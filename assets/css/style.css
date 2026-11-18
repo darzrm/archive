@@ -642,17 +642,25 @@ button {
 
 .status-pill {
   text-transform: capitalize;
-  padding: 2px 7px;
+  padding: 2px 6px;
   border-radius: 5px;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 500;
+  line-height: 1.2;
+  flex-shrink: 0;
   background: var(--eerie-black-1);
   border: 1px solid var(--jet);
 }
 
-.status-pill.completed {
-  color: var(--status-completed);
-  border-color: rgba(140, 233, 154, 0.35);
+.progress-unit-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: -0.1px;
+  color: var(--light-gray-70);
 }
 
 .status-pill.ongoing {
@@ -675,8 +683,8 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: right;
-  font-size: 10px;
-  font-weight: 300;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--light-gray-70);
 }
 
