@@ -392,12 +392,25 @@ window.searchExternalAPI = async function () {
   let items = [];
 
   if (cat === 'series') {
-    const [tvmazeRes, tmdbRes, jikanRes] = await Promise.allSettled([
-      // 1. TVMaze API (Fast, unblocked, global TV series)
+    const [jikanRes, tvmazeRes, tmdbRes] = await Promise.allSettled([
+      // 1. Jikan Anime TV (MyAnimeList - No key required)
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=5&sfw=true`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || []).map(a => ({
+          title: a.title_english || a.title,
+          cover: a.images?.jpg?.large_image_url || '',
+          total: a.episodes || null,
+          unit: 'eps',
+          meta: `Anime Series · ${a.episodes || '?'} Eps`
+        }));
+      })(),
+      // 2. TVMaze API (Global TV series - No key required)
       (async () => {
         const res = await fetchWithTimeout(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
         const data = await res.json();
-        return (data || []).slice(0, 6).map(entry => ({
+        return (data || []).slice(0, 5).map(entry => ({
           tvmazeId: entry.show.id,
           title: entry.show.name,
           cover: entry.show.image?.original || entry.show.image?.medium || '',
@@ -406,7 +419,7 @@ window.searchExternalAPI = async function () {
           meta: `TV Series · ${entry.show.premiered?.slice(0, 4) || 'Show'}`
         }));
       })(),
-      // 2. TMDB TV (Used if accessible)
+      // 3. TMDB TV (Used if accessible)
       (async () => {
         if (!TMDB_API_KEY) return [];
         const res = await fetchWithTimeout(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
@@ -420,32 +433,32 @@ window.searchExternalAPI = async function () {
           unit: 'eps',
           meta: `TV Series · ${t.first_air_date?.slice(0, 4) || 'TMDB'}`
         }));
-      })(),
-      // 3. Jikan Anime TV
+      })()
+    ]);
+
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    if (tvmazeRes.status === 'fulfilled') items.push(...tvmazeRes.value);
+    if (tmdbRes.status === 'fulfilled') items.push(...tmdbRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'movie') {
+    const [jikanRes, itunesRes, tmdbRes] = await Promise.allSettled([
+      // 1. Jikan Anime Movie (MyAnimeList - No key required)
       (async () => {
-        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=5`);
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=movie&limit=5&sfw=true`);
         if (!res.ok) return [];
         const data = await res.json();
         return (data.data || []).map(a => ({
           title: a.title_english || a.title,
           cover: a.images?.jpg?.large_image_url || '',
-          total: a.episodes || null,
-          unit: 'eps',
-          meta: `Anime Series · ${a.episodes || '?'} Eps`
+          total: 1,
+          unit: 'movie',
+          meta: `Anime Movie · ${a.year || 'Film'}`
         }));
-      })()
-    ]);
-
-    if (tvmazeRes.status === 'fulfilled') items.push(...tvmazeRes.value);
-    if (tmdbRes.status === 'fulfilled') items.push(...tmdbRes.value);
-    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
-    items = deduplicateResults(items);
-
-  } else if (cat === 'movie') {
-    const [itunesRes, tmdbRes, jikanRes] = await Promise.allSettled([
-      // 1. iTunes Movie Search API (Fast, unblocked, global movies)
+      })(),
+      // 2. iTunes Movie Search API (Global movies - No key required)
       (async () => {
-        const res = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=movie&limit=6`);
+        const res = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=movie&limit=5`);
         const data = await res.json();
         return (data.results || []).map(m => ({
           title: m.trackName,
@@ -455,7 +468,7 @@ window.searchExternalAPI = async function () {
           meta: `Movie · ${m.releaseDate?.slice(0, 4) || 'Film'}`
         }));
       })(),
-      // 2. TMDB Movie (Used if accessible)
+      // 3. TMDB Movie (Used if accessible)
       (async () => {
         if (!TMDB_API_KEY) return [];
         const res = await fetchWithTimeout(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
@@ -468,32 +481,19 @@ window.searchExternalAPI = async function () {
           unit: 'movie',
           meta: `Movie · ${m.release_date?.slice(0, 4) || 'TMDB'}`
         }));
-      })(),
-      // 3. Jikan Anime Movie
-      (async () => {
-        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=movie&limit=5`);
-        if (!res.ok) return [];
-        const data = await res.json();
-        return (data.data || []).map(a => ({
-          title: a.title_english || a.title,
-          cover: a.images?.jpg?.large_image_url || '',
-          total: 1,
-          unit: 'movie',
-          meta: `Anime Movie · ${a.year || 'Film'}`
-        }));
       })()
     ]);
 
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
     if (itunesRes.status === 'fulfilled') items.push(...itunesRes.value);
     if (tmdbRes.status === 'fulfilled') items.push(...tmdbRes.value);
-    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
     items = deduplicateResults(items);
 
   } else if (cat === 'comic') {
-    const [aniRes, jikanRes] = await Promise.allSettled([
-      fetchAniListMedia(query, false),
+    const [jikanRes, aniRes] = await Promise.allSettled([
+      // 1. Jikan Manga / Manhwa / Manhua
       (async () => {
-        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=5`);
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=6&sfw=true`);
         if (!res.ok) return [];
         const data = await res.json();
         return (data.data || [])
@@ -505,18 +505,20 @@ window.searchExternalAPI = async function () {
             unit: 'ch',
             meta: `${m.type} · ${m.chapters || '?'} Ch`
           }));
-      })()
+      })(),
+      // 2. AniList Manga / Manhwa / Manhua
+      fetchAniListMedia(query, false)
     ]);
 
-    if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
     if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
     items = deduplicateResults(items);
 
   } else if (cat === 'other' && subCat === 'light_novel') {
-    const [aniRes, jikanRes] = await Promise.allSettled([
-      fetchAniListMedia(query, true),
+    const [jikanRes, aniRes] = await Promise.allSettled([
+      // 1. Jikan Light Novel
       (async () => {
-        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&type=lightnovel&limit=5`);
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&type=lightnovel&limit=5&sfw=true`);
         if (!res.ok) return [];
         const data = await res.json();
         return (data.data || []).map(ln => ({
@@ -526,11 +528,13 @@ window.searchExternalAPI = async function () {
           unit: ln.volumes ? 'vol' : 'ch',
           meta: `Light Novel · ${ln.volumes || '?'} Vol`
         }));
-      })()
+      })(),
+      // 2. AniList Light Novel
+      fetchAniListMedia(query, true)
     ]);
 
-    if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
     if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
     items = deduplicateResults(items);
 
   } else if (cat === 'other' && subCat === 'game') {
