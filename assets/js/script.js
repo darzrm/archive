@@ -5,7 +5,7 @@
 // ==========================================
 const SUPABASE_URL = 'https://uendrdxiixmikkeanlod.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_IdPLjwQhVQwXGGxUnBVblg_oIQ5Zz89';
-const TMDB_API_KEY = '727a00da59cd2b9873f7636a5bde9561'
+const TMDB_API_KEY = '727a00da59cd2b9873f7636a5bde9561';
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
