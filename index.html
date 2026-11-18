@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Archive</title>
   <link id="favicon-link" rel="shortcut icon" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" type="image/x-icon">
-  <link rel="stylesheet" href="./assets/css/style.css?v=37">
+  <link rel="stylesheet" href="./assets/css/style.css?v=38">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -15,12 +15,35 @@
 
 <body>
 
+  <!-- ==========================================
+       STICKY MINI HEADER (ON SCROLL)
+  =========================================== -->
+  <div id="sticky-mini-header" class="sticky-mini-header">
+    <div class="sticky-mini-inner">
+      <div class="sticky-mini-profile" onclick="scrollToTopSmooth()" title="Back to top">
+        <img id="sticky-avatar-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="">
+        <span id="sticky-name-text" class="sticky-mini-name"></span>
+      </div>
+
+      <div class="sticky-mini-tabs">
+        <button type="button" class="mini-tab-btn active" data-view="blog" onclick="switchMainView('blog')">Notes</button>
+        <button type="button" class="mini-tab-btn" data-view="library" onclick="switchMainView('library')">Library</button>
+      </div>
+    </div>
+  </div>
+
   <main class="single-page-container">
 
     <!-- ==========================================
-         1. TOP SECTION: PROFILE
+         1. TOP SECTION: PROFILE WITH DYNAMIC BANNER
     =========================================== -->
-    <header class="card-section profile-header">
+    <header id="profile-header-card" class="card-section profile-header">
+      <!-- Dynamic Cover Banner -->
+      <div id="profile-banner-wrap" class="profile-banner-wrap" style="display: none;">
+        <img id="profile-banner-img" src="" alt="Cover Banner">
+        <div class="profile-banner-overlay"></div>
+      </div>
+
       <div class="profile-top-actions">
         <button id="btn-edit-profile" class="icon-pill-btn" style="display: none;" onclick="openProfileModal()" title="Edit Profile">
           <ion-icon name="create-outline"></ion-icon>
@@ -31,16 +54,19 @@
         </button>
       </div>
 
-      <div class="profile-main">
-        <figure class="profile-avatar">
-          <img id="profile-avatar-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="">
-        </figure>
+      <div class="profile-content-body">
+        <div class="profile-main">
+          <figure class="profile-avatar">
+            <img id="profile-avatar-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="">
+          </figure>
 
-        <div class="profile-details">
-          <div class="profile-name-row">
-            <h1 class="profile-name" id="profile-name-text"></h1>
+          <div class="profile-details">
+            <div class="profile-name-row">
+              <h1 class="profile-name" id="profile-name-text"></h1>
+            </div>
+            <p class="profile-bio" id="profile-bio-text"></p>
+            <div id="profile-socials-bar" class="profile-socials" style="display: none;"></div>
           </div>
-          <p class="profile-bio" id="profile-bio-text"></p>
         </div>
       </div>
     </header>
@@ -75,22 +101,33 @@
       </div>
 
       <!-- TAB 1 (DEFAULT PRIORITY): PERSONAL NOTES VIEW -->
-      <div id="view-blog">
+      <div id="view-blog" class="tab-view-panel active-view">
         <div id="blog-feed-list" class="blog-feed-list">
           <p class="empty-state">Loading posts...</p>
         </div>
       </div>
 
       <!-- TAB 2: MEDIA LIBRARY VIEW -->
-      <div id="view-library" style="display: none;">
-        <!-- Collapsible Stats Bar -->
+      <div id="view-library" class="tab-view-panel" style="display: none;">
+        <!-- Collapsible Stats & View Mode Bar -->
         <div class="library-stats-bar">
           <button type="button" id="btn-toggle-stats" class="stats-toggle-btn" onclick="toggleLibraryStats()">
             <ion-icon name="stats-chart-outline"></ion-icon>
             <span id="stats-toggle-text">Show Stats</span>
             <ion-icon id="stats-chevron-icon" name="chevron-down-outline"></ion-icon>
           </button>
-          <span class="stats-total-badge" id="total-entries-label">0 Entries</span>
+
+          <div class="library-right-meta">
+            <span class="stats-total-badge" id="total-entries-label">0 Entries</span>
+            <div class="view-mode-switch" title="Switch Layout">
+              <button type="button" id="btn-view-grid" class="view-mode-btn active" onclick="setLibraryViewMode('grid')" title="Grid View">
+                <ion-icon name="grid-outline"></ion-icon>
+              </button>
+              <button type="button" id="btn-view-list" class="view-mode-btn" onclick="setLibraryViewMode('list')" title="Compact List View">
+                <ion-icon name="list-outline"></ion-icon>
+              </button>
+            </div>
+          </div>
         </div>
 
         <div id="collapsible-stats-panel" class="collapsible-stats-panel" style="display: none;">
@@ -214,6 +251,18 @@
               <option value="dropped">Dropped</option>
             </select>
 
+            <select id="filter-rating" class="control-select">
+              <option value="all">All Ratings</option>
+              <option value="under_5">&lt; 5.0</option>
+              <option value="5_plus">5.0+</option>
+              <option value="6_plus">6.0+</option>
+              <option value="7_plus">7.0+</option>
+              <option value="8_plus">8.0+</option>
+              <option value="9_plus">9.0+</option>
+              <option value="exact_10">10.0</option>
+              <option value="unrated">Unrated</option>
+            </select>
+
             <select id="sort-library" class="control-select">
               <option value="recent">Recently Updated</option>
               <option value="rating_desc">Highest Rated</option>
@@ -222,9 +271,17 @@
           </div>
         </div>
 
-        <!-- Media Cards Grid -->
+        <!-- Media Cards Grid / List -->
         <div id="media-grid" class="media-grid">
           <p class="empty-state">Loading media library...</p>
+        </div>
+
+        <!-- Load More Button -->
+        <div id="load-more-wrap" class="load-more-wrap" style="display: none;">
+          <button type="button" id="btn-load-more" class="load-more-btn" onclick="loadMoreMedia()">
+            <ion-icon name="chevron-down-outline"></ion-icon>
+            <span id="load-more-text">Load More</span>
+          </button>
         </div>
       </div>
     </section>
@@ -244,6 +301,11 @@
     </footer>
 
   </main>
+
+  <!-- Back to Top Floating Button -->
+  <button type="button" id="btn-back-to-top" class="back-to-top-btn" onclick="scrollToTopSmooth()" title="Back to top">
+    <ion-icon name="arrow-up-outline"></ion-icon>
+  </button>
 
   <!-- ==========================================
        MODAL: ADMIN LOGIN
@@ -269,11 +331,11 @@
   </div>
 
   <!-- ==========================================
-       MODAL: EDIT PROFILE
+       MODAL: EDIT PROFILE (AVATAR, BANNER & SOCIAL LINKS)
   =========================================== -->
   <div id="profile-modal" class="custom-modal">
     <div class="custom-modal-backdrop" onclick="closeProfileModal()"></div>
-    <div class="custom-modal-box">
+    <div class="custom-modal-box modal-lg">
       <div class="modal-header">
         <h3 class="h3">Edit Profile</h3>
         <button class="modal-close" onclick="closeProfileModal()">
@@ -282,6 +344,22 @@
       </div>
 
       <form id="profile-form" class="modal-form">
+        <div class="form-group">
+          <label>Cover Banner (Optional — URL or Upload)</label>
+          <div class="api-search-row">
+            <input type="text" id="edit-profile-banner" class="form-input" placeholder="https://... (leave empty for no banner)">
+            <label for="banner-file-input" class="pill-btn primary-btn" style="cursor: pointer; white-space: nowrap;">
+              <ion-icon name="cloud-upload-outline"></ion-icon>
+              <span>Upload</span>
+            </label>
+            <input type="file" id="banner-file-input" accept="image/*" style="display: none;" onchange="handleBannerImageUpload(event)">
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px;">
+            <small id="banner-upload-status" style="color: var(--light-gray-70); font-size: 11px;"></small>
+            <button type="button" onclick="clearBannerInput()" style="background: none; border: none; color: #ff6b6b; font-size: 11px; cursor: pointer;">Remove banner</button>
+          </div>
+        </div>
+
         <div class="form-group">
           <label>Profile Avatar</label>
           <div class="api-search-row">
@@ -302,7 +380,19 @@
 
         <div class="form-group">
           <label>Bio</label>
-          <textarea id="edit-profile-bio" class="form-input" rows="3" placeholder="Write a short bio..." style="resize: vertical; font-family: inherit;"></textarea>
+          <textarea id="edit-profile-bio" class="form-input" rows="2" placeholder="Write a short bio..." style="resize: vertical; font-family: inherit;"></textarea>
+        </div>
+
+        <!-- Social Links Editor -->
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label>Social Links (Icon auto-detected from URL)</label>
+            <button type="button" class="minimal-add-btn" style="padding: 4px 9px; font-size: 11px;" onclick="addSocialLinkRow()">
+              <ion-icon name="add-outline"></ion-icon>
+              <span>Add Link</span>
+            </button>
+          </div>
+          <div id="social-links-editor" class="social-links-editor"></div>
         </div>
 
         <div class="modal-submit-row">
@@ -399,7 +489,7 @@
           </div>
         </div>
 
-        <div class="form-row-2">
+        <div class="form-row-3">
           <div class="form-group">
             <label>Unit Type</label>
             <select id="media-unit" class="form-input">
@@ -416,6 +506,14 @@
           <div class="form-group">
             <label>Rating (1.0 – 10.0)</label>
             <input type="number" id="media-rating" class="form-input" step="0.1" min="1.0" max="10.0" placeholder="e.g. 8.7">
+          </div>
+
+          <div class="form-group">
+            <label>Rewatch / Reread</label>
+            <div class="progress-input-row">
+              <input type="number" id="media-repeat" class="form-input" min="0" value="0">
+              <button type="button" class="step-plus-btn" onclick="stepModalRepeat()" title="Add +1">+1</button>
+            </div>
           </div>
         </div>
 
@@ -482,7 +580,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./assets/js/script.js?v=37"></script>
+  <script src="./assets/js/script.js?v=38"></script>
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 </body>
