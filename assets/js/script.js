@@ -65,10 +65,18 @@ window.toggleLibraryStats = function () {
   const textEl = document.getElementById('stats-toggle-text');
   const iconEl = document.getElementById('stats-chevron-icon');
 
-  if (panel) panel.style.display = isStatsExpanded ? 'block' : 'none';
-  if (toggleBtn) toggleBtn.classList.toggle('active', isStatsExpanded);
-  if (textEl) textEl.textContent = isStatsExpanded ? 'Hide Stats' : 'Show Stats';
-  if (iconEl) iconEl.setAttribute('name', isStatsExpanded ? 'chevron-up-outline' : 'chevron-down-outline');
+  if (panel) {
+    panel.style.display = isStatsExpanded ? 'block' : 'none';
+  }
+  if (toggleBtn) {
+    toggleBtn.classList.toggle('active', isStatsExpanded);
+  }
+  if (textEl) {
+    textEl.textContent = isStatsExpanded ? 'Hide Stats' : 'Show Stats';
+  }
+  if (iconEl) {
+    iconEl.setAttribute('name', isStatsExpanded ? 'chevron-up-outline' : 'chevron-down-outline');
+  }
 };
 
 function updateAdminActionButtons() {
@@ -285,18 +293,14 @@ function applyProfileToUI() {
 
   if (avatarEl) {
     if (currentProfile.avatar_url) {
+      const cleanUrl = normalizeImageUrl(currentProfile.avatar_url);
       avatarEl.onerror = () => {
         avatarEl.src = 'https://placehold.co/200x200/1e1e1f/ffffff?text=?';
-        avatarEl.style.opacity = '1';
       };
-      avatarEl.onload = () => {
-        avatarEl.style.opacity = '1';
-      };
-      avatarEl.src = currentProfile.avatar_url;
-      if (faviconEl) faviconEl.href = currentProfile.avatar_url;
+      avatarEl.src = cleanUrl;
+      if (faviconEl) faviconEl.href = cleanUrl;
     } else {
       avatarEl.src = TRANSPARENT_PIXEL;
-      avatarEl.style.opacity = '0';
     }
   }
 
@@ -1235,7 +1239,7 @@ function renderBlogPosts() {
     return;
   }
 
-  const avatarSrc = currentProfile.avatar_url || TRANSPARENT_PIXEL;
+  const avatarSrc = normalizeImageUrl(currentProfile.avatar_url) || TRANSPARENT_PIXEL;
   const authorName = escapeHtml(currentProfile.name || '');
 
   listEl.innerHTML = allBlogPosts.map(post => {
