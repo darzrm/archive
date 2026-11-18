@@ -1,917 +1,519 @@
-const SUPABASE_URL = 'https://uendrdxiixmikkeanlod.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_IdPLjwQhVQwXGGxUnBVblg_oIQ5Zz89';
-const TMDB_API_KEY = '';
-
-
 'use strict';
 
-/**
- * Element toggle function
- */
-const elementToggleFunc = function (elem) { elem.classList.toggle("active"); }
+// ==========================================
+// 1. KONFIGURASI SUPABASE & API
+// ==========================================
+const SUPABASE_URL = 'https://uendrdxiixmikkeanlod.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_IdPLjwQhVQwXGGxUnBVblg_oIQ5Zz89';
+const TMDB_API_KEY = ''; // Opsional: isi API key TMDB jika ingin cari film/series non-anime
 
-/**
- * Sidebar variables & toggle (Mobile)
- */
-const sidebar = document.querySelector("[data-sidebar]");
-const sidebarBtn = document.querySelector("[data-sidebar-btn]");
-
-if (sidebarBtn) {
-  sidebarBtn.addEventListener("click", function () { elementToggleFunc(sidebar); });
-}
-
-/**
- * Filter & Custom Select
- */
-const select = document.querySelector("[data-select]");
-const selectItems = document.querySelectorAll("[data-select-item]");
-const selectValue = document.querySelector("[data-select-value]");
-const filterBtn = document.querySelectorAll("[data-filter-btn]");
-const filterItems = document.querySelectorAll("[data-filter-item]");
-
-if (select) {
-  select.addEventListener("click", function () { elementToggleFunc(this); });
-}
-
-const filterFunc = function (selectedValue) {
-  for (let i = 0; i < filterItems.length; i++) {
-    if (selectedValue === "all") {
-      filterItems[i].classList.add("active");
-    } else if (selectedValue === filterItems[i].dataset.category) {
-      filterItems[i].classList.add("active");
-    } else {
-      filterItems[i].classList.remove("active");
-    }
-  }
-}
-
-for (let i = 0; i < selectItems.length; i++) {
-  selectItems[i].addEventListener("click", function () {
-    let selectedValue = this.innerText.toLowerCase();
-    selectValue.innerText = this.innerText;
-    elementToggleFunc(select);
-    filterFunc(selectedValue);
-  });
-}
-
-if (filterBtn.length > 0) {
-  let lastClickedBtn = filterBtn[0];
-  for (let i = 0; i < filterBtn.length; i++) {
-    filterBtn[i].addEventListener("click", function () {
-      let selectedValue = this.innerText.toLowerCase();
-      selectValue.innerText = this.innerText;
-      filterFunc(selectedValue);
-      lastClickedBtn.classList.remove("active");
-      this.classList.add("active");
-      lastClickedBtn = this;
-    });
-  }
-}
-
-/**
- * Page Navigation
- */
-const navigationLinks = document.querySelectorAll("[data-nav-link]");
-const pages = document.querySelectorAll("[data-page]");
-
-for (let i = 0; i < navigationLinks.length; i++) {
-  navigationLinks[i].addEventListener("click", function () {
-    const clickedPage = this.innerText.toLowerCase().trim();
-    for (let j = 0; j < pages.length; j++) {
-      if (clickedPage === pages[j].dataset.page) {
-        pages[j].classList.add("active");
-        navigationLinks[j].classList.add("active");
-        window.scrollTo(0, 0);
-      } else {
-        pages[j].classList.remove("active");
-        navigationLinks[j].classList.remove("active");
-      }
-    }
-  });
-}
-
-// --- SUPABASE INITIALIZATION ---
-const SUPABASE_URL = 'https://xhbmfsrwpebyunjxxmio.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoYm1mc3J3cGVieXVuanh4bWlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0NzkzOTksImV4cCI6MjA5MjA1NTM5OX0.EiFkHOoS2kegWrmPG9BP_nSaBqV3FKWbTZF-jWJupe0';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-/**
- * LAST SEEN / ONLINE STATUS SYSTEM
- * Update last_seen setiap 2 menit selama user aktif
- * User dianggap Online jika last_seen < 5 menit yang lalu
- */
-async function updateLastSeen() {
-  const { data: { user } } = await supabaseClient.auth.getUser();
-  if (!user) return;
-  await supabaseClient
-    .from('profiles')
-    .update({ last_seen: new Date().toISOString() })
-    .eq('id', user.id);
+// State Aplikasi
+let allMediaLogs = [];
+let lastApiResults = [];
+let currentCategory = 'all';
+let currentSubCategory = 'all';
+let isAdminLoggedIn = false;
+
+// ==========================================
+// 2. INISIALISASI & AUTH ADMIN
+// ==========================================
+document.addEventListener('DOMContentLoaded', async () => {
+  await checkAdminSession();
+  await fetchMediaLogs();
+  setupFilterListeners();
+});
+
+async function checkAdminSession() {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  isAdminLoggedIn = !!session;
+  updateAdminUI();
 }
 
-// Update saat halaman dibuka, lalu setiap 2 menit
-updateLastSeen();
-setInterval(updateLastSeen, 2 * 60 * 1000);
+function updateAdminUI() {
+  const addBtn = document.getElementById('btn-add-media');
+  const lockIcon = document.getElementById('admin-lock-icon');
+  const btnText = document.getElementById('admin-btn-text');
 
-// Update juga saat user melakukan aktivitas (klik / ketik)
-let lastActivityUpdate = 0;
-document.addEventListener('click', () => {
-  const now = Date.now();
-  if (now - lastActivityUpdate > 60 * 1000) {
-    lastActivityUpdate = now;
-    updateLastSeen();
+  if (isAdminLoggedIn) {
+    addBtn.style.display = 'inline-flex';
+    lockIcon.setAttribute('name', 'log-out-outline');
+    btnText.textContent = 'Logout';
+  } else {
+    addBtn.style.display = 'none';
+    lockIcon.setAttribute('name', 'lock-closed-outline');
+    btnText.textContent = 'Admin';
+  }
+  renderMediaGrid();
+}
+
+window.handleAdminAuthClick = async function () {
+  if (isAdminLoggedIn) {
+    const confirm = await Swal.fire({
+      text: 'Keluar dari mode Admin?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Logout',
+      background: '#1e1e1f',
+      color: '#fff'
+    });
+    if (confirm.isConfirmed) {
+      await supabaseClient.auth.signOut();
+      isAdminLoggedIn = false;
+      updateAdminUI();
+    }
+  } else {
+    document.getElementById('login-modal').classList.add('active');
+  }
+};
+
+window.closeLoginModal = function () {
+  document.getElementById('login-modal').classList.remove('active');
+};
+
+document.getElementById('admin-login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
+  } else {
+    isAdminLoggedIn = true;
+    closeLoginModal();
+    updateAdminUI();
+    Swal.fire({ icon: 'success', text: 'Login Admin berhasil', timer: 1200, showConfirmButton: false, background: '#1e1e1f', color: '#fff' });
   }
 });
 
-/**
- * UNIFIED CLICK HANDLER
- */
-window.addEventListener('click', async function(event) {
-  const gCont = document.getElementById('guest-container');
-  const aCont = document.getElementById('auth-container');
-  const editSection = document.getElementById('edit-username-section');
-  
-  // 1. Change Username: Toggle Form
-  if (event.target.closest('#btn-show-edit')) {
-    if (editSection) {
-      const isHidden = editSection.style.display === 'none' || editSection.style.display === '';
-      editSection.style.display = isHidden ? 'block' : 'none';
-    }
+// ==========================================
+// 3. LOAD DATA & KALKULASI STATS OTOMATIS
+// ==========================================
+async function fetchMediaLogs() {
+  const { data, error } = await supabaseClient
+    .from('media_logs')
+    .select('*')
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    document.getElementById('media-grid').innerHTML = `<p class="empty-state">Gagal memuat data: ${error.message}</p>`;
+    return;
   }
 
-  // 2. Change Username: Submit Update (Auth Metadata + Profile Table)
-  if (event.target.closest('#btn-submit-username')) {
-    const password = document.getElementById('confirm-password').value;
-    const newName = document.getElementById('new-username').value;
-    
-    if (newName.length > 12) {
-      return Swal.fire({ icon: 'error', text: 'Username cannot exceed 12 characters!', background: '#1e1e1f', color: '#fff' });
-    }
-    const { data: { user } } = await supabaseClient.auth.getUser();
+  allMediaLogs = data || [];
+  updateStatsUI();
+  renderMediaGrid();
+}
 
-    if (!password || !newName) {
-      return Swal.fire({ icon: 'warning', text: 'Please fill in all fields', background: '#1e1e1f', color: '#fff' });
-    }
+function updateStatsUI() {
+  const seriesItems = allMediaLogs.filter(i => i.category === 'series');
+  const movieItems = allMediaLogs.filter(i => i.category === 'movie');
+  const comicItems = allMediaLogs.filter(i => i.category === 'comic');
+  const otherItems = allMediaLogs.filter(i => i.category === 'other');
 
-    // Re-autentikasi untuk keamanan sebelum ganti nama
-    const { error: authError } = await supabaseClient.auth.signInWithPassword({
-      email: user.email,
-      password: password
+  const totalSeriesEps = seriesItems.reduce((sum, i) => sum + (i.progress || 0), 0);
+  const completedMovies = movieItems.filter(i => i.status === 'completed').length;
+  const totalComicCh = comicItems.reduce((sum, i) => sum + (i.progress || 0), 0);
+
+  const lnCount = otherItems.filter(i => i.sub_category === 'light_novel').length;
+  const gameCount = otherItems.filter(i => i.sub_category === 'game').length;
+
+  const ratedItems = allMediaLogs.filter(i => i.rating !== null && i.rating !== undefined);
+  const avgRating = ratedItems.length
+    ? (ratedItems.reduce((sum, i) => sum + Number(i.rating), 0) / ratedItems.length).toFixed(2)
+    : '0.0';
+
+  document.getElementById('total-entries-label').textContent = `${allMediaLogs.length} Total Entries`;
+  document.getElementById('stat-series-eps').textContent = totalSeriesEps.toLocaleString('id-ID');
+  document.getElementById('stat-series-count').textContent = `${seriesItems.length} Series`;
+
+  document.getElementById('stat-movies').textContent = completedMovies.toLocaleString('id-ID');
+  document.getElementById('stat-movies-total').textContent = `${movieItems.length} Total`;
+
+  document.getElementById('stat-comic-ch').textContent = totalComicCh.toLocaleString('id-ID');
+  document.getElementById('stat-comic-count').textContent = `${comicItems.length} Comics`;
+
+  document.getElementById('stat-other-count').textContent = otherItems.length.toLocaleString('id-ID');
+  document.getElementById('stat-other-breakdown').textContent = `${lnCount} LN · ${gameCount} Game`;
+
+  document.getElementById('stat-avg-rating').textContent = avgRating;
+}
+
+// ==========================================
+// 4. FILTER, SEARCH & RENDER GRID
+// ==========================================
+function setupFilterListeners() {
+  document.querySelectorAll('.cat-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentCategory = btn.dataset.category;
+
+      const subBar = document.getElementById('other-sub-bar');
+      if (currentCategory === 'other') {
+        subBar.style.display = 'flex';
+      } else {
+        subBar.style.display = 'none';
+        currentSubCategory = 'all';
+        document.querySelectorAll('.sub-pill').forEach(p => p.classList.remove('active'));
+        document.querySelector('.sub-pill[data-sub="all"]').classList.add('active');
+      }
+      renderMediaGrid();
     });
-
-    if (authError) {
-      return Swal.fire({ icon: 'error', text: 'Incorrect password!', background: '#1e1e1f', color: '#fff' });
-    }
-
-  // Update Auth Metadata
-  const { error: updateAuthError } = await supabaseClient.auth.updateUser({
-    data: { display_name: newName }
   });
 
-  // Update Tabel Profiles
-  const { data: updatedRows, error: updateTableError } = await supabaseClient
-    .from('profiles')
-    .update({ username: newName })
-    .eq('id', user.id)
-    .select(); // <-- This forces Supabase to return the updated row
-
-  // Check if it failed OR if 0 rows were updated
-  if (updateAuthError || updateTableError || !updatedRows || updatedRows.length === 0) {
-    Swal.fire({ icon: 'error', text: 'Update failed! Check your database permissions (RLS).', background: '#1e1e1f', color: '#fff' });
-  } else {
-    await Swal.fire({ icon: 'success', text: 'Username updated successfully!', background: '#1e1e1f', color: '#fff' });
-    if (editSection) editSection.style.display = 'none';
-    
-    // Clear the input fields
-    document.getElementById('confirm-password').value = '';
-    document.getElementById('new-username').value = '';
-    
-    checkAccountStatus(); 
-  }
-  }
-
-  // 3. Auth Navigation
-  if (event.target.closest('#btn-start-auth')) {
-    gCont.style.setProperty('display', 'none', 'important');
-    aCont.style.setProperty('display', 'block', 'important');
-  }
-
-  if (event.target.closest('#btn-cancel-auth')) {
-    aCont.style.setProperty('display', 'none', 'important');
-    gCont.style.setProperty('display', 'block', 'important');
-  }
-
-  // 4. Login Action
-  if (event.target.closest('#login-btn-final')) {
-    const emailInput = document.getElementById('auth-email');
-    const passInput = document.getElementById('auth-password');
-    const { error } = await supabaseClient.auth.signInWithPassword({
-      email: emailInput.value,
-      password: passInput.value
+  document.querySelectorAll('.sub-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.sub-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      currentSubCategory = pill.dataset.sub;
+      renderMediaGrid();
     });
-    if (error) Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
+  });
+
+  document.getElementById('search-library').addEventListener('input', renderMediaGrid);
+  document.getElementById('filter-status').addEventListener('change', renderMediaGrid);
+  document.getElementById('sort-library').addEventListener('change', renderMediaGrid);
+}
+
+function formatCategoryBadge(item) {
+  if (item.category === 'other') {
+    if (item.sub_category === 'light_novel') return 'Light Novel';
+    if (item.sub_category === 'game') return 'Game';
+    return 'Other';
+  }
+  return item.category;
+}
+
+function renderMediaGrid() {
+  const grid = document.getElementById('media-grid');
+  const query = document.getElementById('search-library').value.toLowerCase().trim();
+  const statusFilter = document.getElementById('filter-status').value;
+  const sortBy = document.getElementById('sort-library').value;
+
+  let filtered = allMediaLogs.filter(item => {
+    const matchCat = currentCategory === 'all' || item.category === currentCategory;
+    const matchSub = currentCategory !== 'other' || currentSubCategory === 'all' || item.sub_category === currentSubCategory;
+    const matchStatus = statusFilter === 'all' || item.status === statusFilter;
+    const matchQuery = !query || item.title.toLowerCase().includes(query);
+    return matchCat && matchSub && matchStatus && matchQuery;
+  });
+
+  if (sortBy === 'rating_desc') {
+    filtered.sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0));
+  } else if (sortBy === 'title_asc') {
+    filtered.sort((a, b) => a.title.localeCompare(b.title));
   }
 
-  // 5. Register Action (Fixed Username ID)
-  if (event.target.closest('#register-btn-final')) {
-    const emailInput = document.getElementById('auth-email');
-    const passInput = document.getElementById('auth-password');
-    const nameInput = document.getElementById('auth-username'); // Menggunakan ID yang ada di index.html
-
-    if (!emailInput.value || !passInput.value || !nameInput.value) {
-      return Swal.fire({ icon: 'warning', text: 'All fields are required for registration', background: '#1e1e1f', color: '#fff' });
-    }
-
-if (nameInput.value.length > 12) {
-      return Swal.fire({ icon: 'error', text: 'Username maximum is 12 characters', background: '#1e1e1f', color: '#fff' });
-    }
-
-    const { error } = await supabaseClient.auth.signUp({
-      email: emailInput.value,
-      password: passInput.value,
-      options: {
-        data: { display_name: nameInput.value },
-        emailRedirectTo: window.location.origin
-      }
-    });
-
-    if (error) {
-      Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
-    } else {
-      Swal.fire({ icon: 'success', text: 'Registration successful! Check your email to verify.', background: '#1e1e1f', color: '#fff' });
-    }
+  if (filtered.length === 0) {
+    grid.innerHTML = `<p class="empty-state">Belum ada media di kategori ini.</p>`;
+    return;
   }
 
-  // 6. Reset Password Action (Linked to ID btn-forgot-pass or btn-reset-password)
-  if (event.target.closest('#btn-forgot-pass') || event.target.closest('#btn-reset-password')) {
-    const emailInput = document.getElementById('auth-email');
-    
-    if (!emailInput || !emailInput.value) {
-      return Swal.fire({ icon: 'warning', text: 'Please enter your email first', background: '#1e1e1f', color: '#fff' });
-    }
+  grid.innerHTML = filtered.map(item => {
+    const cover = item.cover_url || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
+    const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
+    const progressText = item.total_units
+      ? `${item.progress || 0} / ${item.total_units} ${item.unit_label || ''}`
+      : `${item.progress || 0} ${item.unit_label || ''}`;
 
-    const { error } = await supabaseClient.auth.resetPasswordForEmail(emailInput.value, {
-      redirectTo: window.location.href, 
-    });
+    const percent = item.total_units
+      ? Math.min(100, Math.round(((item.progress || 0) / item.total_units) * 100))
+      : (item.status === 'completed' ? 100 : 35);
 
-    if (error) {
-      Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
-    } else {
-      Swal.fire({ icon: 'success', text: 'Reset instructions sent to your email!', background: '#1e1e1f', color: '#fff' });
-    }
-  }
+    const adminControls = isAdminLoggedIn ? `
+      <div class="admin-card-actions">
+        <button class="mini-btn" onclick="incrementProgress('${item.id}')">+1</button>
+        <button class="mini-btn" onclick="openEditModal('${item.id}')">Edit</button>
+        <button class="mini-btn danger" onclick="deleteMedia('${item.id}')">Hapus</button>
+      </div>
+    ` : '';
 
-// Tambahkan ini di script.js
-supabaseClient.auth.onAuthStateChange(async (event, session) => {
-  if (event === "PASSWORD_RECOVERY") {
-    // Tampilkan popup SweetAlert untuk input password baru
-    const { value: newPassword } = await Swal.fire({
-      title: 'Reset Your Password',
-      input: 'password',
-      inputLabel: 'Enter your new password',
-      inputPlaceholder: 'New Password',
-      showCancelButton: false,
-      confirmButtonText: 'Update Password',
-      background: '#1e1e1f',
-      color: '#fff',
-      inputAttributes: {
-        autocapitalize: 'off',
-        autocorrect: 'off'
-      }
-    });
-
-    if (newPassword) {
-      const { error } = await supabaseClient.auth.updateUser({
-        password: newPassword
-      });
-
-      if (error) {
-        Swal.fire({ icon: 'error', text: error.message });
-      } else {
-        Swal.fire({ icon: 'success', text: 'Password updated successfully!' });
-        // Redirect ke home atau login
-        window.location.hash = ''; 
-      }
-    }
-  }
-});
-
-  
-  // 7. Logout Action
-  if (event.target.closest('#logout-btn-final')) {
-    await supabaseClient.auth.signOut();
-    location.reload();
-  }
-});
-
-/**
- * UI ENGINE: Fetch Role & Persistent Login
- */
-async function checkAccountStatus() {
-  const { data: { user } } = await supabaseClient.auth.getUser();
-  
-  const guest = document.getElementById('guest-container');
-  const auth = document.getElementById('auth-container');
-  const profile = document.getElementById('profile-container');
-  const display = document.getElementById('user-info-display');
-
-  if (guest) guest.style.display = 'none';
-  if (auth) auth.style.display = 'none';
-  if (profile) profile.style.display = 'none';
-
-if (user) {
-    if (profile) profile.style.display = 'block';
-
-    const { data: profileData } = await supabaseClient
-      .from('profiles')
-      .select('role, username, points') // Pastikan 'points' ikut diambil
-      .eq('id', user.id)
-      .single();
-
-    const userRole = profileData?.role || 'Member';
-    const displayName = profileData?.username || user.user_metadata.display_name || 'Member';
-    
-    // Simpan nilai poin dari database ke variabel
-    const userPoints = profileData?.points || 0; 
-
-    const date = new Date(user.created_at).toLocaleDateString('en-US', {
-      day: 'numeric', month: 'long', year: 'numeric'
-    });
-
-        if (display) {
-      display.innerHTML = `
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-          <div style="background: var(--onyx); padding: 20px; border-radius: 12px; border: 1px solid var(--jet); grid-column: span 2;">
-            <h4 class="h4" style="font-size: 24px; color: var(--white-1); margin-bottom: 4px;">
-              ${displayName}
-            </h4>
-            <p style="font-size: 14px; color: var(--light-gray); margin-bottom: 8px;">${user.email}</p>
-            <div style="border-top: 1px solid var(--jet); padding-top: 8px; font-size: 11px; color: var(--light-gray-70);">
-              Joined: ${date}
+    return `
+      <div class="media-card">
+        <div class="media-cover-wrap">
+          <img src="${cover}" alt="${item.title}" loading="lazy">
+          <span class="badge-cat">${formatCategoryBadge(item)}</span>
+          <span class="badge-rating">${ratingText}</span>
+        </div>
+        <div class="media-body">
+          <h3 class="media-title" title="${item.title}">${item.title}</h3>
+          <div>
+            <div class="media-meta-row">
+              <span class="status-pill ${item.status}">${item.status}</span>
+              <span>${progressText}</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" style="width: ${percent}%"></div>
             </div>
           </div>
-
-          <div style="background: var(--onyx); padding: 15px; border-radius: 12px; border: 1px solid var(--jet);">
-            <p style="font-size: 10px; color: var(--light-gray); text-transform: uppercase;">Points</p>
-            <p style="font-size: 20px; font-weight: 600; color: #fff;">${userPoints}</p>
-          </div>
-
-          <div style="background: var(--onyx); padding: 15px; border-radius: 12px; border: 1px solid var(--jet);">
-            <p style="font-size: 10px; color: var(--light-gray); text-transform: uppercase;">Role</p>
-            <p style="font-size: 20px; font-weight: 600; color: #fff;">${userRole}</p>
-          </div>
-        </div>
-      `;
-    }
-    
-    if (window.currentBlogId) loadComments(window.currentBlogId);
-  } else {
-    if (guest) guest.style.display = 'block';
-  }
-}
-
-/**
- * BLOG & COMMENT SYSTEM
- */
-window.currentBlogId = null;
-
-window.showBlogDetail = async function(id, title, text) {
-  window.currentBlogId = id;
-  document.getElementById('blog-list-container').style.display = 'none';
-  document.getElementById('blog-detail-container').style.display = 'block';
-  document.getElementById('detail-title').innerText = title;
-  document.getElementById('detail-text').innerText = text;
-
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-
-  const { data: { user } } = await supabaseClient.auth.getUser();
-  const formArea = document.getElementById('comment-form-area');
-  
-  if (!user) {
-    formArea.innerHTML = `<p style="color: var(--orange-yellow-crayola); font-size: 14px; margin-bottom: 30px;">Please login to join the conversation.</p>`;
-  } else {
-    formArea.innerHTML = `
-      <textarea id="comment-input" class="form-input" placeholder="Write your comment..." required style="min-height: 80px; margin-bottom: 15px; resize: vertical;"></textarea>
-      <button class="form-btn" onclick="postComment()" style="width: max-content; padding: 10px 20px;">
-        <ion-icon name="paper-plane-outline"></ion-icon><span>Post Comment</span>
-      </button>
-    `;
-  }
-  loadComments(id);
-};
-
-window.closeBlogDetail = function() {
-  window.currentBlogId = null;
-  document.getElementById('blog-list-container').style.display = 'block';
-  document.getElementById('blog-detail-container').style.display = 'none';
-};
-
-window.renderCommentHTML = function(c, currentUser) {
-  const username = c.profiles?.username || 'Anonymous';
-  const role = c.profiles?.role || 'Member';
-  const email = c.profiles?.email || 'No Email';
-  const isOwner = currentUser && currentUser.id === c.user_id;
-  const isAdmin = currentUser && currentUser.role === 'Admin';
-
-  return `
-    <div class="comment-item" style="margin-bottom: 30px; background: var(--onyx); padding: 20px; border-radius: 12px; border: 1px solid var(--jet);">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
-        <div>
-<h4 class="h4" style="font-size: 16px; color: var(--white-1); margin: 0;">${username}</h4>
-<p style="font-size: 12px; color: var(--light-gray-70); margin: 2px 0 8px;">${email}</p>
-</div>
-
-<div style="text-align: right;">
-  <span style="display: block; font-size: 10px; color: var(--white-1); text-transform: uppercase; font-weight: 700; letter-spacing: 1px; margin-bottom: 4px;">
-    ${role}
-  </span>
-  
-  <span style="font-size: 10px; color: var(--light-gray-70);">
-    ${new Date(c.created_at).toLocaleString('id-ID', {
-      hour: '2-digit', 
-      minute: '2-digit',
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    })}
-
-</span>
+          ${adminControls}
         </div>
       </div>
-      <div style="border-top: 1px solid var(--jet); margin-bottom: 15px;"></div>
-      <p style="font-size: 15px; color: var(--light-gray); line-height: 1.6; margin-bottom: 15px;">
-        ${c.content}
-      </p>
-      ${(isOwner || currentUser?.role === 'Admin' || currentUser?.role === 'Owner') ? `
-<button onclick="deleteComment('${c.id}')" style="color: #ff5f5f; font-size: 12px; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 5px; padding: 0;">
-  <ion-icon name="trash-outline" style="color: #ff5f5f !important;"></ion-icon> 
-  Delete Comment
-</button>
-      ` : ''}
+    `;
+  }).join('');
+}
 
-    </div>
-  `;
+// ==========================================
+// 5. MODAL ADD / EDIT & AUTO-SEARCH API
+// ==========================================
+window.openMediaModal = function () {
+  document.getElementById('media-modal-title').textContent = 'Tambah Media';
+  document.getElementById('media-form').reset();
+  document.getElementById('media-id').value = '';
+  document.getElementById('api-search-results').style.display = 'none';
+  handleCategoryFormChange();
+  document.getElementById('media-modal').classList.add('active');
 };
 
-window.loadComments = async function(blogId) {
-  const displayList = document.getElementById('comments-display-list');
-  if(!displayList) return;
+window.openEditModal = function (id) {
+  const item = allMediaLogs.find(m => m.id === id);
+  if (!item) return;
 
-  const { data: { user } } = await supabaseClient.auth.getUser();
-  let currentUserData = null;
-  
-  if (user) {
-    const { data: p } = await supabaseClient.from('profiles').select('role').eq('id', user.id).single();
-    currentUserData = { id: user.id, role: p?.role };
+  document.getElementById('media-modal-title').textContent = 'Edit Media';
+  document.getElementById('media-id').value = item.id;
+  document.getElementById('media-category').value = item.category;
+  handleCategoryFormChange();
+
+  if (item.category === 'other' && item.sub_category) {
+    document.getElementById('media-sub-category').value = item.sub_category;
   }
 
-  const { data: comments, error } = await supabaseClient
-    .from('comments')
-    .select(`id, content, created_at, user_id, profiles (username, role, email)`)
-    .eq('post_id', blogId)
-    .order('created_at', { ascending: false });
+  document.getElementById('media-title').value = item.title;
+  document.getElementById('media-cover').value = item.cover_url || '';
+  document.getElementById('media-status').value = item.status;
+  document.getElementById('media-progress').value = item.progress || 0;
+  document.getElementById('media-total').value = item.total_units || '';
+  document.getElementById('media-unit').value = item.unit_label || 'eps';
+  document.getElementById('media-rating').value = (item.rating !== null && item.rating !== undefined) ? item.rating : '';
+  document.getElementById('api-search-results').style.display = 'none';
 
-  if (error) return;
-  if (!comments || comments.length === 0) {
-    displayList.innerHTML = `<p style="color: var(--light-gray-70); text-align: center;">No comments yet.</p>`;
+  document.getElementById('media-modal').classList.add('active');
+};
+
+window.closeMediaModal = function () {
+  document.getElementById('media-modal').classList.remove('active');
+};
+
+window.handleCategoryFormChange = function () {
+  const cat = document.getElementById('media-category').value;
+  const subGroup = document.getElementById('sub-category-group');
+  const unitSelect = document.getElementById('media-unit');
+
+  if (cat === 'other') {
+    subGroup.style.display = 'flex';
+    const sub = document.getElementById('media-sub-category').value;
+    unitSelect.value = sub === 'light_novel' ? 'vol' : 'item';
   } else {
-    displayList.innerHTML = comments.map(c => renderCommentHTML(c, currentUserData)).join('');
+    subGroup.style.display = 'none';
+    if (cat === 'series') unitSelect.value = 'eps';
+    if (cat === 'movie') unitSelect.value = 'movie';
+    if (cat === 'comic') unitSelect.value = 'ch';
   }
 };
 
-window.postComment = async function() {
-  const input = document.getElementById('comment-input');
-  const { data: { user } } = await supabaseClient.auth.getUser();
-  if (!user || !input.value.trim()) return;
-  const { error } = await supabaseClient
-    .from('comments')
-    .insert([{ post_id: window.currentBlogId, user_id: user.id, content: input.value.trim() }]);
-  if (error) return Swal.fire({ icon: 'error', text: 'Failed to post comment' });
-  input.value = ''; 
-  loadComments(window.currentBlogId);
-};
+window.searchExternalAPI = async function () {
+  const query = document.getElementById('api-search-input').value.trim();
+  const cat = document.getElementById('media-category').value;
+  const subCat = document.getElementById('media-sub-category').value;
+  const resultsBox = document.getElementById('api-search-results');
 
-window.deleteComment = async function(commentId) {
-  const result = await Swal.fire({
-    text: "Delete this comment?",
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#ff5f5f',
-    background: '#1e1e1f',
-    color: '#fff'
-  });
-  if (result.isConfirmed) {
-    const { error } = await supabaseClient.from('comments').delete().eq('id', commentId);
-    if (error) Swal.fire({ icon: 'error', text: "Failed to delete" });
-    else loadComments(window.currentBlogId);
-  }
-};
-
-/**
- * INITIALIZATION
- */
-supabaseClient.auth.onAuthStateChange(() => {
-  checkAccountStatus();
-});
-
-document.addEventListener("DOMContentLoaded", () => {
-  checkAccountStatus();
-});
-
-
-/**
- * LEADERBOARD SYSTEM (3 DATA TERATAS + SEE MORE)
- */
-let isLeaderboardExpanded = false; 
-
-async function loadLeaderboard() {
-  const listContainer = document.getElementById('leaderboard-list');
-  if (!listContainer) return;
-
-  listContainer.innerHTML = '<p style="text-align:center; color:var(--light-gray); padding:20px;">Loading leaderboard...</p>';
+  if (!query) return;
+  resultsBox.style.display = 'block';
+  resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">Mencari...</p>`;
 
   try {
-    const { data: users, error: dbError } = await supabaseClient
-      .from('profiles')
-      .select('id, username, email, points, role, created_at, last_seen')
-      .order('points', { ascending: false });
+    let items = [];
 
-    if (dbError) throw dbError;
-    if (!users || users.length === 0) {
-      listContainer.innerHTML = '<p style="text-align:center; color:var(--light-gray); padding:20px;">Belum ada data member.</p>';
+    if (cat === 'series') {
+      const jikanRes = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=5`);
+      const jikanData = await jikanRes.json();
+      items = (jikanData.data || []).map(a => ({
+        title: a.title_english || a.title,
+        cover: a.images?.jpg?.large_image_url || '',
+        total: a.episodes || null,
+        unit: 'eps',
+        meta: `Anime Series · ${a.episodes || '?'} Eps`
+      }));
+
+      if (TMDB_API_KEY) {
+        const tmdbRes = await fetch(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
+        const tmdbData = await tmdbRes.json();
+        const tvItems = (tmdbData.results || []).slice(0, 4).map(t => ({
+          title: t.name,
+          cover: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : '',
+          total: null,
+          unit: 'eps',
+          meta: `TV Series · ${t.first_air_date?.slice(0, 4) || ''}`
+        }));
+        items = [...items, ...tvItems];
+      }
+    } else if (cat === 'movie') {
+      const jikanRes = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=movie&limit=4`);
+      const jikanData = await jikanRes.json();
+      items = (jikanData.data || []).map(a => ({
+        title: a.title_english || a.title,
+        cover: a.images?.jpg?.large_image_url || '',
+        total: 1,
+        unit: 'movie',
+        meta: `Anime Movie · ${a.year || ''}`
+      }));
+
+      if (TMDB_API_KEY) {
+        const tmdbRes = await fetch(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
+        const tmdbData = await tmdbRes.json();
+        const movItems = (tmdbData.results || []).slice(0, 5).map(m => ({
+          title: m.title,
+          cover: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : '',
+          total: 1,
+          unit: 'movie',
+          meta: `Movie · ${m.release_date?.slice(0, 4) || ''}`
+        }));
+        items = [...items, ...movItems];
+      }
+    } else if (cat === 'comic') {
+      const res = await fetch(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=6`);
+      const data = await res.json();
+      items = (data.data || [])
+        .filter(m => m.type !== 'Light Novel' && m.type !== 'Novel')
+        .map(m => ({
+          title: m.title_english || m.title,
+          cover: m.images?.jpg?.large_image_url || '',
+          total: m.chapters || null,
+          unit: 'ch',
+          meta: `${m.type} · ${m.chapters || '?'} Ch`
+        }));
+    } else if (cat === 'other' && subCat === 'light_novel') {
+      const res = await fetch(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&type=lightnovel&limit=6`);
+      const data = await res.json();
+      items = (data.data || []).map(ln => ({
+        title: ln.title_english || ln.title,
+        cover: ln.images?.jpg?.large_image_url || '',
+        total: ln.volumes || ln.chapters || null,
+        unit: ln.volumes ? 'vol' : 'ch',
+        meta: `Light Novel · ${ln.volumes || '?'} Vol`
+      }));
+    } else if (cat === 'other' && subCat === 'game') {
+      const res = await fetch('https://api.vndb.org/kana/vn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filters: ['search', '=', query],
+          fields: 'title, image.url, released',
+          results: 6
+        })
+      });
+      const data = await res.json();
+      items = (data.results || []).map(g => ({
+        title: g.title,
+        cover: g.image?.url || '',
+        total: 1,
+        unit: 'item',
+        meta: `Game / VN · ${g.released || ''}`
+      }));
+    }
+
+    lastApiResults = items;
+
+    if (items.length === 0) {
+      resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">Tidak ditemukan, silakan isi manual di bawah.</p>`;
       return;
     }
 
-    let isAdmin = false;
-    let currentUserId = null;
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (session) {
-      currentUserId = session.user.id;
-      const { data: profile } = await supabaseClient.from('profiles').select('role').eq('id', session.user.id).single();
-      const r = profile?.role?.toLowerCase();
-      if (r === 'admin' || r === 'owner') isAdmin = true;
-    }
-
-    const displayUsers = isLeaderboardExpanded ? users : users.slice(0, 3);
-
-        let htmlContent = displayUsers.map((user, index) => {
-      const isTop3 = index < 3;
-      const rankColor = isTop3 ? '#ffffff' : 'var(--white-1)';
-      
-      const isAdminRole = user.role?.toLowerCase() === 'admin';
-      const isOwnerRole = user.role?.toLowerCase() === 'owner';
-      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
-      const isOnline = user.last_seen && new Date(user.last_seen) > fiveMinAgo ? 'online' : 'offline';
-
-      return `
-        <div class="leaderboard-item" 
-             onclick="showUserStats('${user.username || 'Anonymous'}', '${user.role || 'Member'}', ${user.points || 0}, ${index + 1}, '${user.email || ''}', '${user.created_at || ''}', '${user.id}', '${isOnline}')"
-             style="background: var(--onyx); padding: 20px; border-radius: 14px; border: 1px solid ${isOwnerRole ? 'rgba(255,255,255,0.3)' : 'var(--jet)'}; display: flex; align-items: center; gap: 15px; margin-bottom: 10px; cursor: pointer; transition: all 0.3s ease; ${isOwnerRole ? 'box-shadow: 0 0 0 1px rgba(255,255,255,0.1);' : ''}">
-          <div style="display: flex; flex-direction: column; align-items: center; min-width: 45px; gap: 4px;">
-            <div style="width: 45px; height: 45px; background: var(--jet); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; color: ${rankColor}; border: 1px solid ${isTop3 ? '#ffffff' : 'transparent'};">
-              ${index + 1}
-            </div>
-            ${isOwnerRole ? `
-              <span style="font-size: 9px; color: #fff; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(255,255,255,0.15); padding: 1px 5px; border-radius: 4px;">Owner</span>
-            ` : isAdminRole ? `
-              <span style="font-size: 9px; color: #ffffff; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Admin</span>
-            ` : ''}
-          </div>
-          
-          <div style="flex-grow: 1; min-width: 0;"> 
-            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
-              <h4 class="h4" style="font-size: 16px; color: var(--white-1); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                ${user.username || 'Anonymous'}
-              </h4>
-              <span title="${isOnline === 'online' ? 'Online' : 'Offline'}" style="display:inline-block; flex-shrink:0; width:8px; height:8px; border-radius:50%; background:${isOnline === 'online' ? '#4caf50' : '#555'}; ${isOnline === 'online' ? 'box-shadow:0 0 5px #4caf50;' : ''}"></span>
-            </div>
-            <p style="font-size: 12px; color: var(--light-gray-70); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;">
-              ${user.email || 'No Email'}
-            </p>
-          </div>
-
-          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 80px;">
-            <div style="background: var(--jet); min-width: 70px; height: 45px; border-radius: 10px; border: 1px solid var(--white-1); display: flex; flex-direction: column; align-items: center; justify-content: center;">
-              <span style="font-size: 9px; color: var(--light-gray-70); text-transform: uppercase; line-height: 1;">Pts</span>
-              <span style="font-weight: 700; color: var(--white-1); font-size: 16px; line-height: 1.2;">${user.points || 0}</span>
-            </div>
-          </div>
+    resultsBox.innerHTML = items.map((it, idx) => `
+      <div class="api-result-item" onclick="applyApiResult(${idx})">
+        <img src="${it.cover || 'https://placehold.co/60x90/1e1e1f/888?text=?'}" alt="">
+        <div class="api-result-info">
+          <h4>${it.title}</h4>
+          <p>${it.meta}</p>
         </div>
-      `;
-    }).join('');
-
-
-
-    if (users.length > 3) {
-      // Desain tombol redup (outline gelap) tapi tulisan tetap putih terang
-      htmlContent += `
-        <div style="text-align: center; margin-top: 15px;">
-          <button onclick="toggleLeaderboard()" class="form-btn" 
-            style="margin: 0 auto; 
-                   padding: 10px 25px; 
-                   background: transparent; 
-                   border: 1px solid var(--jet); 
-                   color: #ffffff; 
-                   font-size: 13px;
-                   opacity: 0.8;">
-            <span>${isLeaderboardExpanded ? 'See Less' : 'See More'}</span>
-            <ion-icon name="${isLeaderboardExpanded ? 'chevron-up-outline' : 'chevron-down-outline'}"></ion-icon>
-          </button>
-        </div>
-      `;
-    }
-
-
-    listContainer.innerHTML = htmlContent;
-  } catch (err) {
-    listContainer.innerHTML = `<p style="text-align:center; color:#ff5f5f; padding:20px;">Error: ${err.message}</p>`;
-  }
-}
-
-window.toggleLeaderboard = function() {
-  isLeaderboardExpanded = !isLeaderboardExpanded;
-  loadLeaderboard();
-};
-
-document.querySelectorAll("[data-nav-link]").forEach(link => {
-  link.addEventListener("click", function() {
-    const tabName = this.innerText.toLowerCase().trim();
-    if (tabName === "event") {
-      isLeaderboardExpanded = false; 
-      loadLeaderboard();
-    }
-  });
-});
-
-
-
-/**
- * FUNGSI UPDATE POINTS (WAJIB GLOBAL)
- * Menggunakan window agar bisa dipanggil oleh onclick di HTML
- */
-window.updatePoints = async function(userId, username, currentPoints) {
-  console.log("Mencoba update poin untuk:", username); // Untuk cek di console F12
-
-  const { value: newPoints } = await Swal.fire({
-    title: `Update Points: ${username}`,
-    input: 'number',
-    inputValue: currentPoints,
-    background: '#1e1e1f',
-    color: '#fff',
-    confirmButtonColor: '#ffdb70',
-    showCancelButton: true,
-    confirmButtonText: 'Save',
-    cancelButtonText: 'Cancel'
-  });
-
-  if (newPoints !== undefined && newPoints !== null && newPoints !== "") {
-    try {
-      const { error } = await supabaseClient
-        .from('profiles')
-        .update({ points: parseInt(newPoints) })
-        .eq('id', userId);
-
-      if (error) throw error;
-
-      Swal.fire({
-        icon: 'success',
-        title: 'Success!',
-        text: `${username}'s points have been updated to ${newPoints}`,
-        background: '#1e1e1f',
-        color: '#fff',
-        timer: 1500,
-        showConfirmButton: false
-      });
-
-
-      // Refresh table data after successful update
-      if (typeof loadLeaderboard === 'function') {
-        loadLeaderboard();
-      }
-      
-    } catch (err) {
-      console.error("Update failed:", err);
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: err.message,
-        background: '#1e1e1f',
-        color: '#fff'
-      });
-    }
-  }
-};
-
-
-// Listener untuk memantau perubahan data profil secara realtime
-supabaseClient
-  .channel('profile-update')
-  .on('postgres_changes', { 
-    event: 'UPDATE', 
-    schema: 'public', 
-    table: 'profiles' 
-  }, (payload) => {
-    // Jika data yang berubah adalah milik user yang sedang login, refresh tampilan profil
-    supabaseClient.auth.getUser().then(({ data: { user } }) => {
-      if (user && payload.new.id === user.id) {
-        checkAccountStatus();
-      }
-    });
-  })
-  .subscribe();
-
-/**
- * QnA ACCORDION SYSTEM (SLIDE EFFECT)
- */
-const qnaButtons = document.querySelectorAll('.qna-btn');
-
-qnaButtons.forEach(btn => {
-  btn.addEventListener('click', function() {
-    const parent = this.parentElement;
-    
-    // Toggle class active pada item yang diklik
-    parent.classList.toggle('active');
-    
-    // Opsional: Tutup pertanyaan lain jika satu dibuka (Mode tunggal)
-    document.querySelectorAll('.qna-item').forEach(item => {
-      if (item !== parent) {
-        item.classList.remove('active');
-      }
-    });
-  });
-});
-
-document.addEventListener("DOMContentLoaded", function() {
-  const popup = document.getElementById('join-popup');
-  const closeBtn = document.getElementById('close-popup');
-
-  // Munculkan bar setelah 2 detik agar tidak mengejutkan
-  setTimeout(() => {
-    popup.classList.add('active');
-  }, 2000);
-
-  // Fungsi tutup
-  closeBtn.addEventListener('click', () => {
-    popup.classList.remove('active');
-  });
-
-  // Otomatis hilang setelah 10 detik (opsional, agar tidak mengganggu terus)
-  setTimeout(() => {
-    popup.classList.remove('active');
-  }, 12000);
-});
-
-/**
- * TAMPILKAN STATISTIK USER DARI LEADERBOARD
- */
-window.showUserStats = async function(username, role, points, rank, email, createdAt, userId, onlineStatus) {
-  // Check if current logged-in user is admin or owner
-  let isAdmin = false;
-  let isOwner = false;
-  const { data: { session } } = await supabaseClient.auth.getSession();
-  if (session) {
-    const { data: profile } = await supabaseClient.from('profiles').select('role').eq('id', session.user.id).single();
-    const currentRole = profile?.role?.toLowerCase();
-    if (currentRole === 'admin') isAdmin = true;
-    if (currentRole === 'owner') { isOwner = true; isAdmin = true; } // owner also has admin power
-  }
-
-  const joinDate = createdAt
-    ? new Date(createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
-    : 'Unknown';
-
-  const isOnline = onlineStatus === 'online';
-  const statusDot = isOnline
-    ? `<span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:#4caf50; margin-right:6px; box-shadow: 0 0 5px #4caf50;"></span>`
-    : `<span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:#888; margin-right:6px;"></span>`;
-  const statusLabel = isOnline ? 'Online' : 'Offline';
-  const statusColor = isOnline ? '#4caf50' : '#888';
-
-  const targetIsAdmin = role?.toLowerCase() === 'admin';
-  const targetIsOwner = role?.toLowerCase() === 'owner';
-
-  // Edit Points button (admin & owner) - centered
-  const editPointsBtn = (isAdmin || isOwner) ? `
-    <div style="text-align: center; margin-top: 12px;">
-      <button onclick="Swal.close(); setTimeout(() => updatePoints('${userId}', '${username}', ${points}), 200);"
-        style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 28px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.08); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; letter-spacing: 0.5px; transition: all 0.2s; width: 100%;">
-          Edit Points
-      </button>
-    </div>
-  ` : '';
-
-  // Toggle Admin button (owner only, can't demote owner)
-  const toggleAdminBtn = isOwner && !targetIsOwner ? `
-    <div style="text-align: center; margin-top: 8px;">
-      <button onclick="Swal.close(); setTimeout(() => toggleAdminRole('${userId}', '${username}', '${role}'), 200);"
-        style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 28px; border-radius: 10px; border: 1px solid ${targetIsAdmin ? 'rgba(255,95,95,0.35)' : 'rgba(100,200,100,0.35)'}; background: ${targetIsAdmin ? 'rgba(255,95,95,0.08)' : 'rgba(100,200,100,0.08)'}; color: ${targetIsAdmin ? '#ff7f7f' : '#7fdf7f'}; font-size: 13px; font-weight: 600; cursor: pointer; letter-spacing: 0.5px; transition: all 0.2s; width: 100%;">
-        ${targetIsAdmin ? '🔻 Remove Admin' : '🛡️ Make Admin'}
-      </button>
-    </div>
-  ` : '';
-
-  Swal.fire({
-    html: `
-      <div style="text-align: center; padding-bottom: 6px;">
-
-        <!-- Avatar / Rank Badge -->
-        <div style="width: 64px; height: 64px; background: var(--jet); border-radius: 16px; border: 2px solid var(--white-1); display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #fff; margin: 0 auto 14px;">
-          #${rank}
-        </div>
-
-        <!-- Username -->
-        <h3 style="color: #fff; font-size: 20px; font-weight: 700; margin: 0 0 4px;">${username}</h3>
-
-        <!-- Role -->
-        <p style="color: var(--light-gray-70); font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 10px;">${role}</p>
-
-        <!-- Online Status Badge -->
-        <div style="display: inline-flex; align-items: center; background: var(--jet); padding: 5px 14px; border-radius: 20px; font-size: 12px; color: ${statusColor}; font-weight: 600; margin-bottom: 20px;">
-          ${statusDot}${statusLabel}
-        </div>
-
-        <div style="border-top: 1px solid var(--jet); margin-bottom: 16px;"></div>
-
-        <!-- Stats Grid -->
-        <div style="display: flex; flex-direction: column; gap: 10px; text-align: center;">
-
-          <div style="background: var(--onyx); padding: 14px 20px; border-radius: 12px; border: 1px solid var(--jet);">
-            <p style="color: var(--light-gray-70); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 4px;">Total Points</p>
-            <p style="color: #fff; font-size: 22px; font-weight: 700; margin: 0;">${points}</p>
-          </div>
-
-          <div style="background: var(--onyx); padding: 12px 20px; border-radius: 12px; border: 1px solid var(--jet);">
-            <p style="color: var(--light-gray-70); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 4px;">Email</p>
-            <p style="color: #fff; font-size: 13px; font-weight: 500; margin: 0; word-break: break-all;">${email || '—'}</p>
-          </div>
-
-          <div style="background: var(--onyx); padding: 12px 20px; border-radius: 12px; border: 1px solid var(--jet);">
-            <p style="color: var(--light-gray-70); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 4px;">Joined</p>
-            <p style="color: #fff; font-size: 13px; font-weight: 500; margin: 0;">${joinDate}</p>
-          </div>
-
-        </div>
-
-        ${editPointsBtn}
-        ${toggleAdminBtn}
-
       </div>
-    `,
-    background: '#1e1e1f',
-    showConfirmButton: true,
-    confirmButtonText: '<span style="color: #1a1a1a; font-weight: 600;">Close</span>',
-    confirmButtonColor: '#ffffff',
-    customClass: {
-      popup: 'swal-monochrome-popup'
-    }
-  });
+    `).join('');
+  } catch (err) {
+    resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: #ff5f5f;">Error API: ${err.message}</p>`;
+  }
 };
 
-/**
- * TOGGLE ADMIN ROLE (OWNER ONLY)
- */
-window.toggleAdminRole = async function(userId, username, currentRole) {
-  const isCurrentlyAdmin = currentRole?.toLowerCase() === 'admin';
-  const newRole = isCurrentlyAdmin ? 'Member' : 'Admin';
-  const actionText = isCurrentlyAdmin ? 'Remove Admin from' : 'Make Admin';
+window.applyApiResult = function (idx) {
+  const item = lastApiResults[idx];
+  if (!item) return;
+  document.getElementById('media-title').value = item.title;
+  document.getElementById('media-cover').value = item.cover || '';
+  if (item.total) document.getElementById('media-total').value = item.total;
+  if (item.unit) document.getElementById('media-unit').value = item.unit;
+  document.getElementById('api-search-results').style.display = 'none';
+};
 
-  const result = await Swal.fire({
-    title: `${actionText} ${username}?`,
-    text: isCurrentlyAdmin
-      ? `${username} will be demoted to Member.`
-      : `${username} will be promoted to Admin and can manage leaderboard points.`,
+// ==========================================
+// 6. CRUD SUPABASE (CREATE, UPDATE, DELETE)
+// ==========================================
+document.getElementById('media-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const id = document.getElementById('media-id').value;
+  const category = document.getElementById('media-category').value;
+  const subCategory = category === 'other' ? document.getElementById('media-sub-category').value : null;
+  const ratingRaw = document.getElementById('media-rating').value;
+  const totalRaw = document.getElementById('media-total').value;
+
+  const payload = {
+    title: document.getElementById('media-title').value.trim(),
+    category,
+    sub_category: subCategory,
+    cover_url: document.getElementById('media-cover').value.trim() || null,
+    status: document.getElementById('media-status').value,
+    progress: parseInt(document.getElementById('media-progress').value) || 0,
+    total_units: totalRaw ? parseInt(totalRaw) : null,
+    unit_label: document.getElementById('media-unit').value,
+    rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null,
+    updated_at: new Date().toISOString()
+  };
+
+  let error;
+  if (id) {
+    ({ error } = await supabaseClient.from('media_logs').update(payload).eq('id', id));
+  } else {
+    ({ error } = await supabaseClient.from('media_logs').insert([payload]));
+  }
+
+  if (error) {
+    Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
+  } else {
+    closeMediaModal();
+    await fetchMediaLogs();
+  }
+});
+
+window.incrementProgress = async function (id) {
+  const item = allMediaLogs.find(m => m.id === id);
+  if (!item) return;
+
+  const nextProgress = (item.progress || 0) + 1;
+  const nextStatus = (item.total_units && nextProgress >= item.total_units) ? 'completed' : item.status;
+
+  const { error } = await supabaseClient
+    .from('media_logs')
+    .update({ progress: nextProgress, status: nextStatus, updated_at: new Date().toISOString() })
+    .eq('id', id);
+
+  if (!error) await fetchMediaLogs();
+};
+
+window.deleteMedia = async function (id) {
+  const confirm = await Swal.fire({
+    text: 'Hapus media ini dari daftar?',
     icon: 'warning',
     showCancelButton: true,
-    confirmButtonColor: isCurrentlyAdmin ? '#ff5f5f' : '#4caf50',
-    cancelButtonColor: '#444',
-    confirmButtonText: isCurrentlyAdmin ? 'Yes, Remove Admin' : 'Yes, Make Admin',
+    confirmButtonColor: '#ff5f5f',
+    confirmButtonText: 'Hapus',
     background: '#1e1e1f',
     color: '#fff'
   });
 
-  if (result.isConfirmed) {
-    try {
-      const { error } = await supabaseClient
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', userId);
-
-      if (error) throw error;
-
-      Swal.fire({
-        icon: 'success',
-        title: 'Role Updated!',
-        text: `${username} is now ${newRole}.`,
-        background: '#1e1e1f',
-        color: '#fff',
-        timer: 1800,
-        showConfirmButton: false
-      });
-
-      if (typeof loadLeaderboard === 'function') loadLeaderboard();
-
-    } catch (err) {
-      Swal.fire({ icon: 'error', text: err.message, background: '#1e1e1f', color: '#fff' });
-    }
+  if (confirm.isConfirmed) {
+    const { error } = await supabaseClient.from('media_logs').delete().eq('id', id);
+    if (!error) await fetchMediaLogs();
   }
 };
