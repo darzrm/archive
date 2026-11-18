@@ -196,6 +196,11 @@ function formatCategoryBadge(item) {
   return item.category;
 }
 
+function normalizeImageUrl(url) {
+  if (!url) return '';
+  return url.trim().replace(/^http:\/\//i, 'https://');
+}
+
 function renderMediaGrid() {
   const grid = document.getElementById('media-grid');
   const query = document.getElementById('search-library').value.toLowerCase().trim();
@@ -222,15 +227,20 @@ function renderMediaGrid() {
   }
 
   grid.innerHTML = filtered.map(item => {
-    const cover = item.cover_url || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
+    const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
     const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
     const progressText = item.total_units
       ? `${item.progress || 0} / ${item.total_units} ${item.unit_label || ''}`
       : `${item.progress || 0} ${item.unit_label || ''}`;
 
-    const percent = item.total_units
-      ? Math.min(100, Math.round(((item.progress || 0) / item.total_units) * 100))
-      : (item.status === 'completed' ? 100 : 35);
+    let percent = 0;
+    if (item.status === 'completed') {
+      percent = 100;
+    } else if (item.total_units && Number(item.total_units) > 0) {
+      percent = Math.min(100, Math.max(0, Math.round(((item.progress || 0) / Number(item.total_units)) * 100)));
+    } else {
+      percent = (item.progress || 0) > 0 ? 40 : 0;
+    }
 
     const adminControls = isAdminLoggedIn ? `
       <div class="admin-card-actions">
@@ -243,19 +253,19 @@ function renderMediaGrid() {
     return `
       <div class="media-card">
         <div class="media-cover-wrap">
-          <img src="${cover}" alt="${item.title}" loading="lazy">
+          <img src="${cover}" alt="${item.title}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=No+Cover'">
           <span class="badge-cat">${formatCategoryBadge(item)}</span>
           <span class="badge-rating">${ratingText}</span>
         </div>
         <div class="media-body">
           <h3 class="media-title" title="${item.title}">${item.title}</h3>
-          <div>
+          <div class="media-progress-wrap">
             <div class="media-meta-row">
               <span class="status-pill ${item.status}">${item.status}</span>
               <span>${progressText}</span>
             </div>
             <div class="progress-track">
-              <div class="progress-fill" style="width: ${percent}%"></div>
+              <div class="progress-fill ${item.status === 'completed' ? 'completed' : ''}" style="width: ${percent}%"></div>
             </div>
           </div>
           ${adminControls}
@@ -323,6 +333,24 @@ window.handleCategoryFormChange = function () {
   }
 };
 
+window.handleStatusFormChange = function () {
+  const status = document.getElementById('media-status').value;
+  const totalVal = parseInt(document.getElementById('media-total').value, 10);
+
+  if (status === 'completed' && totalVal > 0) {
+    document.getElementById('media-progress').value = totalVal;
+  }
+};
+
+window.handleTotalUnitsChange = function () {
+  const status = document.getElementById('media-status').value;
+  const totalVal = parseInt(document.getElementById('media-total').value, 10);
+
+  if (status === 'completed' && totalVal > 0) {
+    document.getElementById('media-progress').value = totalVal;
+  }
+};
+
 // Fetch helper with timeout so blocked domains never hang search
 async function fetchWithTimeout(url, options = {}, timeoutMs = 4500) {
   const controller = new AbortController();
@@ -341,7 +369,7 @@ async function fetchAniListMedia(query, isNovel = false) {
       Page(perPage: 6) {
         media(search: $search, type: MANGA, ${isNovel ? 'format: NOVEL' : 'format_not: NOVEL'}) {
           title { english romaji }
-          coverImage { large }
+          coverImage { large medium }
           chapters
           volumes
           countryOfOrigin
@@ -360,7 +388,7 @@ async function fetchAniListMedia(query, isNovel = false) {
     const label = isNovel ? 'Light Novel' : (originMap[m.countryOfOrigin] || 'Comic');
     return {
       title: m.title.english || m.title.romaji,
-      cover: m.coverImage?.large || '',
+      cover: normalizeImageUrl(m.coverImage?.large || m.coverImage?.medium || ''),
       total: isNovel ? (m.volumes || m.chapters || null) : (m.chapters || null),
       unit: isNovel ? (m.volumes ? 'vol' : 'ch') : 'ch',
       meta: `${label} · ${isNovel ? (m.volumes || '?') + ' Vol' : (m.chapters || '?') + ' Ch'}`
@@ -393,33 +421,33 @@ window.searchExternalAPI = async function () {
 
   if (cat === 'series') {
     const [jikanRes, tvmazeRes, tmdbRes] = await Promise.allSettled([
-      // 1. Jikan Anime TV (MyAnimeList - No key required)
+      // 1. Jikan Anime TV
       (async () => {
         const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=5&sfw=true`);
         if (!res.ok) return [];
         const data = await res.json();
         return (data.data || []).map(a => ({
           title: a.title_english || a.title,
-          cover: a.images?.jpg?.large_image_url || '',
+          cover: normalizeImageUrl(a.images?.jpg?.large_image_url || a.images?.jpg?.image_url || a.images?.webp?.large_image_url || ''),
           total: a.episodes || null,
           unit: 'eps',
           meta: `Anime Series · ${a.episodes || '?'} Eps`
         }));
       })(),
-      // 2. TVMaze API (Global TV series - No key required)
+      // 2. TVMaze API
       (async () => {
         const res = await fetchWithTimeout(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
         const data = await res.json();
         return (data || []).slice(0, 5).map(entry => ({
           tvmazeId: entry.show.id,
           title: entry.show.name,
-          cover: entry.show.image?.original || entry.show.image?.medium || '',
+          cover: normalizeImageUrl(entry.show.image?.original || entry.show.image?.medium || ''),
           total: null,
           unit: 'eps',
           meta: `TV Series · ${entry.show.premiered?.slice(0, 4) || 'Show'}`
         }));
       })(),
-      // 3. TMDB TV (Used if accessible)
+      // 3. TMDB TV
       (async () => {
         if (!TMDB_API_KEY) return [];
         const res = await fetchWithTimeout(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
@@ -443,32 +471,32 @@ window.searchExternalAPI = async function () {
 
   } else if (cat === 'movie') {
     const [jikanRes, itunesRes, tmdbRes] = await Promise.allSettled([
-      // 1. Jikan Anime Movie (MyAnimeList - No key required)
+      // 1. Jikan Anime Movie
       (async () => {
         const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=movie&limit=5&sfw=true`);
         if (!res.ok) return [];
         const data = await res.json();
         return (data.data || []).map(a => ({
           title: a.title_english || a.title,
-          cover: a.images?.jpg?.large_image_url || '',
+          cover: normalizeImageUrl(a.images?.jpg?.large_image_url || a.images?.jpg?.image_url || a.images?.webp?.large_image_url || ''),
           total: 1,
           unit: 'movie',
           meta: `Anime Movie · ${a.year || 'Film'}`
         }));
       })(),
-      // 2. iTunes Movie Search API (Global movies - No key required)
+      // 2. iTunes Movie Search API
       (async () => {
         const res = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=movie&limit=5`);
         const data = await res.json();
         return (data.results || []).map(m => ({
           title: m.trackName,
-          cover: m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : '',
+          cover: normalizeImageUrl(m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : ''),
           total: 1,
           unit: 'movie',
           meta: `Movie · ${m.releaseDate?.slice(0, 4) || 'Film'}`
         }));
       })(),
-      // 3. TMDB Movie (Used if accessible)
+      // 3. TMDB Movie
       (async () => {
         if (!TMDB_API_KEY) return [];
         const res = await fetchWithTimeout(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
@@ -500,7 +528,7 @@ window.searchExternalAPI = async function () {
           .filter(m => m.type !== 'Light Novel' && m.type !== 'Novel')
           .map(m => ({
             title: m.title_english || m.title,
-            cover: m.images?.jpg?.large_image_url || '',
+            cover: normalizeImageUrl(m.images?.jpg?.large_image_url || m.images?.jpg?.image_url || m.images?.webp?.large_image_url || ''),
             total: m.chapters || null,
             unit: 'ch',
             meta: `${m.type} · ${m.chapters || '?'} Ch`
@@ -523,7 +551,7 @@ window.searchExternalAPI = async function () {
         const data = await res.json();
         return (data.data || []).map(ln => ({
           title: ln.title_english || ln.title,
-          cover: ln.images?.jpg?.large_image_url || '',
+          cover: normalizeImageUrl(ln.images?.jpg?.large_image_url || ln.images?.jpg?.image_url || ln.images?.webp?.large_image_url || ''),
           total: ln.volumes || ln.chapters || null,
           unit: ln.volumes ? 'vol' : 'ch',
           meta: `Light Novel · ${ln.volumes || '?'} Vol`
@@ -546,7 +574,7 @@ window.searchExternalAPI = async function () {
         const data = await res.json();
         return (data.results || []).map(g => ({
           title: g.name,
-          cover: g.background_image || '',
+          cover: normalizeImageUrl(g.background_image || ''),
           total: 1,
           unit: 'item',
           meta: `Game · ${g.released?.slice(0, 4) || ''}`
@@ -565,7 +593,7 @@ window.searchExternalAPI = async function () {
         const data = await res.json();
         return (data.results || []).map(g => ({
           title: g.title,
-          cover: g.image?.url || '',
+          cover: normalizeImageUrl(g.image?.url || ''),
           total: 1,
           unit: 'item',
           meta: `Visual Novel · ${g.released || ''}`
@@ -587,7 +615,7 @@ window.searchExternalAPI = async function () {
 
   resultsBox.innerHTML = items.map((it, idx) => `
     <div class="api-result-item" onclick="applyApiResult(${idx})">
-      <img src="${it.cover || 'https://placehold.co/60x90/1e1e1f/888?text=?'}" alt="" onerror="this.src='https://placehold.co/60x90/1e1e1f/888?text=?'">
+      <img src="${it.cover || 'https://placehold.co/60x90/1e1e1f/888?text=?'}" alt="" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/60x90/1e1e1f/888?text=?'">
       <div class="api-result-info">
         <h4>${it.title}</h4>
         <p>${it.meta}</p>
@@ -604,6 +632,7 @@ window.applyApiResult = async function (idx) {
   document.getElementById('media-cover').value = item.cover || '';
   if (item.total) document.getElementById('media-total').value = item.total;
   if (item.unit) document.getElementById('media-unit').value = item.unit;
+  handleTotalUnitsChange();
   document.getElementById('api-search-results').style.display = 'none';
 
   // Auto-fetch total episodes from TVMaze
@@ -613,6 +642,7 @@ window.applyApiResult = async function (idx) {
       const epData = await epRes.json();
       if (Array.isArray(epData) && epData.length > 0) {
         document.getElementById('media-total').value = epData.length;
+        handleTotalUnitsChange();
       }
     } catch (e) {
       console.error('TVMaze episode count error:', e);
@@ -626,6 +656,7 @@ window.applyApiResult = async function (idx) {
       const detailData = await detailRes.json();
       if (detailData.number_of_episodes) {
         document.getElementById('media-total').value = detailData.number_of_episodes;
+        handleTotalUnitsChange();
       }
     } catch (e) {
       console.error('TMDB detail error:', e);
@@ -644,15 +675,22 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
   const subCategory = category === 'other' ? document.getElementById('media-sub-category').value : null;
   const ratingRaw = document.getElementById('media-rating').value;
   const totalRaw = document.getElementById('media-total').value;
+  const statusVal = document.getElementById('media-status').value;
+  const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
+  let progressVal = parseInt(document.getElementById('media-progress').value, 10) || 0;
+
+  if (statusVal === 'completed' && totalUnits && totalUnits > 0) {
+    progressVal = totalUnits;
+  }
 
   const payload = {
     title: document.getElementById('media-title').value.trim(),
     category,
     sub_category: subCategory,
-    cover_url: document.getElementById('media-cover').value.trim() || null,
-    status: document.getElementById('media-status').value,
-    progress: parseInt(document.getElementById('media-progress').value) || 0,
-    total_units: totalRaw ? parseInt(totalRaw) : null,
+    cover_url: normalizeImageUrl(document.getElementById('media-cover').value) || null,
+    status: statusVal,
+    progress: progressVal,
+    total_units: totalUnits,
     unit_label: document.getElementById('media-unit').value,
     rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null,
     updated_at: new Date().toISOString()
