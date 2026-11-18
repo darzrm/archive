@@ -136,7 +136,7 @@ function updateStatsUI() {
   const totalTvEps = tvItems.reduce((sum, i) => sum + (i.progress || 0), 0);
   const completedMovies = movieItems.filter(i => (i.status || '').toLowerCase().trim() === 'completed').length;
   const totalComicCh = comicItems.reduce((sum, i) => sum + (i.progress || 0), 0);
-  const totalNovelUnits = novelItems.reduce((sum, i) => sum + (i.progress || 0), 0);
+  const completedNovels = novelItems.filter(i => (i.status || '').toLowerCase().trim() === 'completed').length;
   const completedGames = gameItems.filter(i => (i.status || '').toLowerCase().trim() === 'completed').length;
   const totalMusicTracks = musicItems.reduce((sum, i) => sum + (i.progress || 0), 0);
 
@@ -152,22 +152,22 @@ function updateStatsUI() {
   document.getElementById('total-entries-label').textContent = `${totalEntries} Entries`;
 
   document.getElementById('stat-tv-eps').textContent = totalTvEps.toLocaleString('en-US');
-  document.getElementById('stat-tv-count').textContent = `${tvItems.length} Shows`;
+  document.getElementById('stat-tv-count').textContent = `Episodes · ${tvItems.length} Shows`;
 
   document.getElementById('stat-movies').textContent = completedMovies.toLocaleString('en-US');
   document.getElementById('stat-movies-total').textContent = `${movieItems.length} Total`;
 
   document.getElementById('stat-comic-ch').textContent = totalComicCh.toLocaleString('en-US');
-  document.getElementById('stat-comic-count').textContent = `${comicItems.length} Comics`;
+  document.getElementById('stat-comic-count').textContent = `Chapters · ${comicItems.length} Comics`;
 
-  document.getElementById('stat-novel-units').textContent = totalNovelUnits.toLocaleString('en-US');
-  document.getElementById('stat-novel-count').textContent = `${novelItems.length} Novels`;
+  document.getElementById('stat-novel-completed').textContent = completedNovels.toLocaleString('en-US');
+  document.getElementById('stat-novel-total').textContent = `${novelItems.length} Total`;
 
   document.getElementById('stat-game-count').textContent = gameItems.length.toLocaleString('en-US');
   document.getElementById('stat-game-done').textContent = `${completedGames} Completed`;
 
   document.getElementById('stat-music-count').textContent = musicItems.length.toLocaleString('en-US');
-  document.getElementById('stat-music-units').textContent = `${totalMusicTracks} Tracks`;
+  document.getElementById('stat-music-units').textContent = `Albums · ${totalMusicTracks.toLocaleString('en-US')} Tracks`;
 
   document.getElementById('stat-completed-total').textContent = totalCompleted.toLocaleString('en-US');
   document.getElementById('stat-completion-rate').textContent = `${completionRate}% Rate`;
@@ -175,6 +175,7 @@ function updateStatsUI() {
   document.getElementById('stat-avg-rating').textContent = avgRating;
   document.getElementById('stat-rated-count').textContent = `${ratedItems.length} Rated`;
 }
+
 
 // ==========================================
 // 4. FILTER, SEARCH & RENDER GRID
