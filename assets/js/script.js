@@ -157,22 +157,22 @@ function updateStatsUI() {
   setElText('total-entries-label', `${totalEntries} Entries`);
 
   setElText('stat-tv-eps', totalTvEps.toLocaleString('en-US'));
-  setElText('stat-tv-count', `Episodes · ${tvItems.length} Shows`);
+  setElText('stat-tv-count', `${tvItems.length} Show`);
 
-  setElText('stat-movies', completedMovies.toLocaleString('en-US'));
-  setElText('stat-movies-total', `${movieItems.length} Total`);
+  setElText('stat-movies-total', movieItems.length.toLocaleString('en-US'));
+  setElText('stat-movies-done', `${completedMovies} Completed`);
 
   setElText('stat-comic-ch', totalComicCh.toLocaleString('en-US'));
-  setElText('stat-comic-count', `Chapters · ${comicItems.length} Comics`);
+  setElText('stat-comic-count', `${comicItems.length} Comic`);
 
-  setElText('stat-novel-completed', completedNovels.toLocaleString('en-US'));
-  setElText('stat-novel-total', `${novelItems.length} Total`);
+  setElText('stat-novel-total', novelItems.length.toLocaleString('en-US'));
+  setElText('stat-novel-done', `${completedNovels} Completed`);
 
-  setElText('stat-game-count', gameItems.length.toLocaleString('en-US'));
+  setElText('stat-game-total', gameItems.length.toLocaleString('en-US'));
   setElText('stat-game-done', `${completedGames} Completed`);
 
-  setElText('stat-music-count', musicItems.length.toLocaleString('en-US'));
-  setElText('stat-music-units', `Albums · ${totalMusicTracks.toLocaleString('en-US')} Tracks`);
+  setElText('stat-music-total', musicItems.length.toLocaleString('en-US'));
+  setElText('stat-music-tracks', `${totalMusicTracks.toLocaleString('en-US')} Track`);
 
   setElText('stat-completed-total', totalCompleted.toLocaleString('en-US'));
   setElText('stat-completion-rate', `${completionRate}% Rate`);
