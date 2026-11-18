@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Kazvera — Personal Media Tracker</title>
   <link rel="shortcut icon" href="./assets/images/eec.png" type="image/x-icon">
-  <link rel="stylesheet" href="./assets/css/style.css?v=17">
+  <link rel="stylesheet" href="./assets/css/style.css?v=18">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -39,7 +39,7 @@
             <span class="profile-badge">Media Archive</span>
           </div>
           <p class="profile-bio">
-            Personal log for tracking watched series, movies, reading lists, and games. Automatically synced with live statistics and decimal ratings.
+            Personal log for tracking watched TV shows, movies, reading lists, games, and music. Automatically synced with live statistics and decimal ratings.
           </p>
 
           <div class="profile-socials">
@@ -57,38 +57,104 @@
     </header>
 
     <!-- ==========================================
-         2. MIDDLE SECTION: MINIMALIST STATS
+         2. MIDDLE SECTION: MODERN SYMMETRICAL STATS
     =========================================== -->
     <section class="card-section stats-section">
-      <div class="stats-header-minimal">
-        <span class="stats-title-minimal">Overview</span>
-        <span class="stats-total-minimal" id="total-entries-label">0 Entries</span>
+      <div class="stats-header-modern">
+        <div class="stats-header-left">
+          <ion-icon name="stats-chart-outline"></ion-icon>
+          <span class="stats-title-modern">Archive Overview</span>
+        </div>
+        <span class="stats-total-badge" id="total-entries-label">0 Entries</span>
       </div>
 
-      <div class="stats-minimal-strip">
-        <div class="stat-item-minimal">
-          <span class="stat-val-minimal" id="stat-series-eps">0</span>
-          <span class="stat-lbl-minimal">Series Eps · <span id="stat-series-count">0</span></span>
+      <div class="stats-modern-grid">
+        <div class="stat-card-modern">
+          <div class="stat-icon-box">
+            <ion-icon name="tv-outline"></ion-icon>
+          </div>
+          <div class="stat-info-modern">
+            <span class="stat-val-modern" id="stat-tv-eps">0</span>
+            <span class="stat-name-modern">TV Show</span>
+            <span class="stat-sub-modern" id="stat-tv-count">0 Shows</span>
+          </div>
         </div>
 
-        <div class="stat-item-minimal">
-          <span class="stat-val-minimal" id="stat-movies">0</span>
-          <span class="stat-lbl-minimal">Movies · <span id="stat-movies-total">0</span></span>
+        <div class="stat-card-modern">
+          <div class="stat-icon-box">
+            <ion-icon name="film-outline"></ion-icon>
+          </div>
+          <div class="stat-info-modern">
+            <span class="stat-val-modern" id="stat-movies">0</span>
+            <span class="stat-name-modern">Movie</span>
+            <span class="stat-sub-modern" id="stat-movies-total">0 Total</span>
+          </div>
         </div>
 
-        <div class="stat-item-minimal">
-          <span class="stat-val-minimal" id="stat-comic-ch">0</span>
-          <span class="stat-lbl-minimal">Chapters · <span id="stat-comic-count">0</span></span>
+        <div class="stat-card-modern">
+          <div class="stat-icon-box">
+            <ion-icon name="book-outline"></ion-icon>
+          </div>
+          <div class="stat-info-modern">
+            <span class="stat-val-modern" id="stat-comic-ch">0</span>
+            <span class="stat-name-modern">Comic</span>
+            <span class="stat-sub-modern" id="stat-comic-count">0 Comics</span>
+          </div>
         </div>
 
-        <div class="stat-item-minimal">
-          <span class="stat-val-minimal" id="stat-other-count">0</span>
-          <span class="stat-lbl-minimal" id="stat-other-breakdown">0 LN · 0 Game</span>
+        <div class="stat-card-modern">
+          <div class="stat-icon-box">
+            <ion-icon name="library-outline"></ion-icon>
+          </div>
+          <div class="stat-info-modern">
+            <span class="stat-val-modern" id="stat-novel-units">0</span>
+            <span class="stat-name-modern">Novel</span>
+            <span class="stat-sub-modern" id="stat-novel-count">0 Novels</span>
+          </div>
         </div>
 
-        <div class="stat-item-minimal">
-          <span class="stat-val-minimal" id="stat-avg-rating">0.0</span>
-          <span class="stat-lbl-minimal">Mean Rating</span>
+        <div class="stat-card-modern">
+          <div class="stat-icon-box">
+            <ion-icon name="game-controller-outline"></ion-icon>
+          </div>
+          <div class="stat-info-modern">
+            <span class="stat-val-modern" id="stat-game-count">0</span>
+            <span class="stat-name-modern">Game</span>
+            <span class="stat-sub-modern" id="stat-game-done">0 Completed</span>
+          </div>
+        </div>
+
+        <div class="stat-card-modern">
+          <div class="stat-icon-box">
+            <ion-icon name="musical-notes-outline"></ion-icon>
+          </div>
+          <div class="stat-info-modern">
+            <span class="stat-val-modern" id="stat-music-count">0</span>
+            <span class="stat-name-modern">Music</span>
+            <span class="stat-sub-modern" id="stat-music-units">0 Tracks</span>
+          </div>
+        </div>
+
+        <div class="stat-card-modern">
+          <div class="stat-icon-box accent-green">
+            <ion-icon name="checkmark-done-outline"></ion-icon>
+          </div>
+          <div class="stat-info-modern">
+            <span class="stat-val-modern" id="stat-completed-total">0</span>
+            <span class="stat-name-modern">Completed</span>
+            <span class="stat-sub-modern" id="stat-completion-rate">0% Rate</span>
+          </div>
+        </div>
+
+        <div class="stat-card-modern">
+          <div class="stat-icon-box accent-gold">
+            <ion-icon name="star-outline"></ion-icon>
+          </div>
+          <div class="stat-info-modern">
+            <span class="stat-val-modern" id="stat-avg-rating">0.0</span>
+            <span class="stat-name-modern">Mean Rating</span>
+            <span class="stat-sub-modern" id="stat-rated-count">0 Rated</span>
+          </div>
         </div>
       </div>
     </section>
@@ -108,18 +174,13 @@
 
         <div class="category-tabs" id="category-tabs">
           <button class="cat-tab active" data-category="all">All</button>
-          <button class="cat-tab" data-category="series">Series</button>
+          <button class="cat-tab" data-category="tv_show">TV Show</button>
           <button class="cat-tab" data-category="movie">Movie</button>
           <button class="cat-tab" data-category="comic">Comic</button>
-          <button class="cat-tab" data-category="other">Other</button>
+          <button class="cat-tab" data-category="novel">Novel</button>
+          <button class="cat-tab" data-category="game">Game</button>
+          <button class="cat-tab" data-category="music">Music</button>
         </div>
-      </div>
-
-      <!-- Sub-category pills for Other (Light Novel & Game) -->
-      <div class="sub-category-bar" id="other-sub-bar" style="display: none;">
-        <button class="sub-pill active" data-sub="all">All Other</button>
-        <button class="sub-pill" data-sub="light_novel">Light Novel</button>
-        <button class="sub-pill" data-sub="game">Game</button>
       </div>
 
       <!-- Filter & Search Controls -->
@@ -207,24 +268,16 @@
       <form id="media-form" class="modal-form">
         <input type="hidden" id="media-id">
 
-        <div class="form-row-2">
-          <div class="form-group">
-            <label>Category</label>
-            <select id="media-category" class="form-input" onchange="handleCategoryFormChange()">
-              <option value="series">Series</option>
-              <option value="movie">Movie</option>
-              <option value="comic">Comic</option>
-              <option value="other">Other (Light Novel / Game)</option>
-            </select>
-          </div>
-
-          <div class="form-group" id="sub-category-group" style="display: none;">
-            <label>Sub-Category (Other)</label>
-            <select id="media-sub-category" class="form-input" onchange="handleCategoryFormChange()">
-              <option value="light_novel">Light Novel</option>
-              <option value="game">Game</option>
-            </select>
-          </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select id="media-category" class="form-input" onchange="handleCategoryFormChange()">
+            <option value="tv_show">TV Show</option>
+            <option value="movie">Movie</option>
+            <option value="comic">Comic</option>
+            <option value="novel">Novel</option>
+            <option value="game">Game</option>
+            <option value="music">Music</option>
+          </select>
         </div>
 
         <!-- Auto-Fetch Search Bar -->
@@ -277,12 +330,13 @@
 
         <div class="form-row-2">
           <div class="form-group">
-            <label>Unit Label</label>
+            <label>Unit Type</label>
             <select id="media-unit" class="form-input">
               <option value="eps">Episode</option>
               <option value="movie">Movie</option>
               <option value="ch">Chapter</option>
               <option value="vol">Volume</option>
+              <option value="track">Track</option>
               <option value="item">Item</option>
             </select>
           </div>
@@ -309,7 +363,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./assets/js/script.js?v=17"></script>
+  <script src="./assets/js/script.js?v=18"></script>
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 </body>
