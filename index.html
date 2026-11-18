@@ -5,9 +5,9 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Media Tracker</title>
-  <link id="favicon-link" rel="shortcut icon" href="./assets/images/profile.jpg" type="image/x-icon">
-  <link rel="stylesheet" href="./assets/css/style.css?v=35">
+  <title>Archive</title>
+  <link id="favicon-link" rel="shortcut icon" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" type="image/x-icon">
+  <link rel="stylesheet" href="./assets/css/style.css?v=36">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -21,10 +21,9 @@
          1. TOP SECTION: PROFILE
     =========================================== -->
     <header class="card-section profile-header">
-      <div class="profile-top-actions" style="display: flex; gap: 8px;">
-        <button id="btn-edit-profile" class="pill-btn" style="display: none;" onclick="openProfileModal()" title="Edit Profile">
+      <div class="profile-top-actions">
+        <button id="btn-edit-profile" class="icon-pill-btn" style="display: none;" onclick="openProfileModal()" title="Edit Profile">
           <ion-icon name="create-outline"></ion-icon>
-          <span>Edit Profile</span>
         </button>
         <button id="btn-admin-toggle" class="pill-btn" onclick="handleAdminAuthClick()" title="Admin Access">
           <ion-icon id="admin-lock-icon" name="lock-closed-outline"></ion-icon>
@@ -34,154 +33,159 @@
 
       <div class="profile-main">
         <figure class="profile-avatar">
-          <img id="profile-avatar-img" src="./assets/images/profile.jpg" alt="Profile Avatar" onerror="this.src='https://placehold.co/200x200/1e1e1f/ffffff?text=D'">
+          <img id="profile-avatar-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" style="opacity: 0; transition: opacity 0.2s ease;">
         </figure>
 
         <div class="profile-details">
           <div class="profile-name-row">
-            <h1 class="profile-name" id="profile-name-text">dariraa</h1>
+            <h1 class="profile-name" id="profile-name-text"></h1>
           </div>
-          <p class="profile-bio" id="profile-bio-text">
-            glory glory man united!
-          </p>
+          <p class="profile-bio" id="profile-bio-text"></p>
         </div>
       </div>
     </header>
 
     <!-- ==========================================
-         2. MIDDLE SECTION: MODERN SYMMETRICAL STATS
-    =========================================== -->
-    <section class="card-section stats-section">
-      <div class="stats-header-modern">
-        <div class="stats-header-left">
-          <ion-icon name="stats-chart-outline"></ion-icon>
-          <span class="stats-title-modern">Archive Overview</span>
-        </div>
-        <span class="stats-total-badge" id="total-entries-label">0 Entries</span>
-      </div>
-
-      <div class="stats-modern-grid">
-        <div class="stat-card-modern">
-          <div class="stat-icon-box">
-            <ion-icon name="tv-outline"></ion-icon>
-          </div>
-          <div class="stat-info-modern">
-            <span class="stat-val-modern" id="stat-tv-eps">0</span>
-            <span class="stat-name-modern">Episode</span>
-            <span class="stat-sub-modern" id="stat-tv-count">0 Show</span>
-          </div>
-        </div>
-
-        <div class="stat-card-modern">
-          <div class="stat-icon-box">
-            <ion-icon name="film-outline"></ion-icon>
-          </div>
-          <div class="stat-info-modern">
-            <span class="stat-val-modern" id="stat-movies-total">0</span>
-            <span class="stat-name-modern">Movies</span>
-            <span class="stat-sub-modern" id="stat-movies-done">0 Completed</span>
-          </div>
-        </div>
-
-        <div class="stat-card-modern">
-          <div class="stat-icon-box">
-            <ion-icon name="book-outline"></ion-icon>
-          </div>
-          <div class="stat-info-modern">
-            <span class="stat-val-modern" id="stat-comic-ch">0</span>
-            <span class="stat-name-modern">Chapter</span>
-            <span class="stat-sub-modern" id="stat-comic-count">0 Comic</span>
-          </div>
-        </div>
-
-        <div class="stat-card-modern">
-          <div class="stat-icon-box">
-            <ion-icon name="library-outline"></ion-icon>
-          </div>
-          <div class="stat-info-modern">
-            <span class="stat-val-modern" id="stat-novel-total">0</span>
-            <span class="stat-name-modern">Novel</span>
-            <span class="stat-sub-modern" id="stat-novel-done">0 Completed</span>
-          </div>
-        </div>
-
-        <div class="stat-card-modern">
-          <div class="stat-icon-box">
-            <ion-icon name="game-controller-outline"></ion-icon>
-          </div>
-          <div class="stat-info-modern">
-            <span class="stat-val-modern" id="stat-game-total">0</span>
-            <span class="stat-name-modern">Game</span>
-            <span class="stat-sub-modern" id="stat-game-done">0 Completed</span>
-          </div>
-        </div>
-
-        <div class="stat-card-modern">
-          <div class="stat-icon-box">
-            <ion-icon name="musical-notes-outline"></ion-icon>
-          </div>
-          <div class="stat-info-modern">
-            <span class="stat-val-modern" id="stat-music-total">0</span>
-            <span class="stat-name-modern">Album</span>
-            <span class="stat-sub-modern" id="stat-music-tracks">0 Track</span>
-          </div>
-        </div>
-
-        <div class="stat-card-modern">
-          <div class="stat-icon-box">
-            <ion-icon name="checkmark-done-outline"></ion-icon>
-          </div>
-          <div class="stat-info-modern">
-            <span class="stat-val-modern" id="stat-completed-total">0</span>
-            <span class="stat-name-modern">Completed</span>
-            <span class="stat-sub-modern" id="stat-completion-rate">0% Rate</span>
-          </div>
-        </div>
-
-        <div class="stat-card-modern">
-          <div class="stat-icon-box">
-            <ion-icon name="star-outline"></ion-icon>
-          </div>
-          <div class="stat-info-modern">
-            <span class="stat-val-modern" id="stat-avg-rating">0.0</span>
-            <span class="stat-name-modern">Mean Rating</span>
-            <span class="stat-sub-modern" id="stat-rated-count">0 Rated</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ==========================================
-         3. BOTTOM SECTION: TABBED LIBRARY & BLOG
+         2. MAIN SECTION: TABBED NOTES & LIBRARY
     =========================================== -->
     <section class="card-section library-section">
-      <!-- Top Switcher Tabs (Library vs Blog) -->
+      <!-- Top Switcher Tabs (Notes Priority Left vs Library) -->
       <div class="main-switcher-bar">
         <div class="main-view-tabs">
-          <button type="button" class="main-view-btn active" data-view="library" onclick="switchMainView('library')">
+          <button type="button" class="main-view-btn active" data-view="blog" onclick="switchMainView('blog')">
+            <ion-icon name="chatbox-ellipses-outline"></ion-icon>
+            <span>Notes</span>
+          </button>
+          <button type="button" class="main-view-btn" data-view="library" onclick="switchMainView('library')">
             <ion-icon name="albums-outline"></ion-icon>
             <span>Library</span>
-          </button>
-          <button type="button" class="main-view-btn" data-view="blog" onclick="switchMainView('blog')">
-            <ion-icon name="chatbox-ellipses-outline"></ion-icon>
-            <span>Blog & Notes</span>
           </button>
         </div>
 
         <!-- Contextual Admin Action Buttons -->
-        <button id="btn-add-media" class="minimal-add-btn" style="display: none;" onclick="openMediaModal()">
-          <ion-icon name="add-outline"></ion-icon>
-          <span>Add Media</span>
-        </button>
-
         <button id="btn-add-post" class="minimal-add-btn" style="display: none;" onclick="openPostModal()">
           <ion-icon name="create-outline"></ion-icon>
           <span>New Post</span>
         </button>
+
+        <button id="btn-add-media" class="minimal-add-btn" style="display: none;" onclick="openMediaModal()">
+          <ion-icon name="add-outline"></ion-icon>
+          <span>Add Media</span>
+        </button>
       </div>
 
-      <!-- TAB 1: MEDIA LIBRARY VIEW -->
-      <div id="view-library">
+      <!-- TAB 1 (DEFAULT PRIORITY): PERSONAL NOTES VIEW -->
+      <div id="view-blog">
+        <div id="blog-feed-list" class="blog-feed-list">
+          <p class="empty-state">Loading posts...</p>
+        </div>
+      </div>
+
+      <!-- TAB 2: MEDIA LIBRARY VIEW -->
+      <div id="view-library" style="display: none;">
+        <!-- Collapsible Stats Bar -->
+        <div class="library-stats-bar">
+          <button type="button" id="btn-toggle-stats" class="stats-toggle-btn" onclick="toggleLibraryStats()">
+            <ion-icon name="stats-chart-outline"></ion-icon>
+            <span id="stats-toggle-text">Show Stats</span>
+            <ion-icon id="stats-chevron-icon" name="chevron-down-outline"></ion-icon>
+          </button>
+          <span class="stats-total-badge" id="total-entries-label">0 Entries</span>
+        </div>
+
+        <div id="collapsible-stats-panel" class="collapsible-stats-panel" style="display: none;">
+          <div class="stats-modern-grid">
+            <div class="stat-card-modern">
+              <div class="stat-icon-box">
+                <ion-icon name="tv-outline"></ion-icon>
+              </div>
+              <div class="stat-info-modern">
+                <span class="stat-val-modern" id="stat-tv-eps">0</span>
+                <span class="stat-name-modern">Episode</span>
+                <span class="stat-sub-modern" id="stat-tv-count">0 Show</span>
+              </div>
+            </div>
+
+            <div class="stat-card-modern">
+              <div class="stat-icon-box">
+                <ion-icon name="film-outline"></ion-icon>
+              </div>
+              <div class="stat-info-modern">
+                <span class="stat-val-modern" id="stat-movies-total">0</span>
+                <span class="stat-name-modern">Movies</span>
+                <span class="stat-sub-modern" id="stat-movies-done">0 Completed</span>
+              </div>
+            </div>
+
+            <div class="stat-card-modern">
+              <div class="stat-icon-box">
+                <ion-icon name="book-outline"></ion-icon>
+              </div>
+              <div class="stat-info-modern">
+                <span class="stat-val-modern" id="stat-comic-ch">0</span>
+                <span class="stat-name-modern">Chapter</span>
+                <span class="stat-sub-modern" id="stat-comic-count">0 Comic</span>
+              </div>
+            </div>
+
+            <div class="stat-card-modern">
+              <div class="stat-icon-box">
+                <ion-icon name="library-outline"></ion-icon>
+              </div>
+              <div class="stat-info-modern">
+                <span class="stat-val-modern" id="stat-novel-total">0</span>
+                <span class="stat-name-modern">Novel</span>
+                <span class="stat-sub-modern" id="stat-novel-done">0 Completed</span>
+              </div>
+            </div>
+
+            <div class="stat-card-modern">
+              <div class="stat-icon-box">
+                <ion-icon name="game-controller-outline"></ion-icon>
+              </div>
+              <div class="stat-info-modern">
+                <span class="stat-val-modern" id="stat-game-total">0</span>
+                <span class="stat-name-modern">Game</span>
+                <span class="stat-sub-modern" id="stat-game-done">0 Completed</span>
+              </div>
+            </div>
+
+            <div class="stat-card-modern">
+              <div class="stat-icon-box">
+                <ion-icon name="musical-notes-outline"></ion-icon>
+              </div>
+              <div class="stat-info-modern">
+                <span class="stat-val-modern" id="stat-music-total">0</span>
+                <span class="stat-name-modern">Album</span>
+                <span class="stat-sub-modern" id="stat-music-tracks">0 Track</span>
+              </div>
+            </div>
+
+            <div class="stat-card-modern">
+              <div class="stat-icon-box">
+                <ion-icon name="checkmark-done-outline"></ion-icon>
+              </div>
+              <div class="stat-info-modern">
+                <span class="stat-val-modern" id="stat-completed-total">0</span>
+                <span class="stat-name-modern">Completed</span>
+                <span class="stat-sub-modern" id="stat-completion-rate">0% Rate</span>
+              </div>
+            </div>
+
+            <div class="stat-card-modern">
+              <div class="stat-icon-box">
+                <ion-icon name="star-outline"></ion-icon>
+              </div>
+              <div class="stat-info-modern">
+                <span class="stat-val-modern" id="stat-avg-rating">0.0</span>
+                <span class="stat-name-modern">Mean Rating</span>
+                <span class="stat-sub-modern" id="stat-rated-count">0 Rated</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Category Filter Tabs -->
         <div class="library-top-bar">
           <div class="category-tabs" id="category-tabs">
             <button class="cat-tab active" data-category="all">All</button>
@@ -223,13 +227,6 @@
           <p class="empty-state">Loading media library...</p>
         </div>
       </div>
-
-      <!-- TAB 2: PERSONAL BLOG / NOTES VIEW -->
-      <div id="view-blog" style="display: none;">
-        <div id="blog-feed-list" class="blog-feed-list">
-          <p class="empty-state">Loading posts...</p>
-        </div>
-      </div>
     </section>
 
     <!-- Footer -->
@@ -237,8 +234,8 @@
       <div class="footer-divider"></div>
       <div class="footer-container">
         <div class="footer-brand">
-          <span class="brand-name">DARIRAA</span>
-          <span class="brand-tagline">Personal Media Tracker</span>
+          <span class="brand-name" id="footer-brand-name">ARCHIVE</span>
+          <span class="brand-tagline">Personal Archive</span>
         </div>
         <div class="footer-info">
           <span class="info-item">Powered by Supabase & GitHub Pages</span>
@@ -485,7 +482,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./assets/js/script.js?v=35"></script>
+  <script src="./assets/js/script.js?v=36"></script>
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 </body>
