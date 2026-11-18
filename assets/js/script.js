@@ -267,10 +267,9 @@ function renderMediaGrid() {
 
     const statusDateText = formatStatusDate(item.status_updated_at || item.updated_at || item.created_at);
 
-    const editBtnHtml = isAdminLoggedIn ? `
-      <button class="card-edit-btn" onclick="openEditModal('${item.id}')" title="Edit Entry">
+    const coverEditHtml = isAdminLoggedIn ? `
+      <button type="button" class="cover-edit-btn" onclick="openEditModal('${item.id}')" title="Edit Entry">
         <ion-icon name="create-outline"></ion-icon>
-        <span>Edit</span>
       </button>
     ` : '';
 
@@ -278,26 +277,26 @@ function renderMediaGrid() {
       <div class="media-card">
         <div class="media-cover-wrap">
           <img src="${cover}" alt="${item.title}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=No+Cover'">
-          <span class="badge-cat">${formatCategoryBadge(item)}</span>
-          <span class="badge-rating">${ratingText}</span>
+          <div class="cover-left-badges">
+            <span class="badge-cat">${formatCategoryBadge(item)}</span>
+            <span class="badge-rating">${ratingText}</span>
+          </div>
+          ${coverEditHtml}
         </div>
         <div class="media-body">
           <h3 class="media-title" title="${item.title}">${item.title}</h3>
-          <div class="media-progress-wrap">
+          <div class="media-bottom-stack">
             <div class="media-meta-row">
               <span class="status-pill ${statusKey}">${statusKey}</span>
               <span>${progressText}</span>
             </div>
+            <div class="status-date-row" title="Last status update">
+              <ion-icon name="calendar-outline"></ion-icon>
+              <span>${statusDateText}</span>
+            </div>
             <div class="progress-track">
               <div class="progress-fill ${statusKey} ${extraBarClass}" style="width: ${percent}%"></div>
             </div>
-          </div>
-          <div class="card-bottom-row">
-            <span class="status-date-tag" title="Last status update">
-              <ion-icon name="calendar-outline"></ion-icon>
-              <span>${statusDateText}</span>
-            </span>
-            ${editBtnHtml}
           </div>
         </div>
       </div>
@@ -715,7 +714,6 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
     progressVal = totalUnits;
   }
 
-  // Only refresh status date when creating new entry or when status actually changed
   const statusChanged = !existingItem || existingItem.status !== statusVal;
   const statusTimestamp = statusChanged
     ? new Date().toISOString()
