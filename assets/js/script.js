@@ -14,6 +14,7 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // Application State
 let allMediaLogs = [];
 let lastApiResults = [];
+let pendingUploadedUrls = [];
 let currentCategory = 'all';
 let isAdminLoggedIn = false;
 let currentProfile = {
@@ -168,6 +169,7 @@ async function uploadImageToSupabase(file, folder = 'covers') {
     .from(STORAGE_BUCKET)
     .getPublicUrl(fileName);
 
+  pendingUploadedUrls.push(publicData.publicUrl);
   return publicData.publicUrl;
 }
 
@@ -175,22 +177,36 @@ async function deleteOldStorageFile(fileUrl) {
   if (!fileUrl) return;
   const marker = `/storage/v1/object/public/${STORAGE_BUCKET}/`;
   const idx = fileUrl.indexOf(marker);
-  if (idx === -1) return;
+  if (idx === -1) return; // Ignore external API URLs
 
   const filePath = decodeURIComponent(fileUrl.substring(idx + marker.length).split('?')[0]);
-  if (filePath) {
-    const { data, error } = await supabaseClient.storage
-      .from(STORAGE_BUCKET)
-      .remove([filePath]);
+  if (!filePath) return;
 
-    if (error) {
-      console.error('Supabase Storage Delete Error:', error.message);
-    } else {
-      console.log('Deleted old file from storage:', data);
-    }
+  const { data, error } = await supabaseClient.storage
+    .from(STORAGE_BUCKET)
+    .remove([filePath]);
+
+  if (error) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Storage Cleanup Info',
+      text: `Failed to delete old file: ${error.message}`,
+      background: '#1e1e1f',
+      color: '#fff'
+    });
+  } else if (!data || data.length === 0) {
+    console.warn('File not found or blocked by RLS policy:', filePath);
   }
 }
 
+async function cleanupPendingUploads(keepUrl = null) {
+  for (const tempUrl of pendingUploadedUrls) {
+    if (tempUrl !== keepUrl) {
+      await deleteOldStorageFile(tempUrl);
+    }
+  }
+  pendingUploadedUrls = [];
+}
 
 // ==========================================
 // 2C. PROFILE SETTINGS (FETCH, EDIT, UPLOAD)
@@ -222,6 +238,7 @@ function applyProfileToUI() {
 }
 
 window.openProfileModal = function () {
+  pendingUploadedUrls = [];
   document.getElementById('edit-profile-name').value = currentProfile.name;
   document.getElementById('edit-profile-bio').value = currentProfile.bio;
   document.getElementById('edit-profile-avatar').value = currentProfile.avatar_url;
@@ -229,8 +246,9 @@ window.openProfileModal = function () {
   document.getElementById('profile-modal').classList.add('active');
 };
 
-window.closeProfileModal = function () {
+window.closeProfileModal = async function () {
   document.getElementById('profile-modal').classList.remove('active');
+  await cleanupPendingUploads(null);
 };
 
 window.handleProfileImageUpload = async function (event) {
@@ -270,12 +288,13 @@ document.getElementById('profile-form').addEventListener('submit', async (e) => 
   if (error) {
     Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
   } else {
+    await cleanupPendingUploads(newAvatar);
     if (oldAvatar && oldAvatar !== newAvatar) {
       await deleteOldStorageFile(oldAvatar);
     }
     currentProfile = updatedProfile;
     applyProfileToUI();
-    closeProfileModal();
+    document.getElementById('profile-modal').classList.remove('active');
     Swal.fire({
       icon: 'success',
       text: 'Profile updated',
@@ -515,6 +534,7 @@ function renderMediaGrid() {
 // 5. ADD / EDIT MODAL, COVER UPLOAD & MULTI-API SEARCH
 // ==========================================
 window.openMediaModal = function () {
+  pendingUploadedUrls = [];
   document.getElementById('media-modal-title').textContent = 'Add Media';
   document.getElementById('media-form').reset();
   document.getElementById('media-id').value = '';
@@ -529,6 +549,7 @@ window.openEditModal = function (id) {
   const item = allMediaLogs.find(m => m.id === id);
   if (!item) return;
 
+  pendingUploadedUrls = [];
   document.getElementById('media-modal-title').textContent = 'Edit Media';
   document.getElementById('media-id').value = item.id;
   document.getElementById('btn-modal-delete').style.display = 'inline-flex';
@@ -548,8 +569,9 @@ window.openEditModal = function (id) {
   document.getElementById('media-modal').classList.add('active');
 };
 
-window.closeMediaModal = function () {
+window.closeMediaModal = async function () {
   document.getElementById('media-modal').classList.remove('active');
+  await cleanupPendingUploads(null);
 };
 
 window.handleMediaCoverUpload = async function (event) {
@@ -1052,10 +1074,11 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
   if (error) {
     Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
   } else {
+    await cleanupPendingUploads(newCover);
     if (oldCover && oldCover !== newCover) {
       await deleteOldStorageFile(oldCover);
     }
-    closeMediaModal();
+    document.getElementById('media-modal').classList.remove('active');
     await fetchMediaLogs();
   }
 });
@@ -1082,10 +1105,11 @@ window.deleteCurrentModalMedia = async function () {
     if (error) {
       Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
     } else {
+      await cleanupPendingUploads(null);
       if (existingItem?.cover_url) {
         await deleteOldStorageFile(existingItem.cover_url);
       }
-      closeMediaModal();
+      document.getElementById('media-modal').classList.remove('active');
       await fetchMediaLogs();
     }
   }
