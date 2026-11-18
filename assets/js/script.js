@@ -255,10 +255,9 @@ function renderMediaGrid() {
   }
 
   grid.innerHTML = filtered.map(item => {
-        const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
+    const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
     const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
-    
-    // Cek apakah total_units ada dan bernilai lebih dari 0
+
     const hasTotal = item.total_units !== null && item.total_units !== undefined && Number(item.total_units) > 0;
     const progressText = hasTotal
       ? `${item.progress || 0}/${item.total_units}`
@@ -589,9 +588,25 @@ window.searchExternalAPI = async function () {
     items = deduplicateResults(items);
 
   } else if (cat === 'novel') {
-    const [jikanRes, aniRes] = await Promise.allSettled([
+    const [openLibRes, jikanRes, aniRes] = await Promise.allSettled([
       (async () => {
-        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&type=lightnovel&limit=5&sfw=true`);
+        const res = await fetchWithTimeout(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=6`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.docs || []).map(b => {
+          const author = b.author_name ? b.author_name[0] : 'Book';
+          const pages = b.number_of_pages_median || null;
+          return {
+            title: b.title,
+            cover: b.cover_i ? `https://covers.openlibrary.org/b/id/${b.cover_i}-L.jpg` : '',
+            total: pages,
+            unit: pages ? 'pages' : 'vol',
+            meta: `Novel (${author}) · ${pages ? pages + ' Pages' : 'Book'}`
+          };
+        });
+      })(),
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&type=lightnovel&limit=4&sfw=true`);
         if (!res.ok) return [];
         const data = await res.json();
         return (data.data || []).map(ln => ({
@@ -599,12 +614,13 @@ window.searchExternalAPI = async function () {
           cover: normalizeImageUrl(ln.images?.jpg?.large_image_url || ln.images?.jpg?.image_url || ln.images?.webp?.large_image_url || ''),
           total: ln.volumes || ln.chapters || null,
           unit: ln.volumes ? 'vol' : 'ch',
-          meta: `Novel · ${ln.volumes || '?'} Volume`
+          meta: `Light Novel · ${ln.volumes || '?'} Volume`
         }));
       })(),
       fetchAniListMedia(query, true)
     ]);
 
+    if (openLibRes.status === 'fulfilled') items.push(...openLibRes.value);
     if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
     if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
     items = deduplicateResults(items);
@@ -651,19 +667,15 @@ window.searchExternalAPI = async function () {
 
   } else if (cat === 'music') {
     try {
-      const res = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=album,song&limit=6`);
+      const res = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=album&limit=8`);
       const data = await res.json();
-      items = (data.results || []).map(m => {
-        const isAlbum = m.wrapperType === 'collection';
-        const title = isAlbum ? `${m.collectionName} — ${m.artistName}` : `${m.trackName} — ${m.artistName}`;
-        return {
-          title,
-          cover: normalizeImageUrl(m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : ''),
-          total: isAlbum ? (m.trackCount || 1) : 1,
-          unit: 'track',
-          meta: `${isAlbum ? 'Album' : 'Song'} · ${m.artistName || ''}`
-        };
-      });
+      items = (data.results || []).map(m => ({
+        title: `${m.collectionName} — ${m.artistName}`,
+        cover: normalizeImageUrl(m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : ''),
+        total: m.trackCount || 1,
+        unit: 'track',
+        meta: `Album · ${m.trackCount || '?'} Tracks · ${m.releaseDate?.slice(0, 4) || ''}`
+      }));
       items = deduplicateResults(items);
     } catch (e) {
       console.error('Music search error:', e);
