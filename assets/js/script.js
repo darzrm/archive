@@ -16,6 +16,11 @@ let lastApiResults = [];
 let currentCategory = 'all';
 let isAdminLoggedIn = false;
 
+function setElText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
 // ==========================================
 // 2. INITIALIZATION & ADMIN AUTH
 // ==========================================
@@ -37,13 +42,13 @@ function updateAdminUI() {
   const btnText = document.getElementById('admin-btn-text');
 
   if (isAdminLoggedIn) {
-    addBtn.style.display = 'inline-flex';
-    lockIcon.setAttribute('name', 'log-out-outline');
-    btnText.textContent = 'Logout';
+    if (addBtn) addBtn.style.display = 'inline-flex';
+    if (lockIcon) lockIcon.setAttribute('name', 'log-out-outline');
+    if (btnText) btnText.textContent = 'Logout';
   } else {
-    addBtn.style.display = 'none';
-    lockIcon.setAttribute('name', 'lock-closed-outline');
-    btnText.textContent = 'Admin';
+    if (addBtn) addBtn.style.display = 'none';
+    if (lockIcon) lockIcon.setAttribute('name', 'lock-closed-outline');
+    if (btnText) btnText.textContent = 'Admin';
   }
   renderMediaGrid();
 }
@@ -149,33 +154,32 @@ function updateStatsUI() {
     ? (ratedItems.reduce((sum, i) => sum + Number(i.rating), 0) / ratedItems.length).toFixed(2)
     : '0.0';
 
-  document.getElementById('total-entries-label').textContent = `${totalEntries} Entries`;
+  setElText('total-entries-label', `${totalEntries} Entries`);
 
-  document.getElementById('stat-tv-eps').textContent = totalTvEps.toLocaleString('en-US');
-  document.getElementById('stat-tv-count').textContent = `Episodes · ${tvItems.length} Shows`;
+  setElText('stat-tv-eps', totalTvEps.toLocaleString('en-US'));
+  setElText('stat-tv-count', `Episodes · ${tvItems.length} Shows`);
 
-  document.getElementById('stat-movies').textContent = completedMovies.toLocaleString('en-US');
-  document.getElementById('stat-movies-total').textContent = `${movieItems.length} Total`;
+  setElText('stat-movies', completedMovies.toLocaleString('en-US'));
+  setElText('stat-movies-total', `${movieItems.length} Total`);
 
-  document.getElementById('stat-comic-ch').textContent = totalComicCh.toLocaleString('en-US');
-  document.getElementById('stat-comic-count').textContent = `Chapters · ${comicItems.length} Comics`;
+  setElText('stat-comic-ch', totalComicCh.toLocaleString('en-US'));
+  setElText('stat-comic-count', `Chapters · ${comicItems.length} Comics`);
 
-  document.getElementById('stat-novel-completed').textContent = completedNovels.toLocaleString('en-US');
-  document.getElementById('stat-novel-total').textContent = `${novelItems.length} Total`;
+  setElText('stat-novel-completed', completedNovels.toLocaleString('en-US'));
+  setElText('stat-novel-total', `${novelItems.length} Total`);
 
-  document.getElementById('stat-game-count').textContent = gameItems.length.toLocaleString('en-US');
-  document.getElementById('stat-game-done').textContent = `${completedGames} Completed`;
+  setElText('stat-game-count', gameItems.length.toLocaleString('en-US'));
+  setElText('stat-game-done', `${completedGames} Completed`);
 
-  document.getElementById('stat-music-count').textContent = musicItems.length.toLocaleString('en-US');
-  document.getElementById('stat-music-units').textContent = `Albums · ${totalMusicTracks.toLocaleString('en-US')} Tracks`;
+  setElText('stat-music-count', musicItems.length.toLocaleString('en-US'));
+  setElText('stat-music-units', `Albums · ${totalMusicTracks.toLocaleString('en-US')} Tracks`);
 
-  document.getElementById('stat-completed-total').textContent = totalCompleted.toLocaleString('en-US');
-  document.getElementById('stat-completion-rate').textContent = `${completionRate}% Rate`;
+  setElText('stat-completed-total', totalCompleted.toLocaleString('en-US'));
+  setElText('stat-completion-rate', `${completionRate}% Rate`);
 
-  document.getElementById('stat-avg-rating').textContent = avgRating;
-  document.getElementById('stat-rated-count').textContent = `${ratedItems.length} Rated`;
+  setElText('stat-avg-rating', avgRating);
+  setElText('stat-rated-count', `${ratedItems.length} Rated`);
 }
-
 
 // ==========================================
 // 4. FILTER, SEARCH & RENDER GRID
