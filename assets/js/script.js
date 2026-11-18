@@ -8,6 +8,7 @@ const SUPABASE_KEY = 'sb_publishable_IdPLjwQhVQwXGGxUnBVblg_oIQ5Zz89';
 const TMDB_API_KEY = '727a00da59cd2b9873f7636a5bde9561';
 const RAWG_API_KEY = '';
 const STORAGE_BUCKET = 'media-assets';
+const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -17,12 +18,14 @@ let allBlogPosts = [];
 let lastApiResults = [];
 let pendingUploadedUrls = [];
 let currentCategory = 'all';
-let currentMainView = 'library';
+let currentMainView = 'blog'; // Default tab priority: Notes
+let isStatsExpanded = false;
 let isAdminLoggedIn = false;
+let isProfileLoaded = false;
 let currentProfile = {
-  name: 'dariraa',
-  bio: 'glory glory man united!',
-  avatar_url: './assets/images/profile.jpg'
+  name: '',
+  bio: '',
+  avatar_url: ''
 };
 
 function setElText(id, text) {
@@ -36,7 +39,7 @@ function setElText(id, text) {
 document.addEventListener('DOMContentLoaded', async () => {
   await checkAdminSession();
   await fetchProfileSettings();
-  await Promise.all([fetchMediaLogs(), fetchBlogPosts()]);
+  await Promise.all([fetchBlogPosts(), fetchMediaLogs()]);
   setupFilterListeners();
 });
 
@@ -53,6 +56,19 @@ window.switchMainView = function (viewName) {
   if (blogView) blogView.style.display = viewName === 'blog' ? 'block' : 'none';
 
   updateAdminActionButtons();
+};
+
+window.toggleLibraryStats = function () {
+  isStatsExpanded = !isStatsExpanded;
+  const panel = document.getElementById('collapsible-stats-panel');
+  const toggleBtn = document.getElementById('btn-toggle-stats');
+  const textEl = document.getElementById('stats-toggle-text');
+  const iconEl = document.getElementById('stats-chevron-icon');
+
+  if (panel) panel.style.display = isStatsExpanded ? 'block' : 'none';
+  if (toggleBtn) toggleBtn.classList.toggle('active', isStatsExpanded);
+  if (textEl) textEl.textContent = isStatsExpanded ? 'Hide Stats' : 'Show Stats';
+  if (iconEl) iconEl.setAttribute('name', isStatsExpanded ? 'chevron-up-outline' : 'chevron-down-outline');
 };
 
 function updateAdminActionButtons() {
@@ -92,7 +108,7 @@ function updateAdminUI() {
 
   updateAdminActionButtons();
   renderMediaGrid();
-  renderBlogPosts();
+  if (isProfileLoaded) renderBlogPosts();
 }
 
 window.handleAdminAuthClick = async function () {
@@ -246,21 +262,44 @@ async function fetchProfileSettings() {
 
   if (!error && data) {
     currentProfile = {
-      name: data.name || 'dariraa',
+      name: data.name || '',
       bio: data.bio || '',
-      avatar_url: data.avatar_url || './assets/images/profile.jpg'
+      avatar_url: data.avatar_url || ''
     };
   }
+  isProfileLoaded = true;
   applyProfileToUI();
 }
 
 function applyProfileToUI() {
   setElText('profile-name-text', currentProfile.name);
   setElText('profile-bio-text', currentProfile.bio);
-  const avatarEl = document.getElementById('profile-avatar-img');
-  if (avatarEl && currentProfile.avatar_url) {
-    avatarEl.src = currentProfile.avatar_url;
+
+  if (currentProfile.name) {
+    document.title = `${currentProfile.name} — Archive`;
+    setElText('footer-brand-name', currentProfile.name.toUpperCase());
   }
+
+  const avatarEl = document.getElementById('profile-avatar-img');
+  const faviconEl = document.getElementById('favicon-link');
+
+  if (avatarEl) {
+    if (currentProfile.avatar_url) {
+      avatarEl.onerror = () => {
+        avatarEl.src = 'https://placehold.co/200x200/1e1e1f/ffffff?text=?';
+        avatarEl.style.opacity = '1';
+      };
+      avatarEl.onload = () => {
+        avatarEl.style.opacity = '1';
+      };
+      avatarEl.src = currentProfile.avatar_url;
+      if (faviconEl) faviconEl.href = currentProfile.avatar_url;
+    } else {
+      avatarEl.src = TRANSPARENT_PIXEL;
+      avatarEl.style.opacity = '0';
+    }
+  }
+
   renderBlogPosts();
 }
 
@@ -298,7 +337,7 @@ document.getElementById('profile-form').addEventListener('submit', async (e) => 
   e.preventDefault();
 
   const oldAvatar = currentProfile.avatar_url;
-  const newAvatar = document.getElementById('edit-profile-avatar').value.trim() || './assets/images/profile.jpg';
+  const newAvatar = document.getElementById('edit-profile-avatar').value.trim();
 
   const updatedProfile = {
     id: 1,
@@ -1143,7 +1182,7 @@ window.deleteCurrentModalMedia = async function () {
 };
 
 // ==========================================
-// 7. PERSONAL BLOG / POSTS (CREATE, READ, EDIT, DELETE)
+// 7. PERSONAL NOTES / POSTS (CREATE, READ, EDIT, DELETE)
 // ==========================================
 function formatPostDateTime(createdIso, updatedIso) {
   if (!createdIso) return '';
@@ -1192,9 +1231,12 @@ function renderBlogPosts() {
   if (!listEl) return;
 
   if (allBlogPosts.length === 0) {
-    listEl.innerHTML = `<p class="empty-state">No posts yet.</p>`;
+    listEl.innerHTML = `<p class="empty-state">No notes yet.</p>`;
     return;
   }
+
+  const avatarSrc = currentProfile.avatar_url || TRANSPARENT_PIXEL;
+  const authorName = escapeHtml(currentProfile.name || '');
 
   listEl.innerHTML = allBlogPosts.map(post => {
     const postImg = normalizeImageUrl(post.image_url);
@@ -1221,9 +1263,9 @@ function renderBlogPosts() {
       <article class="blog-post-card">
         <div class="blog-post-header">
           <div class="blog-post-author">
-            <img class="blog-post-avatar" src="${currentProfile.avatar_url}" alt="${currentProfile.name}" onerror="this.src='https://placehold.co/100x100/1e1e1f/ffffff?text=D'">
+            <img class="blog-post-avatar" src="${avatarSrc}" alt="" onerror="this.src='${TRANSPARENT_PIXEL}'">
             <div class="blog-post-meta">
-              <span class="blog-post-name">${escapeHtml(currentProfile.name)}</span>
+              <span class="blog-post-name">${authorName}</span>
               <span class="blog-post-time">${timeLabel}</span>
             </div>
           </div>
