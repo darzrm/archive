@@ -1,344 +1,336 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>eFoodico</title>
+  <title>Kazvera — Personal Media Tracker</title>
   <link rel="shortcut icon" href="./assets/images/eec.png" type="image/x-icon">
   <link rel="stylesheet" href="./assets/css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 
 <body>
-  <div id="join-popup" class="join-popup-container">
-  <div class="join-popup-content">
-    
-    <div class="join-popup-left">
-      <div class="join-popup-icon">
-        <ion-icon name="logo-whatsapp"></ion-icon>
+
+  <main class="single-page-container">
+
+    <!-- ==========================================
+         1. TOP SECTION: PROFILE
+    =========================================== -->
+    <header class="card-section profile-header">
+      <div class="profile-top-actions">
+        <button id="btn-add-media" class="pill-btn primary-btn" style="display: none;" onclick="openMediaModal()">
+          <ion-icon name="add-outline"></ion-icon>
+          <span>Add Media</span>
+        </button>
+        <button id="btn-admin-toggle" class="pill-btn" onclick="handleAdminAuthClick()" title="Admin Access">
+          <ion-icon id="admin-lock-icon" name="lock-closed-outline"></ion-icon>
+          <span id="admin-btn-text">Admin</span>
+        </button>
       </div>
-      <div class="join-popup-info">
-        <p class="join-popup-title">Join eFoodico!
-        </p>
-        <p class="join-popup-desc">300+ active designer</p>
-      </div>
-    </div>
 
-    <div class="join-popup-right">
-      <a href="https://chat.whatsapp.com/JfI0kkaKZbpHHVR9s4XhfN" class="join-popup-btn">Join Now</a>
-      <button class="join-popup-close" id="close-popup">
-        <ion-icon name="close-outline"></ion-icon>
-      </button>
-    </div>
-
-  </div>
-</div>
-
-  <main>
-    <aside class="sidebar" data-sidebar>
-      <div class="sidebar-info">
-        <figure class="avatar-box">
-          <img src="./assets/images/eec.png" alt="eFoodico" width="80">
+      <div class="profile-main">
+        <figure class="profile-avatar">
+          <img src="./assets/images/eec.png" alt="Profile Avatar" onerror="this.src='https://placehold.co/200x200/1e1e1f/ffffff?text=K'">
         </figure>
-        <div class="info-content">
-          <h1 class="name" title="eFoodico">eFoodico</h1>
-          <p class="title">Keep Improving!</p>
-        </div>
-        <button class="info_more-btn" data-sidebar-btn>
-          <span>Show Contacts</span>
-          <ion-icon name="chevron-down"></ion-icon>
-        </button>
-      </div>
 
-      <div class="sidebar-info_more">
-        <div class="separator"></div>
-        <ul class="contacts-list">
-          <li class="contact-item">
-            <div class="icon-box"><ion-icon name="mail-outline"></ion-icon></div>
-            <div class="contact-info">
-              <p class="contact-title">Email</p>
-              <a href="mailto:darzrm@gmail.com" class="contact-link">darzrm@gmail.com</a>
-            </div>
-          </li>
-          <li class="contact-item">
-            <div class="icon-box"><ion-icon name="phone-portrait-outline"></ion-icon></div>
-            <div class="contact-info">
-              <p class="contact-title">Phone</p>
-              <a href="https://wa.me/6283841129519" class="contact-link">(+62) 838-4112-9519</a>
-            </div>
-          </li>
-        </ul>
-        <div class="separator"></div>
-        <ul class="social-list">
-          <li class="social-item"><a href="https://chat.whatsapp.com/JfI0kkaKZbpHHVR9s4XhfN" class="social-link"><ion-icon name="logo-whatsapp"></ion-icon></a></li>
-          <li class="social-item"><a href="https://www.instagram.com/efoodico" class="social-link"><ion-icon name="logo-instagram"></ion-icon></a></li>
-          <li class="social-item"><a href="https://www.tiktok.com/efoodico" class="social-link"><ion-icon name="logo-tiktok"></ion-icon></a></li>
-        </ul>
-      </div>
-    </aside>
-
-    <div class="main-content">
-      <nav class="navbar">
-        <ul class="navbar-list">
-          <li class="navbar-item"><button class="navbar-link active" data-nav-link>Home</button></li>
-          <li class="navbar-item"><button class="navbar-link" data-nav-link>Event</button></li>
-          <li class="navbar-item"><button class="navbar-link" data-nav-link>Blog</button></li>
-          <li class="navbar-item"><button class="navbar-link" data-nav-link>Account</button></li>
-        </ul>
-      </nav>
-
-      <article class="home active" data-page="home">
-        <header><h2 class="h2 article-title">Home</h2></header>
-        <section class="about-text">
-<p>Selamat datang di komunitas edit eFoodico, sebuah wadah kreatif yang berdiri sejak 7 September 2023 untuk para pecinta desain dan editing, khususnya di bidang eFootball. Komunitas ini dibangun sebagai tempat bagi para kreator untuk saling berbagi karya, bertukar ide, dan berkembang bersama dalam lingkungan yang aktif dan suportif.</p>
-
-<p>Dengan memanfaatkan berbagai aset gratis seperti font, gambar, dan elemen desain, setiap member memiliki kesempatan yang sama untuk berkarya tanpa batas. Melalui sistem challenge dan leaderboard, komunitas ini menghadirkan suasana kompetitif yang sehat, mendorong setiap anggota untuk terus meningkatkan kemampuan dan menunjukkan hasil terbaik mereka.</p>
-
-        <section class="about-text">
-
-  <div class="qna-container" style="margin-top: 20px; display: flex; flex-direction: column; gap: 15px;">
-    
-        <div class="qna-item">
-      <button class="form-btn qna-btn" style="width: 100%; justify-content: space-between; background: var(--onyx); border: 1px solid var(--jet); padding: 15px 20px;">
-        <span>Bagaimana langkah-langkah untuk bergabung menjadi bagian dari komunitas?
-</span>
-        <ion-icon name="chevron-down-outline" class="qna-icon"></ion-icon>
-      </button>
-      <div class="qna-answer">
-<p>Daftarkan akun secara resmi melalui halaman registrasi di website kami, kemudian Anda bisa bergabung dengan grup diskusi utama melalui tautan berikut: <a href="https://chat.whatsapp.com/JfI0kkaKZbpHHVR9s4XhfN" style="color: var(--orange-yellow-crayola); text-decoration: underline;">Klik di sini untuk join grup WhatsApp.</a></p>
-
-      </div>
-    </div>
-    
-    <div class="qna-item">
-      <button class="form-btn qna-btn" style="width: 100%; justify-content: space-between; background: var(--onyx); border: 1px solid var(--jet); padding: 15px 20px;">
-        <span>Bagaimana sistem tingkatan sanksi terhadap pelanggaran di komunitas EEC?
-</span>
-        <ion-icon name="chevron-down-outline" class="qna-icon"></ion-icon>
-      </button>
-      <div class="qna-answer">
-<p>1. Peringatan: Diberikan jika anggota melakukan spam, mengirim pesan di luar topik secara berlebihan, atau bersikap kurang sopan dalam berinteraksi.</p>
-<p>2. Kick: Diberikan jika anggota terbukti mengambil karya orang lain tanpa izin, memicu keributan besar, atau melakukan promosi tanpa izin admin.</p>
-<p>3. Banned: Diberikan jika anggota menyebarkan konten ilegal, melakukan penipuan, atau melakukan perundungan dan pelecehan berat terhadap anggota lain.</p>
-
-      </div>
-    </div>
-
-    <div class="qna-item">
-      <button class="form-btn qna-btn" style="width: 100%; justify-content: space-between; background: var(--onyx); border: 1px solid var(--jet); padding: 15px 20px;">
-        <span>Bagaimana prosedur pendaftaran dan verifikasi akun di platform eFoodico?</span>
-        <ion-icon name="chevron-down-outline" class="qna-icon"></ion-icon>
-      </button>
-      <div class="qna-answer">
-<p>1. Buka situs efoodico.vercel.app dan masuk ke menu Account.</p>
-
-<p>2. Klik tombol Get Started, lalu isi username, email, dan password Anda untuk mendaftar.</p>
-
-<p>3. Buka email Anda (cek folder Inbox atau Spam) dan klik Konfirmasi Akun Saya untuk verifikasi.</p>
-
-<p>4. Setelah verifikasi berhasil, kembali ke website untuk login menggunakan email dan password yang sudah didaftarkan.</p>
-
-<p>5. Selesai, akun Anda sudah siap digunakan!</p>
-
-      </div>
-    </div>
-<br>
-  </div>
-</section>
-
-      </article>
-
-<article class="event" data-page="event">
-  <header>
-    <h2 class="h2 article-title">Event</h2>
-  </header>
-          <section class="about-text">
-  <p>Melalui halaman ini, pengguna dapat memantau peringkat berdasarkan poin yang diperoleh dari setiap challenge efootball edit. Poin diberikan atas kemenangan dan akan diakumulasikan untuk menentukan posisi dalam leaderboard secara keseluruhan.</p>
-        </section>
-<section class="leaderboard-section">
-  <div id="leaderboard-list" style="display: flex; flex-direction: column; gap: 15px; padding: 10px 0;">
-    </div>
-</section>
-    <br>
-</article>
-
-
-
-
-
-  <article class="blog" data-page="blog">
-  <header>
-    <h2 class="h2 article-title">Blog</h2>
-  </header>
-
-  <section id="blog-list-container">
-    <ul class="blog-posts-list">
-      <li class="blog-post-item" onclick="showBlogDetail('1', 'Hello From EEC', 'Tepat pada hari ini, komunitas EEC resmi berdiri sebagai wadah bagi para desainer eFootball untuk berbagi dan meningkatkan kreativitas bersama.')">
-        <a href="javascript:void(0)">
-          <figure class="blog-banner-box">
-            <img src="./assets/images/b1.jpg" alt="Blog Image" loading="lazy">
-          </figure>
-          <div class="blog-content">
-            <div class="blog-meta">
-              <p class="blog-category">Announcement</p>
-              <span class="dot"></span>
-              <time datetime="2023-09-07">Sept 7, 2023</time>
-            </div>
-            <h3 class="h3 blog-item-title">Hello From EEC</h3>
-            <p class="blog-text">Tepat pada hari ini, komunitas EEC resmi berdiri sebagai wadah bagi para desainer eFootball untuk berbagi dan meningkatkan kreativitas bersama.</p>
+        <div class="profile-details">
+          <div class="profile-name-row">
+            <h1 class="profile-name">Kazvera</h1>
+            <span class="profile-badge">Media Archive</span>
           </div>
-        </a>
-      </li>
-    </ul>
-  </section>
+          <p class="profile-bio">
+            Personal log untuk melacak progress tontonan, bacaan, dan game. Data diperbarui otomatis lengkap dengan statistik dan rating personal.
+          </p>
 
-  <section id="blog-detail-container" style="display: none;">
-    <button class="form-btn" onclick="closeBlogDetail()" style="margin-bottom: 25px; padding: 10px 20px; width: max-content;">
-      <ion-icon name="arrow-back-outline"></ion-icon> <span>Back to Feed</span>
-    </button>
-
-    <div class="blog-content-full">
-      <h2 class="h2" id="detail-title" style="color: var(--orange-yellow-crayola); margin-bottom: 15px;"></h2>
-      <p id="detail-text" style="color: var(--light-gray); line-height: 1.8; margin-bottom: 40px; font-size: 15px;"></p>
-    </div>
-
-    <div class="comment-section" style="border-top: 1px solid var(--jet); padding-top: 30px;">
-      <h3 class="h3" style="margin-bottom: 20px;">Comments</h3>
-      
-      <div id="comment-form-area" class="contact-form" style="margin-bottom: 40px;">
-        <textarea id="comment-input" class="form-input" placeholder="Tulis komentar anda..." required style="min-height: 80px; margin-bottom: 15px; resize: vertical;"></textarea>
-        <button class="form-btn" onclick="postComment()" style="width: max-content; padding: 10px 20px;">
-          <ion-icon name="paper-plane-outline"></ion-icon><span>Post Comment</span>
-        </button>
-      </div>
-
-      <div id="comments-display-list">
-        </div>
-    </div>
-  </section>
-</article>
-
-
-   
-<article class="account" data-page="account">
-  <header>
-    <h2 class="h2 article-title">Account</h2>
-  </header>
-
-  <section id="guest-container" style="padding: 10px 0 30px;">
-    <!-- Modern Auth Hero Panel -->
-    <div class="auth-hero-panel">
-      <!-- Decorative background elements -->
-      <div class="auth-orb auth-orb-1"></div>
-      <div class="auth-orb auth-orb-2"></div>
-      
-      <!-- Logo / Icon area -->
-      <div class="auth-icon-wrap">
-        <div class="auth-icon-ring">
-          <ion-icon name="people-outline"></ion-icon>
+          <div class="profile-socials">
+            <a href="mailto:darzrm@gmail.com" class="social-chip" title="Email">
+              <ion-icon name="mail-outline"></ion-icon>
+              <span>darzrm@gmail.com</span>
+            </a>
+            <a href="https://github.com" target="_blank" class="social-chip" title="GitHub">
+              <ion-icon name="logo-github"></ion-icon>
+              <span>GitHub</span>
+            </a>
+          </div>
         </div>
       </div>
+    </header>
 
-      <!-- Text content -->
-      <div class="auth-hero-text">
-        <h3 class="auth-hero-title">Join the Community</h3>
-        <p class="auth-hero-sub">Track your progress, compete on the leaderboard, and connect with fellow eFoodico creators.</p>
+    <!-- ==========================================
+         2. MIDDLE SECTION: STATS
+    =========================================== -->
+    <section class="card-section stats-section">
+      <div class="section-header">
+        <h2 class="h2 article-title">Stats</h2>
+        <span class="section-subtitle" id="total-entries-label">0 Total Entries</span>
       </div>
 
-      <!-- Feature pills -->
-      <div class="auth-features">
-        <span class="auth-feature-pill"><ion-icon name="trophy-outline"></ion-icon> Leaderboard</span>
-        <span class="auth-feature-pill"><ion-icon name="chatbubble-outline"></ion-icon> Comments</span>
-        <span class="auth-feature-pill"><ion-icon name="stats-chart-outline"></ion-icon> Stats</span>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-icon">
+            <ion-icon name="tv-outline"></ion-icon>
+          </div>
+          <div class="stat-info">
+            <p class="stat-label">Series Episodes</p>
+            <h3 class="stat-value" id="stat-series-eps">0</h3>
+            <span class="stat-sub" id="stat-series-count">0 Series</span>
+          </div>
+        </div>
+
+        <div class="stat-box">
+          <div class="stat-icon">
+            <ion-icon name="film-outline"></ion-icon>
+          </div>
+          <div class="stat-info">
+            <p class="stat-label">Movies Watched</p>
+            <h3 class="stat-value" id="stat-movies">0</h3>
+            <span class="stat-sub" id="stat-movies-total">0 Total</span>
+          </div>
+        </div>
+
+        <div class="stat-box">
+          <div class="stat-icon">
+            <ion-icon name="book-outline"></ion-icon>
+          </div>
+          <div class="stat-info">
+            <p class="stat-label">Comic Chapters</p>
+            <h3 class="stat-value" id="stat-comic-ch">0</h3>
+            <span class="stat-sub" id="stat-comic-count">0 Comics</span>
+          </div>
+        </div>
+
+        <div class="stat-box">
+          <div class="stat-icon">
+            <ion-icon name="game-controller-outline"></ion-icon>
+          </div>
+          <div class="stat-info">
+            <p class="stat-label">Other (LN & Game)</p>
+            <h3 class="stat-value" id="stat-other-count">0</h3>
+            <span class="stat-sub" id="stat-other-breakdown">0 LN · 0 Game</span>
+          </div>
+        </div>
+
+        <div class="stat-box">
+          <div class="stat-icon">
+            <ion-icon name="star-outline"></ion-icon>
+          </div>
+          <div class="stat-info">
+            <p class="stat-label">Mean Rating</p>
+            <h3 class="stat-value" id="stat-avg-rating">0.0</h3>
+            <span class="stat-sub">Scale 1.0 – 10.0</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         3. BOTTOM SECTION: CATEGORIES & MEDIA LIST
+    =========================================== -->
+    <section class="card-section library-section">
+      <div class="library-top-bar">
+        <h2 class="h2 article-title">Library</h2>
+
+        <div class="category-tabs" id="category-tabs">
+          <button class="cat-tab active" data-category="all">All</button>
+          <button class="cat-tab" data-category="series">Series</button>
+          <button class="cat-tab" data-category="movie">Movie</button>
+          <button class="cat-tab" data-category="comic">Comic</button>
+          <button class="cat-tab" data-category="other">Other</button>
+        </div>
       </div>
 
-      <!-- CTA Button -->
-      <button class="auth-cta-btn" id="btn-start-auth">
-        <span>Get Started</span>
-        <ion-icon name="arrow-forward-outline"></ion-icon>
-      </button>
+      <!-- Sub-category khusus Other (Light Novel & Game) -->
+      <div class="sub-category-bar" id="other-sub-bar" style="display: none;">
+        <button class="sub-pill active" data-sub="all">Semua Other</button>
+        <button class="sub-pill" data-sub="light_novel">Light Novel</button>
+        <button class="sub-pill" data-sub="game">Game</button>
+      </div>
 
-      <p class="auth-note">Free to join · No credit card required</p>
-    </div>
-  </section>
+      <!-- Filter & Search Controls -->
+      <div class="library-controls">
+        <div class="search-box">
+          <ion-icon name="search-outline"></ion-icon>
+          <input type="text" id="search-library" placeholder="Cari judul di koleksi...">
+        </div>
 
-  <section id="auth-container" style="display: none;">
-    <div class="contact-form">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
-        <h3 class="h3 form-title" style="margin: 0;">Access Portal</h3>
-        <button id="btn-cancel-auth" style="color: var(--light-gray); font-size: 24px; background: none; border: none; cursor: pointer;">
+        <div class="select-controls">
+          <select id="filter-status" class="control-select">
+            <option value="all">All Status</option>
+            <option value="completed">Completed</option>
+            <option value="ongoing">Ongoing</option>
+            <option value="planned">Planned</option>
+            <option value="dropped">Dropped</option>
+          </select>
+
+          <select id="sort-library" class="control-select">
+            <option value="recent">Terbaru</option>
+            <option value="rating_desc">Rating Tertinggi</option>
+            <option value="title_asc">Judul A–Z</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Media Cards Grid -->
+      <div id="media-grid" class="media-grid">
+        <p class="empty-state">Memuat data media...</p>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="section-footer">
+      <div class="footer-divider"></div>
+      <div class="footer-container">
+        <div class="footer-brand">
+          <span class="brand-name">KAZVERA</span>
+          <span class="brand-tagline">Personal Media Tracker</span>
+        </div>
+        <div class="footer-info">
+          <span class="info-item">Powered by Supabase & GitHub Pages</span>
+        </div>
+      </div>
+    </footer>
+
+  </main>
+
+  <!-- ==========================================
+       MODAL: ADMIN LOGIN
+  =========================================== -->
+  <div id="login-modal" class="custom-modal">
+    <div class="custom-modal-backdrop" onclick="closeLoginModal()"></div>
+    <div class="custom-modal-box">
+      <div class="modal-header">
+        <h3 class="h3">Admin Login</h3>
+        <button class="modal-close" onclick="closeLoginModal()">
           <ion-icon name="close-outline"></ion-icon>
         </button>
       </div>
-      
-      <div class="form">
-        <div class="input-wrapper">
-          <input type="text" id="auth-username" class="form-input" placeholder="Username (For Registration Only)" maxlength="12">
-          <input type="email" id="auth-email" class="form-input" placeholder="Email Address" required>
-          <input type="password" id="auth-password" class="form-input" placeholder="Password" required>
-        </div>
-
-        <div style="display: flex; gap: 15px; margin-top: 25px;">
-          <button class="form-btn" type="button" id="login-btn-final" style="flex: 1; justify-content: center;">
-            <span>Login</span>
-          </button>
-          <button class="form-btn" type="button" id="register-btn-final" style="flex: 1; justify-content: center; background: var(--onyx); border: 1px solid var(--jet);">
-            <span>Register</span>
-          </button>
-        </div>
-
-        <p style="margin-top: 20px; text-align: center; font-size: 13px; color: var(--light-gray);">
-          Forgot your password? 
-   <span id="btn-reset-password" style="color: var(--orange-yellow-crayola); cursor: pointer; font-weight: 500; text-decoration: underline;">
-  Reset here
-</span>
-
-        </p>
-      </div>
+      <form id="admin-login-form" class="modal-form">
+        <input type="email" id="login-email" class="form-input" placeholder="Email Admin" required>
+        <input type="password" id="login-password" class="form-input" placeholder="Password" required>
+        <button type="submit" class="form-btn primary-submit">
+          <ion-icon name="log-in-outline"></ion-icon>
+          <span>Masuk</span>
+        </button>
+      </form>
     </div>
-  </section>
-
- <section id="profile-container" style="display: none;">
-  <div class="contact-form" style="text-align: center;">
-    
-    <div id="user-info-display"></div>
-    
-    <div id="edit-username-section" style="display: none; background: var(--onyx); padding: 20px; border-radius: 12px; border: 1px solid var(--jet); margin-bottom: 20px;">
-      <div class="input-wrapper" style="margin-bottom: 15px;">
-        <input type="password" id="confirm-password" class="form-input" placeholder="Current Password" style="text-align: center;">
-<input type="text" id="new-username" class="form-input" placeholder="Enter New Username" style="text-align: center;" required maxlength="12">
-      </div>
-      <button class="form-btn" id="btn-submit-username" style="width: 100%; justify-content: center;">
-        <span>Confirm Update</span>
-      </button>
-    </div>
-
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <button class="form-btn" id="btn-show-edit" style="width: 100%; justify-content: center; background: var(--onyx); border: 1px solid var(--jet);">
-        <span>Change Username</span>
-      </button>
-     
-      <button class="form-btn" id="logout-btn-final" style="color: #ff5f5f; border-color: rgba(255, 95, 95, 0.2); width: 100%; justify-content: center;">
-        <span>Logout Account</span>
-      </button>
-    </div>
-
   </div>
-</section>
 
-  
+  <!-- ==========================================
+       MODAL: ADD / EDIT MEDIA (WITH AUTO-SEARCH API)
+  =========================================== -->
+  <div id="media-modal" class="custom-modal">
+    <div class="custom-modal-backdrop" onclick="closeMediaModal()"></div>
+    <div class="custom-modal-box modal-lg">
+      <div class="modal-header">
+        <h3 class="h3" id="media-modal-title">Tambah Media</h3>
+        <button class="modal-close" onclick="closeMediaModal()">
+          <ion-icon name="close-outline"></ion-icon>
+        </button>
+      </div>
+
+      <form id="media-form" class="modal-form">
+        <input type="hidden" id="media-id">
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label>Kategori</label>
+            <select id="media-category" class="form-input" onchange="handleCategoryFormChange()">
+              <option value="series">Series</option>
+              <option value="movie">Movie</option>
+              <option value="comic">Comic</option>
+              <option value="other">Other (Light Novel / Game)</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="sub-category-group" style="display: none;">
+            <label>Sub-Kategori (Other)</label>
+            <select id="media-sub-category" class="form-input" onchange="handleCategoryFormChange()">
+              <option value="light_novel">Light Novel</option>
+              <option value="game">Game</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Auto-Fetch Search Bar -->
+        <div class="form-group">
+          <label>Cari Otomatis dari API (Judul, Cover & Total Unit)</label>
+          <div class="api-search-row">
+            <input type="text" id="api-search-input" class="form-input" placeholder="Ketik judul lalu klik Cari..." onkeydown="if(event.key==='Enter'){event.preventDefault();searchExternalAPI();}">
+            <button type="button" class="pill-btn primary-btn" onclick="searchExternalAPI()">
+              <ion-icon name="search-outline"></ion-icon>
+              <span>Cari</span>
+            </button>
+          </div>
+          <div id="api-search-results" class="api-results-list" style="display: none;"></div>
+        </div>
+
+        <div class="form-group">
+          <label>Judul</label>
+          <input type="text" id="media-title" class="form-input" placeholder="Judul media" required>
+        </div>
+
+        <div class="form-group">
+          <label>Cover Image URL</label>
+          <input type="url" id="media-cover" class="form-input" placeholder="https://...">
+        </div>
+
+        <div class="form-row-3">
+          <div class="form-group">
+            <label>Status</label>
+            <select id="media-status" class="form-input">
+              <option value="completed">Completed</option>
+              <option value="ongoing">Ongoing</option>
+              <option value="planned">Planned</option>
+              <option value="dropped">Dropped</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Progress</label>
+            <input type="number" id="media-progress" class="form-input" min="0" value="0" required>
+          </div>
+
+          <div class="form-group">
+            <label>Total Unit</label>
+            <input type="number" id="media-total" class="form-input" min="0" placeholder="Opsional">
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label>Satuan Unit</label>
+            <select id="media-unit" class="form-input">
+              <option value="eps">Episodes (eps)</option>
+              <option value="movie">Movie</option>
+              <option value="ch">Chapters (ch)</option>
+              <option value="vol">Volumes (vol)</option>
+              <option value="item">Item / Game</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Rating (1.0 – 10.0)</label>
+            <input type="number" id="media-rating" class="form-input" step="0.1" min="1.0" max="10.0" placeholder="Contoh: 8.7">
+          </div>
+        </div>
+
+        <button type="submit" class="form-btn primary-submit" style="margin-top: 10px;">
+          <ion-icon name="save-outline"></ion-icon>
+          <span>Simpan Data</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
   <script src="./assets/js/script.js"></script>
-
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
-
 </body>
+
 </html>
