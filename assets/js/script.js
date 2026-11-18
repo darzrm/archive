@@ -112,7 +112,7 @@ document.getElementById('admin-login-form').addEventListener('submit', async (e)
 });
 
 // ==========================================
-// 2B. IMAGE COMPRESSION & STORAGE UPLOAD HELPER
+// 2B. IMAGE COMPRESSION & STORAGE UPLOAD/CLEANUP
 // ==========================================
 function compressImageFile(file, maxWidth = 600, quality = 0.82) {
   return new Promise((resolve, reject) => {
@@ -169,6 +169,22 @@ async function uploadImageToSupabase(file, folder = 'covers') {
     .getPublicUrl(fileName);
 
   return publicData.publicUrl;
+}
+
+async function deleteOldStorageFile(fileUrl) {
+  if (!fileUrl) return;
+  const marker = `/storage/v1/object/public/${STORAGE_BUCKET}/`;
+  const idx = fileUrl.indexOf(marker);
+  if (idx === -1) return; // Ignore external API URLs
+
+  const filePath = decodeURIComponent(fileUrl.substring(idx + marker.length).split('?')[0]);
+  if (filePath) {
+    try {
+      await supabaseClient.storage.from(STORAGE_BUCKET).remove([filePath]);
+    } catch (e) {
+      console.error('Failed to delete old file:', e);
+    }
+  }
 }
 
 // ==========================================
@@ -231,11 +247,14 @@ window.handleProfileImageUpload = async function (event) {
 document.getElementById('profile-form').addEventListener('submit', async (e) => {
   e.preventDefault();
 
+  const oldAvatar = currentProfile.avatar_url;
+  const newAvatar = document.getElementById('edit-profile-avatar').value.trim() || './assets/images/profile.jpg';
+
   const updatedProfile = {
     id: 1,
     name: document.getElementById('edit-profile-name').value.trim(),
     bio: document.getElementById('edit-profile-bio').value.trim(),
-    avatar_url: document.getElementById('edit-profile-avatar').value.trim() || './assets/images/profile.jpg',
+    avatar_url: newAvatar,
     updated_at: new Date().toISOString()
   };
 
@@ -246,6 +265,9 @@ document.getElementById('profile-form').addEventListener('submit', async (e) => 
   if (error) {
     Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
   } else {
+    if (oldAvatar && oldAvatar !== newAvatar) {
+      await deleteOldStorageFile(oldAvatar);
+    }
     currentProfile = updatedProfile;
     applyProfileToUI();
     closeProfileModal();
@@ -975,13 +997,16 @@ window.applyApiResult = async function (idx) {
 };
 
 // ==========================================
-// 6. SUPABASE CRUD (CREATE, UPDATE, DELETE)
+// 6. SUPABASE CRUD (CREATE, UPDATE, DELETE + AUTO-CLEANUP)
 // ==========================================
 document.getElementById('media-form').addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const id = document.getElementById('media-id').value;
   const existingItem = id ? allMediaLogs.find(m => m.id === id) : null;
+  const oldCover = existingItem ? existingItem.cover_url : null;
+  const newCover = normalizeImageUrl(document.getElementById('media-cover').value) || null;
+
   const category = document.getElementById('media-category').value;
   const ratingRaw = document.getElementById('media-rating').value;
   const totalRaw = document.getElementById('media-total').value;
@@ -1003,7 +1028,7 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
     title: document.getElementById('media-title').value.trim(),
     category,
     sub_category: null,
-    cover_url: normalizeImageUrl(document.getElementById('media-cover').value) || null,
+    cover_url: newCover,
     status: statusVal,
     progress: progressVal,
     total_units: totalUnits,
@@ -1022,6 +1047,9 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
   if (error) {
     Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
   } else {
+    if (oldCover && oldCover !== newCover) {
+      await deleteOldStorageFile(oldCover);
+    }
     closeMediaModal();
     await fetchMediaLogs();
   }
@@ -1030,6 +1058,8 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
 window.deleteCurrentModalMedia = async function () {
   const id = document.getElementById('media-id').value;
   if (!id) return;
+
+  const existingItem = allMediaLogs.find(m => m.id === id);
 
   const confirm = await Swal.fire({
     text: 'Remove this entry from your library?',
@@ -1047,6 +1077,9 @@ window.deleteCurrentModalMedia = async function () {
     if (error) {
       Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
     } else {
+      if (existingItem?.cover_url) {
+        await deleteOldStorageFile(existingItem.cover_url);
+      }
       closeMediaModal();
       await fetchMediaLogs();
     }
