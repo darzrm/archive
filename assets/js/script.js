@@ -6,7 +6,8 @@
 const SUPABASE_URL = 'https://uendrdxiixmikkeanlod.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_IdPLjwQhVQwXGGxUnBVblg_oIQ5Zz89';
 const TMDB_API_KEY = '727a00da59cd2b9873f7636a5bde9561';
-const RAWG_API_KEY = ''; // Optional: add free RAWG API key for PC/Mobile games
+const RAWG_API_KEY = '';
+const STORAGE_BUCKET = 'media-assets';
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -15,6 +16,11 @@ let allMediaLogs = [];
 let lastApiResults = [];
 let currentCategory = 'all';
 let isAdminLoggedIn = false;
+let currentProfile = {
+  name: 'dariraa',
+  bio: 'glory glory man united!',
+  avatar_url: './assets/images/profile.jpg'
+};
 
 function setElText(id, text) {
   const el = document.getElementById(id);
@@ -26,6 +32,7 @@ function setElText(id, text) {
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
   await checkAdminSession();
+  await fetchProfileSettings();
   await fetchMediaLogs();
   setupFilterListeners();
 });
@@ -38,15 +45,18 @@ async function checkAdminSession() {
 
 function updateAdminUI() {
   const addBtn = document.getElementById('btn-add-media');
+  const editProfileBtn = document.getElementById('btn-edit-profile');
   const lockIcon = document.getElementById('admin-lock-icon');
   const btnText = document.getElementById('admin-btn-text');
 
   if (isAdminLoggedIn) {
     if (addBtn) addBtn.style.display = 'inline-flex';
+    if (editProfileBtn) editProfileBtn.style.display = 'inline-flex';
     if (lockIcon) lockIcon.setAttribute('name', 'log-out-outline');
     if (btnText) btnText.textContent = 'Logout';
   } else {
     if (addBtn) addBtn.style.display = 'none';
+    if (editProfileBtn) editProfileBtn.style.display = 'none';
     if (lockIcon) lockIcon.setAttribute('name', 'lock-closed-outline');
     if (btnText) btnText.textContent = 'Admin';
   }
@@ -93,6 +103,155 @@ document.getElementById('admin-login-form').addEventListener('submit', async (e)
     Swal.fire({
       icon: 'success',
       text: 'Admin login successful',
+      timer: 1200,
+      showConfirmButton: false,
+      background: '#1e1e1f',
+      color: '#fff'
+    });
+  }
+});
+
+// ==========================================
+// 2B. IMAGE COMPRESSION & STORAGE UPLOAD HELPER
+// ==========================================
+function compressImageFile(file, maxWidth = 600, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Image compression failed'));
+          },
+          'image/webp',
+          quality
+        );
+      };
+      img.onerror = () => reject(new Error('Invalid image file'));
+      img.src = event.target.result;
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadImageToSupabase(file, folder = 'covers') {
+  const compressedBlob = await compressImageFile(file, folder === 'avatars' ? 400 : 600, 0.82);
+  const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.webp`;
+
+  const { error } = await supabaseClient.storage
+    .from(STORAGE_BUCKET)
+    .upload(fileName, compressedBlob, {
+      contentType: 'image/webp',
+      upsert: false
+    });
+
+  if (error) throw error;
+
+  const { data: publicData } = supabaseClient.storage
+    .from(STORAGE_BUCKET)
+    .getPublicUrl(fileName);
+
+  return publicData.publicUrl;
+}
+
+// ==========================================
+// 2C. PROFILE SETTINGS (FETCH, EDIT, UPLOAD)
+// ==========================================
+async function fetchProfileSettings() {
+  const { data, error } = await supabaseClient
+    .from('profile_settings')
+    .select('*')
+    .eq('id', 1)
+    .single();
+
+  if (!error && data) {
+    currentProfile = {
+      name: data.name || 'dariraa',
+      bio: data.bio || '',
+      avatar_url: data.avatar_url || './assets/images/profile.jpg'
+    };
+  }
+  applyProfileToUI();
+}
+
+function applyProfileToUI() {
+  setElText('profile-name-text', currentProfile.name);
+  setElText('profile-bio-text', currentProfile.bio);
+  const avatarEl = document.getElementById('profile-avatar-img');
+  if (avatarEl && currentProfile.avatar_url) {
+    avatarEl.src = currentProfile.avatar_url;
+  }
+}
+
+window.openProfileModal = function () {
+  document.getElementById('edit-profile-name').value = currentProfile.name;
+  document.getElementById('edit-profile-bio').value = currentProfile.bio;
+  document.getElementById('edit-profile-avatar').value = currentProfile.avatar_url;
+  setElText('profile-upload-status', '');
+  document.getElementById('profile-modal').classList.add('active');
+};
+
+window.closeProfileModal = function () {
+  document.getElementById('profile-modal').classList.remove('active');
+};
+
+window.handleProfileImageUpload = async function (event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  setElText('profile-upload-status', 'Uploading avatar...');
+  try {
+    const publicUrl = await uploadImageToSupabase(file, 'avatars');
+    document.getElementById('edit-profile-avatar').value = publicUrl;
+    setElText('profile-upload-status', 'Avatar uploaded! Click Save Profile.');
+  } catch (err) {
+    setElText('profile-upload-status', `Upload failed: ${err.message}`);
+  } finally {
+    event.target.value = '';
+  }
+};
+
+document.getElementById('profile-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const updatedProfile = {
+    id: 1,
+    name: document.getElementById('edit-profile-name').value.trim(),
+    bio: document.getElementById('edit-profile-bio').value.trim(),
+    avatar_url: document.getElementById('edit-profile-avatar').value.trim() || './assets/images/profile.jpg',
+    updated_at: new Date().toISOString()
+  };
+
+  const { error } = await supabaseClient
+    .from('profile_settings')
+    .upsert([updatedProfile]);
+
+  if (error) {
+    Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
+  } else {
+    currentProfile = updatedProfile;
+    applyProfileToUI();
+    closeProfileModal();
+    Swal.fire({
+      icon: 'success',
+      text: 'Profile updated',
       timer: 1200,
       showConfirmButton: false,
       background: '#1e1e1f',
@@ -326,7 +485,7 @@ function renderMediaGrid() {
 }
 
 // ==========================================
-// 5. ADD / EDIT MODAL & MULTI-API SEARCH
+// 5. ADD / EDIT MODAL, COVER UPLOAD & MULTI-API SEARCH
 // ==========================================
 window.openMediaModal = function () {
   document.getElementById('media-modal-title').textContent = 'Add Media';
@@ -334,6 +493,7 @@ window.openMediaModal = function () {
   document.getElementById('media-id').value = '';
   document.getElementById('btn-modal-delete').style.display = 'none';
   document.getElementById('api-search-results').style.display = 'none';
+  setElText('cover-upload-status', '');
   handleCategoryFormChange();
   document.getElementById('media-modal').classList.add('active');
 };
@@ -356,12 +516,29 @@ window.openEditModal = function (id) {
   document.getElementById('media-unit').value = item.unit_label || 'eps';
   document.getElementById('media-rating').value = (item.rating !== null && item.rating !== undefined) ? item.rating : '';
   document.getElementById('api-search-results').style.display = 'none';
+  setElText('cover-upload-status', '');
 
   document.getElementById('media-modal').classList.add('active');
 };
 
 window.closeMediaModal = function () {
   document.getElementById('media-modal').classList.remove('active');
+};
+
+window.handleMediaCoverUpload = async function (event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  setElText('cover-upload-status', 'Uploading cover...');
+  try {
+    const publicUrl = await uploadImageToSupabase(file, 'covers');
+    document.getElementById('media-cover').value = publicUrl;
+    setElText('cover-upload-status', 'Cover uploaded successfully!');
+  } catch (err) {
+    setElText('cover-upload-status', `Upload failed: ${err.message}`);
+  } finally {
+    event.target.value = '';
+  }
 };
 
 window.handleCategoryFormChange = function () {
@@ -405,7 +582,6 @@ window.stepModalProgress = function () {
   }
 };
 
-// Fetch helper with timeout so blocked domains never hang search
 async function fetchWithTimeout(url, options = {}, timeoutMs = 4500) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -416,7 +592,6 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 4500) {
   }
 }
 
-// Helper: AniList GraphQL Search (Comic & Novel)
 async function fetchAniListMedia(query, isNovel = false) {
   const gql = `
     query ($search: String) {
@@ -450,7 +625,6 @@ async function fetchAniListMedia(query, isNovel = false) {
   });
 }
 
-// Deduplicate results with identical titles
 function deduplicateResults(list) {
   const seen = new Set();
   return list.filter(item => {
@@ -625,10 +799,9 @@ window.searchExternalAPI = async function () {
     if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
     items = deduplicateResults(items);
 
-   } else if (cat === 'game') {
+  } else if (cat === 'game') {
     const [wikiGameRes, vndbRes, rawgRes] = await Promise.allSettled([
       (async () => {
-        // 1. Cari entitas di Wikidata berdasarkan judul
         const searchRes = await fetchWithTimeout(
           `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=en&format=json&origin=*&limit=8`
         );
@@ -641,7 +814,6 @@ window.searchExternalAPI = async function () {
 
         if (candidates.length === 0) return [];
 
-        // 2. Ambil detail gambar cover & sitelink Wikipedia dari Wikidata
         const ids = candidates.map(c => c.id).join('|');
         const entityRes = await fetchWithTimeout(
           `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${ids}&props=claims|sitelinks|labels|descriptions&languages=en&format=json&origin=*`
@@ -658,13 +830,11 @@ window.searchExternalAPI = async function () {
             const desc = ent.descriptions?.en?.value || 'Video Game';
             let cover = '';
 
-            // Coba ambil gambar langsung dari Wikidata (P18)
             const p18 = ent.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
             if (p18) {
               cover = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(p18)}?width=500`;
             }
 
-            // Jika di Wikidata tidak ada gambar (biasanya cover berhak cipta ada di Wikipedia EN), ambil dari Wikipedia PageImages
             const enWikiTitle = ent.sitelinks?.enwiki?.title;
             if (!cover && enWikiTitle) {
               try {
@@ -730,8 +900,6 @@ window.searchExternalAPI = async function () {
     if (vndbRes.status === 'fulfilled') items.push(...vndbRes.value);
     if (rawgRes.status === 'fulfilled') items.push(...rawgRes.value);
     items = deduplicateResults(items);
-
-
 
   } else if (cat === 'music') {
     try {
