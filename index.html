@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Media Tracker</title>
   <link id="favicon-link" rel="shortcut icon" href="./assets/images/profile.jpg" type="image/x-icon">
-  <link rel="stylesheet" href="./assets/css/style.css?v=30">
+  <link rel="stylesheet" href="./assets/css/style.css?v=35">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -152,56 +152,83 @@
     </section>
 
     <!-- ==========================================
-         3. BOTTOM SECTION: LIBRARY
+         3. BOTTOM SECTION: TABBED LIBRARY & BLOG
     =========================================== -->
     <section class="card-section library-section">
-      <div class="library-top-bar">
-        <div class="library-title-row">
-          <h2 class="h2 article-title">Library</h2>
-          <button id="btn-add-media" class="minimal-add-btn" style="display: none;" onclick="openMediaModal()">
-            <ion-icon name="add-outline"></ion-icon>
-            <span>Add Media</span>
+      <!-- Top Switcher Tabs (Library vs Blog) -->
+      <div class="main-switcher-bar">
+        <div class="main-view-tabs">
+          <button type="button" class="main-view-btn active" data-view="library" onclick="switchMainView('library')">
+            <ion-icon name="albums-outline"></ion-icon>
+            <span>Library</span>
+          </button>
+          <button type="button" class="main-view-btn" data-view="blog" onclick="switchMainView('blog')">
+            <ion-icon name="chatbox-ellipses-outline"></ion-icon>
+            <span>Blog & Notes</span>
           </button>
         </div>
 
-        <div class="category-tabs" id="category-tabs">
-          <button class="cat-tab active" data-category="all">All</button>
-          <button class="cat-tab" data-category="tv_show">TV Show</button>
-          <button class="cat-tab" data-category="movie">Movie</button>
-          <button class="cat-tab" data-category="comic">Comic</button>
-          <button class="cat-tab" data-category="novel">Novel</button>
-          <button class="cat-tab" data-category="game">Game</button>
-          <button class="cat-tab" data-category="music">Music</button>
+        <!-- Contextual Admin Action Buttons -->
+        <button id="btn-add-media" class="minimal-add-btn" style="display: none;" onclick="openMediaModal()">
+          <ion-icon name="add-outline"></ion-icon>
+          <span>Add Media</span>
+        </button>
+
+        <button id="btn-add-post" class="minimal-add-btn" style="display: none;" onclick="openPostModal()">
+          <ion-icon name="create-outline"></ion-icon>
+          <span>New Post</span>
+        </button>
+      </div>
+
+      <!-- TAB 1: MEDIA LIBRARY VIEW -->
+      <div id="view-library">
+        <div class="library-top-bar">
+          <div class="category-tabs" id="category-tabs">
+            <button class="cat-tab active" data-category="all">All</button>
+            <button class="cat-tab" data-category="tv_show">TV Show</button>
+            <button class="cat-tab" data-category="movie">Movie</button>
+            <button class="cat-tab" data-category="comic">Comic</button>
+            <button class="cat-tab" data-category="novel">Novel</button>
+            <button class="cat-tab" data-category="game">Game</button>
+            <button class="cat-tab" data-category="music">Music</button>
+          </div>
+        </div>
+
+        <!-- Filter & Search Controls -->
+        <div class="library-controls">
+          <div class="search-box">
+            <ion-icon name="search-outline"></ion-icon>
+            <input type="text" id="search-library" placeholder="Search titles...">
+          </div>
+
+          <div class="select-controls">
+            <select id="filter-status" class="control-select">
+              <option value="all">All Status</option>
+              <option value="completed">Completed</option>
+              <option value="ongoing">Ongoing</option>
+              <option value="planned">Planned</option>
+              <option value="dropped">Dropped</option>
+            </select>
+
+            <select id="sort-library" class="control-select">
+              <option value="recent">Recently Updated</option>
+              <option value="rating_desc">Highest Rated</option>
+              <option value="title_asc">Title A–Z</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Media Cards Grid -->
+        <div id="media-grid" class="media-grid">
+          <p class="empty-state">Loading media library...</p>
         </div>
       </div>
 
-      <!-- Filter & Search Controls -->
-      <div class="library-controls">
-        <div class="search-box">
-          <ion-icon name="search-outline"></ion-icon>
-          <input type="text" id="search-library" placeholder="Search titles...">
+      <!-- TAB 2: PERSONAL BLOG / NOTES VIEW -->
+      <div id="view-blog" style="display: none;">
+        <div id="blog-feed-list" class="blog-feed-list">
+          <p class="empty-state">Loading posts...</p>
         </div>
-
-        <div class="select-controls">
-          <select id="filter-status" class="control-select">
-            <option value="all">All Status</option>
-            <option value="completed">Completed</option>
-            <option value="ongoing">Ongoing</option>
-            <option value="planned">Planned</option>
-            <option value="dropped">Dropped</option>
-          </select>
-
-          <select id="sort-library" class="control-select">
-            <option value="recent">Recently Updated</option>
-            <option value="rating_desc">Highest Rated</option>
-            <option value="title_asc">Title A–Z</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Media Cards Grid -->
-      <div id="media-grid" class="media-grid">
-        <p class="empty-state">Loading media library...</p>
       </div>
     </section>
 
@@ -409,9 +436,56 @@
     </div>
   </div>
 
+  <!-- ==========================================
+       MODAL: ADD / EDIT BLOG POST
+  =========================================== -->
+  <div id="post-modal" class="custom-modal">
+    <div class="custom-modal-backdrop" onclick="closePostModal()"></div>
+    <div class="custom-modal-box">
+      <div class="modal-header">
+        <h3 class="h3" id="post-modal-title">New Post</h3>
+        <button class="modal-close" onclick="closePostModal()">
+          <ion-icon name="close-outline"></ion-icon>
+        </button>
+      </div>
+
+      <form id="post-form" class="modal-form">
+        <input type="hidden" id="post-id">
+
+        <div class="form-group">
+          <label>Post Content</label>
+          <textarea id="post-content" class="form-input" rows="4" placeholder="Write your thoughts, mini review, or update..." required style="resize: vertical; font-family: inherit;"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Photo (Optional — URL or Upload)</label>
+          <div class="api-search-row">
+            <input type="text" id="post-image" class="form-input" placeholder="https://... (leave empty for text only)">
+            <label for="post-image-file" class="pill-btn primary-btn" style="cursor: pointer; white-space: nowrap;">
+              <ion-icon name="cloud-upload-outline"></ion-icon>
+              <span>Upload</span>
+            </label>
+            <input type="file" id="post-image-file" accept="image/*" style="display: none;" onchange="handlePostImageUpload(event)">
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+            <small id="post-upload-status" style="color: var(--light-gray-70); font-size: 11px;"></small>
+            <button type="button" onclick="clearPostImageInput()" style="background: none; border: none; color: #ff6b6b; font-size: 11px; cursor: pointer;">Remove photo</button>
+          </div>
+        </div>
+
+        <div class="modal-submit-row">
+          <button type="submit" class="form-btn primary-submit">
+            <ion-icon name="paper-plane-outline"></ion-icon>
+            <span>Publish Post</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./assets/js/script.js?v=33"></script>
+  <script src="./assets/js/script.js?v=35"></script>
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 </body>
