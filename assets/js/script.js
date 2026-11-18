@@ -1,7 +1,7 @@
 'use strict';
 
 // ==========================================
-// 1. KONFIGURASI SUPABASE & API
+// 1. SUPABASE & EXTERNAL API CONFIGURATION
 // ==========================================
 const SUPABASE_URL = 'https://uendrdxiixmikkeanlod.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_IdPLjwQhVQwXGGxUnBVblg_oIQ5Zz89';
@@ -9,7 +9,7 @@ const TMDB_API_KEY = '727a00da59cd2b9873f7636a5bde9561';
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// State Aplikasi
+// Application State
 let allMediaLogs = [];
 let lastApiResults = [];
 let currentCategory = 'all';
@@ -17,7 +17,7 @@ let currentSubCategory = 'all';
 let isAdminLoggedIn = false;
 
 // ==========================================
-// 2. INISIALISASI & AUTH ADMIN
+// 2. INITIALIZATION & ADMIN AUTH
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
   await checkAdminSession();
@@ -51,10 +51,11 @@ function updateAdminUI() {
 window.handleAdminAuthClick = async function () {
   if (isAdminLoggedIn) {
     const confirm = await Swal.fire({
-      text: 'Keluar dari mode Admin?',
+      text: 'Exit Admin mode?',
       icon: 'question',
       showCancelButton: true,
       confirmButtonText: 'Logout',
+      cancelButtonText: 'Cancel',
       background: '#1e1e1f',
       color: '#fff'
     });
@@ -84,12 +85,19 @@ document.getElementById('admin-login-form').addEventListener('submit', async (e)
     isAdminLoggedIn = true;
     closeLoginModal();
     updateAdminUI();
-    Swal.fire({ icon: 'success', text: 'Login Admin berhasil', timer: 1200, showConfirmButton: false, background: '#1e1e1f', color: '#fff' });
+    Swal.fire({
+      icon: 'success',
+      text: 'Admin login successful',
+      timer: 1200,
+      showConfirmButton: false,
+      background: '#1e1e1f',
+      color: '#fff'
+    });
   }
 });
 
 // ==========================================
-// 3. LOAD DATA & KALKULASI STATS OTOMATIS
+// 3. LOAD DATA & AUTO-CALCULATE STATS
 // ==========================================
 async function fetchMediaLogs() {
   const { data, error } = await supabaseClient
@@ -98,7 +106,7 @@ async function fetchMediaLogs() {
     .order('updated_at', { ascending: false });
 
   if (error) {
-    document.getElementById('media-grid').innerHTML = `<p class="empty-state">Gagal memuat data: ${error.message}</p>`;
+    document.getElementById('media-grid').innerHTML = `<p class="empty-state">Failed to load data: ${error.message}</p>`;
     return;
   }
 
@@ -126,16 +134,16 @@ function updateStatsUI() {
     : '0.0';
 
   document.getElementById('total-entries-label').textContent = `${allMediaLogs.length} Total Entries`;
-  document.getElementById('stat-series-eps').textContent = totalSeriesEps.toLocaleString('id-ID');
+  document.getElementById('stat-series-eps').textContent = totalSeriesEps.toLocaleString('en-US');
   document.getElementById('stat-series-count').textContent = `${seriesItems.length} Series`;
 
-  document.getElementById('stat-movies').textContent = completedMovies.toLocaleString('id-ID');
+  document.getElementById('stat-movies').textContent = completedMovies.toLocaleString('en-US');
   document.getElementById('stat-movies-total').textContent = `${movieItems.length} Total`;
 
-  document.getElementById('stat-comic-ch').textContent = totalComicCh.toLocaleString('id-ID');
+  document.getElementById('stat-comic-ch').textContent = totalComicCh.toLocaleString('en-US');
   document.getElementById('stat-comic-count').textContent = `${comicItems.length} Comics`;
 
-  document.getElementById('stat-other-count').textContent = otherItems.length.toLocaleString('id-ID');
+  document.getElementById('stat-other-count').textContent = otherItems.length.toLocaleString('en-US');
   document.getElementById('stat-other-breakdown').textContent = `${lnCount} LN · ${gameCount} Game`;
 
   document.getElementById('stat-avg-rating').textContent = avgRating;
@@ -208,7 +216,7 @@ function renderMediaGrid() {
   }
 
   if (filtered.length === 0) {
-    grid.innerHTML = `<p class="empty-state">Belum ada media di kategori ini.</p>`;
+    grid.innerHTML = `<p class="empty-state">No media found in this category.</p>`;
     return;
   }
 
@@ -227,7 +235,7 @@ function renderMediaGrid() {
       <div class="admin-card-actions">
         <button class="mini-btn" onclick="incrementProgress('${item.id}')">+1</button>
         <button class="mini-btn" onclick="openEditModal('${item.id}')">Edit</button>
-        <button class="mini-btn danger" onclick="deleteMedia('${item.id}')">Hapus</button>
+        <button class="mini-btn danger" onclick="deleteMedia('${item.id}')">Delete</button>
       </div>
     ` : '';
 
@@ -257,10 +265,10 @@ function renderMediaGrid() {
 }
 
 // ==========================================
-// 5. MODAL ADD / EDIT & AUTO-SEARCH API
+// 5. ADD / EDIT MODAL & AUTO-SEARCH API
 // ==========================================
 window.openMediaModal = function () {
-  document.getElementById('media-modal-title').textContent = 'Tambah Media';
+  document.getElementById('media-modal-title').textContent = 'Add Media';
   document.getElementById('media-form').reset();
   document.getElementById('media-id').value = '';
   document.getElementById('api-search-results').style.display = 'none';
@@ -322,57 +330,78 @@ window.searchExternalAPI = async function () {
 
   if (!query) return;
   resultsBox.style.display = 'block';
-  resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">Mencari...</p>`;
+  resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">Searching...</p>`;
 
   try {
     let items = [];
 
     if (cat === 'series') {
-      const jikanRes = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=5`);
-      const jikanData = await jikanRes.json();
-      items = (jikanData.data || []).map(a => ({
-        title: a.title_english || a.title,
-        cover: a.images?.jpg?.large_image_url || '',
-        total: a.episodes || null,
-        unit: 'eps',
-        meta: `Anime Series · ${a.episodes || '?'} Eps`
-      }));
-
       if (TMDB_API_KEY) {
-        const tmdbRes = await fetch(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
-        const tmdbData = await tmdbRes.json();
-        const tvItems = (tmdbData.results || []).slice(0, 4).map(t => ({
-          title: t.name,
-          cover: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : '',
-          total: null,
-          unit: 'eps',
-          meta: `TV Series · ${t.first_air_date?.slice(0, 4) || ''}`
-        }));
-        items = [...items, ...tvItems];
+        try {
+          const tmdbRes = await fetch(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
+          const tmdbData = await tmdbRes.json();
+          const tvItems = (tmdbData.results || []).slice(0, 5).map(t => ({
+            tmdbId: t.id,
+            title: t.name,
+            cover: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : '',
+            total: null,
+            unit: 'eps',
+            meta: `TV Series · ${t.first_air_date?.slice(0, 4) || ''}`
+          }));
+          items = [...items, ...tvItems];
+        } catch (e) {
+          console.error('TMDB TV error:', e);
+        }
       }
-    } else if (cat === 'movie') {
-      const jikanRes = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=movie&limit=4`);
-      const jikanData = await jikanRes.json();
-      items = (jikanData.data || []).map(a => ({
-        title: a.title_english || a.title,
-        cover: a.images?.jpg?.large_image_url || '',
-        total: 1,
-        unit: 'movie',
-        meta: `Anime Movie · ${a.year || ''}`
-      }));
 
+      try {
+        const jikanRes = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=4`);
+        const jikanData = await jikanRes.json();
+        const animeItems = (jikanData.data || []).map(a => ({
+          title: a.title_english || a.title,
+          cover: a.images?.jpg?.large_image_url || '',
+          total: a.episodes || null,
+          unit: 'eps',
+          meta: `Anime Series · ${a.episodes || '?'} Eps`
+        }));
+        items = [...items, ...animeItems];
+      } catch (e) {
+        console.error('Jikan TV error:', e);
+      }
+
+    } else if (cat === 'movie') {
       if (TMDB_API_KEY) {
-        const tmdbRes = await fetch(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
-        const tmdbData = await tmdbRes.json();
-        const movItems = (tmdbData.results || []).slice(0, 5).map(m => ({
-          title: m.title,
-          cover: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : '',
+        try {
+          const tmdbRes = await fetch(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
+          const tmdbData = await tmdbRes.json();
+          const movItems = (tmdbData.results || []).slice(0, 5).map(m => ({
+            title: m.title,
+            cover: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : '',
+            total: 1,
+            unit: 'movie',
+            meta: `Movie · ${m.release_date?.slice(0, 4) || ''}`
+          }));
+          items = [...items, ...movItems];
+        } catch (e) {
+          console.error('TMDB Movie error:', e);
+        }
+      }
+
+      try {
+        const jikanRes = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=movie&limit=4`);
+        const jikanData = await jikanRes.json();
+        const animeMov = (jikanData.data || []).map(a => ({
+          title: a.title_english || a.title,
+          cover: a.images?.jpg?.large_image_url || '',
           total: 1,
           unit: 'movie',
-          meta: `Movie · ${m.release_date?.slice(0, 4) || ''}`
+          meta: `Anime Movie · ${a.year || ''}`
         }));
-        items = [...items, ...movItems];
+        items = [...items, ...animeMov];
+      } catch (e) {
+        console.error('Jikan Movie error:', e);
       }
+
     } else if (cat === 'comic') {
       const res = await fetch(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=6`);
       const data = await res.json();
@@ -385,6 +414,7 @@ window.searchExternalAPI = async function () {
           unit: 'ch',
           meta: `${m.type} · ${m.chapters || '?'} Ch`
         }));
+
     } else if (cat === 'other' && subCat === 'light_novel') {
       const res = await fetch(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&type=lightnovel&limit=6`);
       const data = await res.json();
@@ -395,6 +425,7 @@ window.searchExternalAPI = async function () {
         unit: ln.volumes ? 'vol' : 'ch',
         meta: `Light Novel · ${ln.volumes || '?'} Vol`
       }));
+
     } else if (cat === 'other' && subCat === 'game') {
       const res = await fetch('https://api.vndb.org/kana/vn', {
         method: 'POST',
@@ -418,7 +449,7 @@ window.searchExternalAPI = async function () {
     lastApiResults = items;
 
     if (items.length === 0) {
-      resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">Tidak ditemukan, silakan isi manual di bawah.</p>`;
+      resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">No results found. Please fill in the fields manually below.</p>`;
       return;
     }
 
@@ -432,22 +463,36 @@ window.searchExternalAPI = async function () {
       </div>
     `).join('');
   } catch (err) {
-    resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: #ff5f5f;">Error API: ${err.message}</p>`;
+    resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: #ff5f5f;">API Error: ${err.message}</p>`;
   }
 };
 
-window.applyApiResult = function (idx) {
+window.applyApiResult = async function (idx) {
   const item = lastApiResults[idx];
   if (!item) return;
+
   document.getElementById('media-title').value = item.title;
   document.getElementById('media-cover').value = item.cover || '';
   if (item.total) document.getElementById('media-total').value = item.total;
   if (item.unit) document.getElementById('media-unit').value = item.unit;
   document.getElementById('api-search-results').style.display = 'none';
+
+  // Auto-fetch total episodes if selected item is a TMDB TV Series
+  if (item.tmdbId && TMDB_API_KEY) {
+    try {
+      const detailRes = await fetch(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}`);
+      const detailData = await detailRes.json();
+      if (detailData.number_of_episodes) {
+        document.getElementById('media-total').value = detailData.number_of_episodes;
+      }
+    } catch (e) {
+      console.error('TMDB detail error:', e);
+    }
+  }
 };
 
 // ==========================================
-// 6. CRUD SUPABASE (CREATE, UPDATE, DELETE)
+// 6. SUPABASE CRUD (CREATE, UPDATE, DELETE)
 // ==========================================
 document.getElementById('media-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -503,11 +548,12 @@ window.incrementProgress = async function (id) {
 
 window.deleteMedia = async function (id) {
   const confirm = await Swal.fire({
-    text: 'Hapus media ini dari daftar?',
+    text: 'Remove this entry from your library?',
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#ff5f5f',
-    confirmButtonText: 'Hapus',
+    confirmButtonText: 'Delete',
+    cancelButtonText: 'Cancel',
     background: '#1e1e1f',
     color: '#fff'
   });
