@@ -175,17 +175,22 @@ async function deleteOldStorageFile(fileUrl) {
   if (!fileUrl) return;
   const marker = `/storage/v1/object/public/${STORAGE_BUCKET}/`;
   const idx = fileUrl.indexOf(marker);
-  if (idx === -1) return; // Ignore external API URLs
+  if (idx === -1) return;
 
   const filePath = decodeURIComponent(fileUrl.substring(idx + marker.length).split('?')[0]);
   if (filePath) {
-    try {
-      await supabaseClient.storage.from(STORAGE_BUCKET).remove([filePath]);
-    } catch (e) {
-      console.error('Failed to delete old file:', e);
+    const { data, error } = await supabaseClient.storage
+      .from(STORAGE_BUCKET)
+      .remove([filePath]);
+
+    if (error) {
+      console.error('Supabase Storage Delete Error:', error.message);
+    } else {
+      console.log('Deleted old file from storage:', data);
     }
   }
 }
+
 
 // ==========================================
 // 2C. PROFILE SETTINGS (FETCH, EDIT, UPLOAD)
