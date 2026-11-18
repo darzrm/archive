@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Kazvera — Personal Media Tracker</title>
   <link rel="shortcut icon" href="./assets/images/eec.png" type="image/x-icon">
-  <link rel="stylesheet" href="./assets/css/style.css?v=6">
+  <link rel="stylesheet" href="./assets/css/style.css?v=7">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -61,74 +61,44 @@
     </header>
 
     <!-- ==========================================
-         2. MIDDLE SECTION: STATS
+         2. MIDDLE SECTION: MINIMALIST STATS
     =========================================== -->
     <section class="card-section stats-section">
-      <div class="section-header">
-        <h2 class="h2 article-title">Stats</h2>
-        <span class="section-subtitle" id="total-entries-label">0 Total Entries</span>
+      <div class="stats-header-minimal">
+        <span class="stats-title-minimal">Overview</span>
+        <span class="stats-total-minimal" id="total-entries-label">0 Entries</span>
       </div>
 
-      <div class="stats-grid">
-        <div class="stat-box">
-          <div class="stat-icon">
-            <ion-icon name="tv-outline"></ion-icon>
-          </div>
-          <div class="stat-info">
-            <p class="stat-label">Series Episodes</p>
-            <h3 class="stat-value" id="stat-series-eps">0</h3>
-            <span class="stat-sub" id="stat-series-count">0 Series</span>
-          </div>
+      <div class="stats-minimal-strip">
+        <div class="stat-item-minimal">
+          <span class="stat-val-minimal" id="stat-series-eps">0</span>
+          <span class="stat-lbl-minimal">Series Eps · <span id="stat-series-count">0</span></span>
         </div>
 
-        <div class="stat-box">
-          <div class="stat-icon">
-            <ion-icon name="film-outline"></ion-icon>
-          </div>
-          <div class="stat-info">
-            <p class="stat-label">Movies Watched</p>
-            <h3 class="stat-value" id="stat-movies">0</h3>
-            <span class="stat-sub" id="stat-movies-total">0 Total</span>
-          </div>
+        <div class="stat-item-minimal">
+          <span class="stat-val-minimal" id="stat-movies">0</span>
+          <span class="stat-lbl-minimal">Movies · <span id="stat-movies-total">0</span></span>
         </div>
 
-        <div class="stat-box">
-          <div class="stat-icon">
-            <ion-icon name="book-outline"></ion-icon>
-          </div>
-          <div class="stat-info">
-            <p class="stat-label">Comic Chapters</p>
-            <h3 class="stat-value" id="stat-comic-ch">0</h3>
-            <span class="stat-sub" id="stat-comic-count">0 Comics</span>
-          </div>
+        <div class="stat-item-minimal">
+          <span class="stat-val-minimal" id="stat-comic-ch">0</span>
+          <span class="stat-lbl-minimal">Chapters · <span id="stat-comic-count">0</span></span>
         </div>
 
-        <div class="stat-box">
-          <div class="stat-icon">
-            <ion-icon name="game-controller-outline"></ion-icon>
-          </div>
-          <div class="stat-info">
-            <p class="stat-label">Other (LN & Game)</p>
-            <h3 class="stat-value" id="stat-other-count">0</h3>
-            <span class="stat-sub" id="stat-other-breakdown">0 LN · 0 Game</span>
-          </div>
+        <div class="stat-item-minimal">
+          <span class="stat-val-minimal" id="stat-other-count">0</span>
+          <span class="stat-lbl-minimal" id="stat-other-breakdown">0 LN · 0 Game</span>
         </div>
 
-        <div class="stat-box">
-          <div class="stat-icon">
-            <ion-icon name="star-outline"></ion-icon>
-          </div>
-          <div class="stat-info">
-            <p class="stat-label">Mean Rating</p>
-            <h3 class="stat-value" id="stat-avg-rating">0.0</h3>
-            <span class="stat-sub">Scale 1.0 – 10.0</span>
-          </div>
+        <div class="stat-item-minimal">
+          <span class="stat-val-minimal" id="stat-avg-rating">0.0</span>
+          <span class="stat-lbl-minimal">Mean Rating</span>
         </div>
       </div>
     </section>
 
     <!-- ==========================================
-         3. BOTTOM SECTION: CATEGORIES & MEDIA LIST
+         3. BOTTOM SECTION: SIMPLIFIED LIBRARY
     =========================================== -->
     <section class="card-section library-section">
       <div class="library-top-bar">
@@ -154,7 +124,7 @@
       <div class="library-controls">
         <div class="search-box">
           <ion-icon name="search-outline"></ion-icon>
-          <input type="text" id="search-library" placeholder="Search titles in library...">
+          <input type="text" id="search-library" placeholder="Search titles...">
         </div>
 
         <div class="select-controls">
@@ -220,7 +190,7 @@
   </div>
 
   <!-- ==========================================
-       MODAL: ADD / EDIT MEDIA (WITH AUTO-SEARCH API)
+       MODAL: ADD / EDIT MEDIA
   =========================================== -->
   <div id="media-modal" class="custom-modal">
     <div class="custom-modal-backdrop" onclick="closeMediaModal()"></div>
@@ -291,7 +261,10 @@
 
           <div class="form-group">
             <label>Progress</label>
-            <input type="number" id="media-progress" class="form-input" min="0" value="0" required>
+            <div class="progress-input-row">
+              <input type="number" id="media-progress" class="form-input" min="0" value="0" required>
+              <button type="button" class="step-plus-btn" onclick="stepModalProgress()" title="Add +1">+1</button>
+            </div>
           </div>
 
           <div class="form-group">
@@ -318,17 +291,23 @@
           </div>
         </div>
 
-        <button type="submit" class="form-btn primary-submit" style="margin-top: 10px;">
-          <ion-icon name="save-outline"></ion-icon>
-          <span>Save Entry</span>
-        </button>
+        <div class="modal-submit-row">
+          <button type="button" id="btn-modal-delete" class="form-btn danger-submit" style="display: none;" onclick="deleteCurrentModalMedia()">
+            <ion-icon name="trash-outline"></ion-icon>
+            <span>Delete</span>
+          </button>
+          <button type="submit" class="form-btn primary-submit">
+            <ion-icon name="save-outline"></ion-icon>
+            <span>Save Entry</span>
+          </button>
+        </div>
       </form>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./assets/js/script.js?v=6"></script>
+  <script src="./assets/js/script.js?v=7"></script>
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 </body>
