@@ -625,20 +625,25 @@ window.searchExternalAPI = async function () {
     if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
     items = deduplicateResults(items);
 
-  } else if (cat === 'game') {
-    const [rawgRes, vndbRes] = await Promise.allSettled([
+    } else if (cat === 'game') {
+    const [cheapSharkRes, vndbRes, rawgRes] = await Promise.allSettled([
       (async () => {
-        if (!RAWG_API_KEY) return [];
-        const res = await fetchWithTimeout(`https://api.rawg.io/api/games?key=${RAWG_API_KEY}&search=${encodeURIComponent(query)}&page_size=5`);
+        const res = await fetchWithTimeout(`https://www.cheapshark.com/api/1.0/games?title=${encodeURIComponent(query)}&limit=6`);
         if (!res.ok) return [];
         const data = await res.json();
-        return (data.results || []).map(g => ({
-          title: g.name,
-          cover: normalizeImageUrl(g.background_image || ''),
-          total: 1,
-          unit: 'item',
-          meta: `Game · ${g.released?.slice(0, 4) || ''}`
-        }));
+        return (data || []).map(g => {
+          // Ubah thumbnail kecil menjadi gambar kapsul Steam HD jika ada steamAppID
+          const cover = g.steamAppID
+            ? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${g.steamAppID}/library_600x900.jpg`
+            : normalizeImageUrl(g.thumb || '');
+          return {
+            title: g.external,
+            cover,
+            total: 1,
+            unit: 'item',
+            meta: `PC Game${g.steamAppID ? ' · Steam' : ''}`
+          };
+        });
       })(),
       (async () => {
         const res = await fetchWithTimeout('https://api.vndb.org/kana/vn', {
@@ -658,12 +663,27 @@ window.searchExternalAPI = async function () {
           unit: 'item',
           meta: `Visual Novel · ${g.released || ''}`
         }));
+      })(),
+      (async () => {
+        if (!RAWG_API_KEY) return [];
+        const res = await fetchWithTimeout(`https://api.rawg.io/api/games?key=${RAWG_API_KEY}&search=${encodeURIComponent(query)}&page_size=5`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.results || []).map(g => ({
+          title: g.name,
+          cover: normalizeImageUrl(g.background_image || ''),
+          total: 1,
+          unit: 'item',
+          meta: `Game · ${g.released?.slice(0, 4) || ''}`
+        }));
       })()
     ]);
 
-    if (rawgRes.status === 'fulfilled') items.push(...rawgRes.value);
+    if (cheapSharkRes.status === 'fulfilled') items.push(...cheapSharkRes.value);
     if (vndbRes.status === 'fulfilled') items.push(...vndbRes.value);
+    if (rawgRes.status === 'fulfilled') items.push(...rawgRes.value);
     items = deduplicateResults(items);
+
 
   } else if (cat === 'music') {
     try {
