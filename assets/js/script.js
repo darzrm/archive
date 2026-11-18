@@ -134,7 +134,7 @@ function updateStatsUI() {
     ? (ratedItems.reduce((sum, i) => sum + Number(i.rating), 0) / ratedItems.length).toFixed(2)
     : '0.0';
 
-  document.getElementById('total-entries-label').textContent = `${allMediaLogs.length} Total Entries`;
+  document.getElementById('total-entries-label').textContent = `${allMediaLogs.length} Entries`;
   document.getElementById('stat-series-eps').textContent = totalSeriesEps.toLocaleString('en-US');
   document.getElementById('stat-series-count').textContent = `${seriesItems.length} Series`;
 
@@ -201,6 +201,17 @@ function normalizeImageUrl(url) {
   return url.trim().replace(/^http:\/\//i, 'https://');
 }
 
+function formatStatusDate(isoString) {
+  if (!isoString) return '—';
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+}
+
 function renderMediaGrid() {
   const grid = document.getElementById('media-grid');
   const query = document.getElementById('search-library').value.toLowerCase().trim();
@@ -233,21 +244,34 @@ function renderMediaGrid() {
       ? `${item.progress || 0} / ${item.total_units} ${item.unit_label || ''}`
       : `${item.progress || 0} ${item.unit_label || ''}`;
 
+    const statusKey = (item.status || 'planned').toLowerCase();
     let percent = 0;
-    if (item.status === 'completed') {
+    let extraBarClass = '';
+
+    if (statusKey === 'completed') {
       percent = 100;
     } else if (item.total_units && Number(item.total_units) > 0) {
       percent = Math.min(100, Math.max(0, Math.round(((item.progress || 0) / Number(item.total_units)) * 100)));
+      if (statusKey === 'planned' && percent === 0) {
+        percent = 100;
+        extraBarClass = 'planned-empty';
+      }
     } else {
-      percent = (item.progress || 0) > 0 ? 40 : 0;
+      if (statusKey === 'planned') {
+        percent = 100;
+        extraBarClass = 'planned-empty';
+      } else {
+        percent = (item.progress || 0) > 0 ? 45 : 0;
+      }
     }
 
-    const adminControls = isAdminLoggedIn ? `
-      <div class="admin-card-actions">
-        <button class="mini-btn" onclick="incrementProgress('${item.id}')">+1</button>
-        <button class="mini-btn" onclick="openEditModal('${item.id}')">Edit</button>
-        <button class="mini-btn danger" onclick="deleteMedia('${item.id}')">Delete</button>
-      </div>
+    const statusDateText = formatStatusDate(item.status_updated_at || item.updated_at || item.created_at);
+
+    const editBtnHtml = isAdminLoggedIn ? `
+      <button class="card-edit-btn" onclick="openEditModal('${item.id}')" title="Edit Entry">
+        <ion-icon name="create-outline"></ion-icon>
+        <span>Edit</span>
+      </button>
     ` : '';
 
     return `
@@ -261,14 +285,20 @@ function renderMediaGrid() {
           <h3 class="media-title" title="${item.title}">${item.title}</h3>
           <div class="media-progress-wrap">
             <div class="media-meta-row">
-              <span class="status-pill ${item.status}">${item.status}</span>
+              <span class="status-pill ${statusKey}">${statusKey}</span>
               <span>${progressText}</span>
             </div>
             <div class="progress-track">
-              <div class="progress-fill ${item.status === 'completed' ? 'completed' : ''}" style="width: ${percent}%"></div>
+              <div class="progress-fill ${statusKey} ${extraBarClass}" style="width: ${percent}%"></div>
             </div>
           </div>
-          ${adminControls}
+          <div class="card-bottom-row">
+            <span class="status-date-tag" title="Last status update">
+              <ion-icon name="calendar-outline"></ion-icon>
+              <span>${statusDateText}</span>
+            </span>
+            ${editBtnHtml}
+          </div>
         </div>
       </div>
     `;
@@ -282,6 +312,7 @@ window.openMediaModal = function () {
   document.getElementById('media-modal-title').textContent = 'Add Media';
   document.getElementById('media-form').reset();
   document.getElementById('media-id').value = '';
+  document.getElementById('btn-modal-delete').style.display = 'none';
   document.getElementById('api-search-results').style.display = 'none';
   handleCategoryFormChange();
   document.getElementById('media-modal').classList.add('active');
@@ -293,6 +324,7 @@ window.openEditModal = function (id) {
 
   document.getElementById('media-modal-title').textContent = 'Edit Media';
   document.getElementById('media-id').value = item.id;
+  document.getElementById('btn-modal-delete').style.display = 'inline-flex';
   document.getElementById('media-category').value = item.category;
   handleCategoryFormChange();
 
@@ -348,6 +380,17 @@ window.handleTotalUnitsChange = function () {
 
   if (status === 'completed' && totalVal > 0) {
     document.getElementById('media-progress').value = totalVal;
+  }
+};
+
+window.stepModalProgress = function () {
+  const progInput = document.getElementById('media-progress');
+  const totalVal = parseInt(document.getElementById('media-total').value, 10);
+  const nextVal = (parseInt(progInput.value, 10) || 0) + 1;
+  progInput.value = nextVal;
+
+  if (totalVal > 0 && nextVal >= totalVal) {
+    document.getElementById('media-status').value = 'completed';
   }
 };
 
@@ -421,7 +464,6 @@ window.searchExternalAPI = async function () {
 
   if (cat === 'series') {
     const [jikanRes, tvmazeRes, tmdbRes] = await Promise.allSettled([
-      // 1. Jikan Anime TV
       (async () => {
         const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=5&sfw=true`);
         if (!res.ok) return [];
@@ -434,7 +476,6 @@ window.searchExternalAPI = async function () {
           meta: `Anime Series · ${a.episodes || '?'} Eps`
         }));
       })(),
-      // 2. TVMaze API
       (async () => {
         const res = await fetchWithTimeout(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
         const data = await res.json();
@@ -447,7 +488,6 @@ window.searchExternalAPI = async function () {
           meta: `TV Series · ${entry.show.premiered?.slice(0, 4) || 'Show'}`
         }));
       })(),
-      // 3. TMDB TV
       (async () => {
         if (!TMDB_API_KEY) return [];
         const res = await fetchWithTimeout(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
@@ -471,7 +511,6 @@ window.searchExternalAPI = async function () {
 
   } else if (cat === 'movie') {
     const [jikanRes, itunesRes, tmdbRes] = await Promise.allSettled([
-      // 1. Jikan Anime Movie
       (async () => {
         const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=movie&limit=5&sfw=true`);
         if (!res.ok) return [];
@@ -484,7 +523,6 @@ window.searchExternalAPI = async function () {
           meta: `Anime Movie · ${a.year || 'Film'}`
         }));
       })(),
-      // 2. iTunes Movie Search API
       (async () => {
         const res = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=movie&limit=5`);
         const data = await res.json();
@@ -496,7 +534,6 @@ window.searchExternalAPI = async function () {
           meta: `Movie · ${m.releaseDate?.slice(0, 4) || 'Film'}`
         }));
       })(),
-      // 3. TMDB Movie
       (async () => {
         if (!TMDB_API_KEY) return [];
         const res = await fetchWithTimeout(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
@@ -519,7 +556,6 @@ window.searchExternalAPI = async function () {
 
   } else if (cat === 'comic') {
     const [jikanRes, aniRes] = await Promise.allSettled([
-      // 1. Jikan Manga / Manhwa / Manhua
       (async () => {
         const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=6&sfw=true`);
         if (!res.ok) return [];
@@ -534,7 +570,6 @@ window.searchExternalAPI = async function () {
             meta: `${m.type} · ${m.chapters || '?'} Ch`
           }));
       })(),
-      // 2. AniList Manga / Manhwa / Manhua
       fetchAniListMedia(query, false)
     ]);
 
@@ -544,7 +579,6 @@ window.searchExternalAPI = async function () {
 
   } else if (cat === 'other' && subCat === 'light_novel') {
     const [jikanRes, aniRes] = await Promise.allSettled([
-      // 1. Jikan Light Novel
       (async () => {
         const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&type=lightnovel&limit=5&sfw=true`);
         if (!res.ok) return [];
@@ -557,7 +591,6 @@ window.searchExternalAPI = async function () {
           meta: `Light Novel · ${ln.volumes || '?'} Vol`
         }));
       })(),
-      // 2. AniList Light Novel
       fetchAniListMedia(query, true)
     ]);
 
@@ -635,7 +668,6 @@ window.applyApiResult = async function (idx) {
   handleTotalUnitsChange();
   document.getElementById('api-search-results').style.display = 'none';
 
-  // Auto-fetch total episodes from TVMaze
   if (item.tvmazeId) {
     try {
       const epRes = await fetchWithTimeout(`https://api.tvmaze.com/shows/${item.tvmazeId}/episodes`);
@@ -649,7 +681,6 @@ window.applyApiResult = async function (idx) {
     }
   }
 
-  // Auto-fetch total episodes from TMDB
   if (item.tmdbId && TMDB_API_KEY) {
     try {
       const detailRes = await fetchWithTimeout(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}`);
@@ -671,6 +702,7 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const id = document.getElementById('media-id').value;
+  const existingItem = id ? allMediaLogs.find(m => m.id === id) : null;
   const category = document.getElementById('media-category').value;
   const subCategory = category === 'other' ? document.getElementById('media-sub-category').value : null;
   const ratingRaw = document.getElementById('media-rating').value;
@@ -683,6 +715,12 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
     progressVal = totalUnits;
   }
 
+  // Only refresh status date when creating new entry or when status actually changed
+  const statusChanged = !existingItem || existingItem.status !== statusVal;
+  const statusTimestamp = statusChanged
+    ? new Date().toISOString()
+    : (existingItem.status_updated_at || existingItem.updated_at || new Date().toISOString());
+
   const payload = {
     title: document.getElementById('media-title').value.trim(),
     category,
@@ -693,7 +731,7 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
     total_units: totalUnits,
     unit_label: document.getElementById('media-unit').value,
     rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null,
-    updated_at: new Date().toISOString()
+    updated_at: statusTimestamp
   };
 
   let error;
@@ -711,22 +749,10 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
   }
 });
 
-window.incrementProgress = async function (id) {
-  const item = allMediaLogs.find(m => m.id === id);
-  if (!item) return;
+window.deleteCurrentModalMedia = async function () {
+  const id = document.getElementById('media-id').value;
+  if (!id) return;
 
-  const nextProgress = (item.progress || 0) + 1;
-  const nextStatus = (item.total_units && nextProgress >= item.total_units) ? 'completed' : item.status;
-
-  const { error } = await supabaseClient
-    .from('media_logs')
-    .update({ progress: nextProgress, status: nextStatus, updated_at: new Date().toISOString() })
-    .eq('id', id);
-
-  if (!error) await fetchMediaLogs();
-};
-
-window.deleteMedia = async function (id) {
   const confirm = await Swal.fire({
     text: 'Remove this entry from your library?',
     icon: 'warning',
@@ -740,6 +766,11 @@ window.deleteMedia = async function (id) {
 
   if (confirm.isConfirmed) {
     const { error } = await supabaseClient.from('media_logs').delete().eq('id', id);
-    if (!error) await fetchMediaLogs();
+    if (error) {
+      Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
+    } else {
+      closeMediaModal();
+      await fetchMediaLogs();
+    }
   }
 };
