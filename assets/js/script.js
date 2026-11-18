@@ -1,3 +1,8 @@
+const SUPABASE_URL = 'https://uendrdxiixmikkeanlod.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_IdPLjwQhVQwXGGxUnBVblg_oIQ5Zz89';
+const TMDB_API_KEY = '';
+
+
 'use strict';
 
 /**
