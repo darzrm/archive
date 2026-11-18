@@ -14,7 +14,6 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let allMediaLogs = [];
 let lastApiResults = [];
 let currentCategory = 'all';
-let currentSubCategory = 'all';
 let isAdminLoggedIn = false;
 
 // ==========================================
@@ -100,6 +99,16 @@ document.getElementById('admin-login-form').addEventListener('submit', async (e)
 // ==========================================
 // 3. LOAD DATA & AUTO-CALCULATE STATS
 // ==========================================
+function getNormalizedCategory(item) {
+  const rawCat = (item.category || '').toLowerCase().trim();
+  if (rawCat === 'series' || rawCat === 'tv_show') return 'tv_show';
+  if (rawCat === 'other') {
+    if (item.sub_category === 'light_novel') return 'novel';
+    if (item.sub_category === 'game') return 'game';
+  }
+  return rawCat || 'tv_show';
+}
+
 async function fetchMediaLogs() {
   const { data, error } = await supabaseClient
     .from('media_logs')
@@ -117,26 +126,33 @@ async function fetchMediaLogs() {
 }
 
 function updateStatsUI() {
-  const seriesItems = allMediaLogs.filter(i => i.category === 'series');
-  const movieItems = allMediaLogs.filter(i => i.category === 'movie');
-  const comicItems = allMediaLogs.filter(i => i.category === 'comic');
-  const otherItems = allMediaLogs.filter(i => i.category === 'other');
+  const tvItems = allMediaLogs.filter(i => getNormalizedCategory(i) === 'tv_show');
+  const movieItems = allMediaLogs.filter(i => getNormalizedCategory(i) === 'movie');
+  const comicItems = allMediaLogs.filter(i => getNormalizedCategory(i) === 'comic');
+  const novelItems = allMediaLogs.filter(i => getNormalizedCategory(i) === 'novel');
+  const gameItems = allMediaLogs.filter(i => getNormalizedCategory(i) === 'game');
+  const musicItems = allMediaLogs.filter(i => getNormalizedCategory(i) === 'music');
 
-  const totalSeriesEps = seriesItems.reduce((sum, i) => sum + (i.progress || 0), 0);
-  const completedMovies = movieItems.filter(i => i.status === 'completed').length;
+  const totalTvEps = tvItems.reduce((sum, i) => sum + (i.progress || 0), 0);
+  const completedMovies = movieItems.filter(i => (i.status || '').toLowerCase().trim() === 'completed').length;
   const totalComicCh = comicItems.reduce((sum, i) => sum + (i.progress || 0), 0);
+  const totalNovelUnits = novelItems.reduce((sum, i) => sum + (i.progress || 0), 0);
+  const completedGames = gameItems.filter(i => (i.status || '').toLowerCase().trim() === 'completed').length;
+  const totalMusicTracks = musicItems.reduce((sum, i) => sum + (i.progress || 0), 0);
 
-  const lnCount = otherItems.filter(i => i.sub_category === 'light_novel').length;
-  const gameCount = otherItems.filter(i => i.sub_category === 'game').length;
+  const totalEntries = allMediaLogs.length;
+  const totalCompleted = allMediaLogs.filter(i => (i.status || '').toLowerCase().trim() === 'completed').length;
+  const completionRate = totalEntries > 0 ? Math.round((totalCompleted / totalEntries) * 100) : 0;
 
   const ratedItems = allMediaLogs.filter(i => i.rating !== null && i.rating !== undefined);
   const avgRating = ratedItems.length
     ? (ratedItems.reduce((sum, i) => sum + Number(i.rating), 0) / ratedItems.length).toFixed(2)
     : '0.0';
 
-  document.getElementById('total-entries-label').textContent = `${allMediaLogs.length} Entries`;
-  document.getElementById('stat-series-eps').textContent = totalSeriesEps.toLocaleString('en-US');
-  document.getElementById('stat-series-count').textContent = `${seriesItems.length} Series`;
+  document.getElementById('total-entries-label').textContent = `${totalEntries} Entries`;
+
+  document.getElementById('stat-tv-eps').textContent = totalTvEps.toLocaleString('en-US');
+  document.getElementById('stat-tv-count').textContent = `${tvItems.length} Shows`;
 
   document.getElementById('stat-movies').textContent = completedMovies.toLocaleString('en-US');
   document.getElementById('stat-movies-total').textContent = `${movieItems.length} Total`;
@@ -144,10 +160,20 @@ function updateStatsUI() {
   document.getElementById('stat-comic-ch').textContent = totalComicCh.toLocaleString('en-US');
   document.getElementById('stat-comic-count').textContent = `${comicItems.length} Comics`;
 
-  document.getElementById('stat-other-count').textContent = otherItems.length.toLocaleString('en-US');
-  document.getElementById('stat-other-breakdown').textContent = `${lnCount} LN · ${gameCount} Game`;
+  document.getElementById('stat-novel-units').textContent = totalNovelUnits.toLocaleString('en-US');
+  document.getElementById('stat-novel-count').textContent = `${novelItems.length} Novels`;
+
+  document.getElementById('stat-game-count').textContent = gameItems.length.toLocaleString('en-US');
+  document.getElementById('stat-game-done').textContent = `${completedGames} Completed`;
+
+  document.getElementById('stat-music-count').textContent = musicItems.length.toLocaleString('en-US');
+  document.getElementById('stat-music-units').textContent = `${totalMusicTracks} Tracks`;
+
+  document.getElementById('stat-completed-total').textContent = totalCompleted.toLocaleString('en-US');
+  document.getElementById('stat-completion-rate').textContent = `${completionRate}% Rate`;
 
   document.getElementById('stat-avg-rating').textContent = avgRating;
+  document.getElementById('stat-rated-count').textContent = `${ratedItems.length} Rated`;
 }
 
 // ==========================================
@@ -159,25 +185,6 @@ function setupFilterListeners() {
       document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       currentCategory = btn.dataset.category;
-
-      const subBar = document.getElementById('other-sub-bar');
-      if (currentCategory === 'other') {
-        subBar.style.display = 'flex';
-      } else {
-        subBar.style.display = 'none';
-        currentSubCategory = 'all';
-        document.querySelectorAll('.sub-pill').forEach(p => p.classList.remove('active'));
-        document.querySelector('.sub-pill[data-sub="all"]').classList.add('active');
-      }
-      renderMediaGrid();
-    });
-  });
-
-  document.querySelectorAll('.sub-pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      document.querySelectorAll('.sub-pill').forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
-      currentSubCategory = pill.dataset.sub;
       renderMediaGrid();
     });
   });
@@ -188,32 +195,16 @@ function setupFilterListeners() {
 }
 
 function formatCategoryBadge(item) {
-  if (item.category === 'other') {
-    if (item.sub_category === 'light_novel') return 'Light Novel';
-    if (item.sub_category === 'game') return 'Game';
-    return 'Other';
-  }
-  return item.category;
-}
-
-function formatUnitLabel(unit) {
-  const unitMap = {
-    eps: 'Episode',
-    episode: 'Episode',
-    episodes: 'Episode',
-    ch: 'Chapter',
-    chapter: 'Chapter',
-    chapters: 'Chapter',
+  const cat = getNormalizedCategory(item);
+  const labelMap = {
+    tv_show: 'TV Show',
     movie: 'Movie',
-    movies: 'Movie',
-    vol: 'Volume',
-    volume: 'Volume',
-    volumes: 'Volume',
-    item: 'Item',
-    game: 'Game'
+    comic: 'Comic',
+    novel: 'Novel',
+    game: 'Game',
+    music: 'Music'
   };
-  if (!unit) return '';
-  return unitMap[unit.toLowerCase()] || unit;
+  return labelMap[cat] || cat;
 }
 
 function normalizeImageUrl(url) {
@@ -239,11 +230,12 @@ function renderMediaGrid() {
   const sortBy = document.getElementById('sort-library').value;
 
   let filtered = allMediaLogs.filter(item => {
-    const matchCat = currentCategory === 'all' || item.category === currentCategory;
-    const matchSub = currentCategory !== 'other' || currentSubCategory === 'all' || item.sub_category === currentSubCategory;
-    const matchStatus = statusFilter === 'all' || item.status === statusFilter;
+    const normCat = getNormalizedCategory(item);
+    const normStatus = (item.status || '').toLowerCase().trim();
+    const matchCat = currentCategory === 'all' || normCat === currentCategory;
+    const matchStatus = statusFilter === 'all' || normStatus === statusFilter;
     const matchQuery = !query || item.title.toLowerCase().includes(query);
-    return matchCat && matchSub && matchStatus && matchQuery;
+    return matchCat && matchStatus && matchQuery;
   });
 
   if (sortBy === 'rating_desc') {
@@ -260,12 +252,11 @@ function renderMediaGrid() {
   grid.innerHTML = filtered.map(item => {
     const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
     const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
-    const unitText = formatUnitLabel(item.unit_label);
     const progressText = item.total_units
-      ? `${item.progress || 0} / ${item.total_units} ${unitText}`.trim()
-      : `${item.progress || 0} ${unitText}`.trim();
+      ? `${item.progress || 0}/${item.total_units}`
+      : `${item.progress || 0}`;
 
-    const statusKey = (item.status || 'planned').toLowerCase();
+    const statusKey = (item.status || 'planned').toLowerCase().trim();
     let percent = 0;
     let extraBarClass = '';
 
@@ -309,7 +300,7 @@ function renderMediaGrid() {
           <div class="media-bottom-stack">
             <div class="media-meta-row">
               <span class="status-pill ${statusKey}">${statusKey}</span>
-              <span class="progress-unit-text">${progressText}</span>
+              <span class="progress-pill ${statusKey}">${progressText}</span>
             </div>
             <div class="progress-track">
               <div class="progress-fill ${statusKey} ${extraBarClass}" style="width: ${percent}%"></div>
@@ -347,16 +338,12 @@ window.openEditModal = function (id) {
   document.getElementById('media-modal-title').textContent = 'Edit Media';
   document.getElementById('media-id').value = item.id;
   document.getElementById('btn-modal-delete').style.display = 'inline-flex';
-  document.getElementById('media-category').value = item.category;
+  document.getElementById('media-category').value = getNormalizedCategory(item);
   handleCategoryFormChange();
-
-  if (item.category === 'other' && item.sub_category) {
-    document.getElementById('media-sub-category').value = item.sub_category;
-  }
 
   document.getElementById('media-title').value = item.title;
   document.getElementById('media-cover').value = item.cover_url || '';
-  document.getElementById('media-status').value = item.status;
+  document.getElementById('media-status').value = (item.status || 'planned').toLowerCase().trim();
   document.getElementById('media-progress').value = item.progress || 0;
   document.getElementById('media-total').value = item.total_units || '';
   document.getElementById('media-unit').value = item.unit_label || 'eps';
@@ -372,19 +359,14 @@ window.closeMediaModal = function () {
 
 window.handleCategoryFormChange = function () {
   const cat = document.getElementById('media-category').value;
-  const subGroup = document.getElementById('sub-category-group');
   const unitSelect = document.getElementById('media-unit');
 
-  if (cat === 'other') {
-    subGroup.style.display = 'flex';
-    const sub = document.getElementById('media-sub-category').value;
-    unitSelect.value = sub === 'light_novel' ? 'vol' : 'item';
-  } else {
-    subGroup.style.display = 'none';
-    if (cat === 'series') unitSelect.value = 'eps';
-    if (cat === 'movie') unitSelect.value = 'movie';
-    if (cat === 'comic') unitSelect.value = 'ch';
-  }
+  if (cat === 'tv_show') unitSelect.value = 'eps';
+  if (cat === 'movie') unitSelect.value = 'movie';
+  if (cat === 'comic') unitSelect.value = 'ch';
+  if (cat === 'novel') unitSelect.value = 'vol';
+  if (cat === 'game') unitSelect.value = 'item';
+  if (cat === 'music') unitSelect.value = 'track';
 };
 
 window.handleStatusFormChange = function () {
@@ -427,7 +409,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 4500) {
   }
 }
 
-// Helper: AniList GraphQL Search (Comic & Light Novel)
+// Helper: AniList GraphQL Search (Comic & Novel)
 async function fetchAniListMedia(query, isNovel = false) {
   const gql = `
     query ($search: String) {
@@ -450,7 +432,7 @@ async function fetchAniListMedia(query, isNovel = false) {
   const json = await res.json();
   return (json.data?.Page?.media || []).map(m => {
     const originMap = { JP: 'Manga', KR: 'Manhwa', CN: 'Manhua' };
-    const label = isNovel ? 'Light Novel' : (originMap[m.countryOfOrigin] || 'Comic');
+    const label = isNovel ? 'Novel' : (originMap[m.countryOfOrigin] || 'Comic');
     return {
       title: m.title.english || m.title.romaji,
       cover: normalizeImageUrl(m.coverImage?.large || m.coverImage?.medium || ''),
@@ -475,7 +457,6 @@ function deduplicateResults(list) {
 window.searchExternalAPI = async function () {
   const query = document.getElementById('api-search-input').value.trim();
   const cat = document.getElementById('media-category').value;
-  const subCat = document.getElementById('media-sub-category').value;
   const resultsBox = document.getElementById('api-search-results');
 
   if (!query) return;
@@ -484,7 +465,7 @@ window.searchExternalAPI = async function () {
 
   let items = [];
 
-  if (cat === 'series') {
+  if (cat === 'tv_show') {
     const [jikanRes, tvmazeRes, tmdbRes] = await Promise.allSettled([
       (async () => {
         const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=5&sfw=true`);
@@ -495,7 +476,7 @@ window.searchExternalAPI = async function () {
           cover: normalizeImageUrl(a.images?.jpg?.large_image_url || a.images?.jpg?.image_url || a.images?.webp?.large_image_url || ''),
           total: a.episodes || null,
           unit: 'eps',
-          meta: `Anime Series · ${a.episodes || '?'} Episode`
+          meta: `Anime TV · ${a.episodes || '?'} Episode`
         }));
       })(),
       (async () => {
@@ -507,7 +488,7 @@ window.searchExternalAPI = async function () {
           cover: normalizeImageUrl(entry.show.image?.original || entry.show.image?.medium || ''),
           total: null,
           unit: 'eps',
-          meta: `TV Series · ${entry.show.premiered?.slice(0, 4) || 'Show'}`
+          meta: `TV Show · ${entry.show.premiered?.slice(0, 4) || 'Show'}`
         }));
       })(),
       (async () => {
@@ -521,7 +502,7 @@ window.searchExternalAPI = async function () {
           cover: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : '',
           total: null,
           unit: 'eps',
-          meta: `TV Series · ${t.first_air_date?.slice(0, 4) || 'TMDB'}`
+          meta: `TV Show · ${t.first_air_date?.slice(0, 4) || 'TMDB'}`
         }));
       })()
     ]);
@@ -599,7 +580,7 @@ window.searchExternalAPI = async function () {
     if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
     items = deduplicateResults(items);
 
-  } else if (cat === 'other' && subCat === 'light_novel') {
+  } else if (cat === 'novel') {
     const [jikanRes, aniRes] = await Promise.allSettled([
       (async () => {
         const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&type=lightnovel&limit=5&sfw=true`);
@@ -610,7 +591,7 @@ window.searchExternalAPI = async function () {
           cover: normalizeImageUrl(ln.images?.jpg?.large_image_url || ln.images?.jpg?.image_url || ln.images?.webp?.large_image_url || ''),
           total: ln.volumes || ln.chapters || null,
           unit: ln.volumes ? 'vol' : 'ch',
-          meta: `Light Novel · ${ln.volumes || '?'} Volume`
+          meta: `Novel · ${ln.volumes || '?'} Volume`
         }));
       })(),
       fetchAniListMedia(query, true)
@@ -620,7 +601,7 @@ window.searchExternalAPI = async function () {
     if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
     items = deduplicateResults(items);
 
-  } else if (cat === 'other' && subCat === 'game') {
+  } else if (cat === 'game') {
     const [rawgRes, vndbRes] = await Promise.allSettled([
       (async () => {
         if (!RAWG_API_KEY) return [];
@@ -659,6 +640,26 @@ window.searchExternalAPI = async function () {
     if (rawgRes.status === 'fulfilled') items.push(...rawgRes.value);
     if (vndbRes.status === 'fulfilled') items.push(...vndbRes.value);
     items = deduplicateResults(items);
+
+  } else if (cat === 'music') {
+    try {
+      const res = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=album,song&limit=6`);
+      const data = await res.json();
+      items = (data.results || []).map(m => {
+        const isAlbum = m.wrapperType === 'collection';
+        const title = isAlbum ? `${m.collectionName} — ${m.artistName}` : `${m.trackName} — ${m.artistName}`;
+        return {
+          title,
+          cover: normalizeImageUrl(m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : ''),
+          total: isAlbum ? (m.trackCount || 1) : 1,
+          unit: 'track',
+          meta: `${isAlbum ? 'Album' : 'Song'} · ${m.artistName || ''}`
+        };
+      });
+      items = deduplicateResults(items);
+    } catch (e) {
+      console.error('Music search error:', e);
+    }
   }
 
   lastApiResults = items;
@@ -726,7 +727,6 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
   const id = document.getElementById('media-id').value;
   const existingItem = id ? allMediaLogs.find(m => m.id === id) : null;
   const category = document.getElementById('media-category').value;
-  const subCategory = category === 'other' ? document.getElementById('media-sub-category').value : null;
   const ratingRaw = document.getElementById('media-rating').value;
   const totalRaw = document.getElementById('media-total').value;
   const statusVal = document.getElementById('media-status').value;
@@ -737,7 +737,8 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
     progressVal = totalUnits;
   }
 
-  const statusChanged = !existingItem || existingItem.status !== statusVal;
+  const prevStatus = existingItem ? (existingItem.status || '').toLowerCase().trim() : null;
+  const statusChanged = !existingItem || prevStatus !== statusVal;
   const statusTimestamp = statusChanged
     ? new Date().toISOString()
     : (existingItem.status_updated_at || existingItem.updated_at || new Date().toISOString());
@@ -745,7 +746,7 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
   const payload = {
     title: document.getElementById('media-title').value.trim(),
     category,
-    sub_category: subCategory,
+    sub_category: null,
     cover_url: normalizeImageUrl(document.getElementById('media-cover').value) || null,
     status: statusVal,
     progress: progressVal,
