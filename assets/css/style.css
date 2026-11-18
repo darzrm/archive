@@ -338,17 +338,6 @@ button {
   flex-shrink: 0;
 }
 
-
-.stat-icon-box.accent-green {
-  color: var(--status-completed);
-  border-color: rgba(140, 233, 154, 0.25);
-}
-
-.stat-icon-box.accent-gold {
-  color: var(--status-planned);
-  border-color: rgba(255, 212, 59, 0.25);
-}
-
 .stat-info-modern {
   display: flex;
   flex-direction: column;
