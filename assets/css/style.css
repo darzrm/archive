@@ -338,6 +338,7 @@ button {
   flex-shrink: 0;
 }
 
+
 .stat-icon-box.accent-green {
   color: var(--status-completed);
   border-color: rgba(140, 233, 154, 0.25);
