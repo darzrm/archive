@@ -257,7 +257,8 @@ function renderMediaGrid() {
   grid.innerHTML = filtered.map(item => {
     const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
     const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
-        const hasTotal = item.total_units !== null && item.total_units !== undefined && Number(item.total_units) > 0;
+    
+    const hasTotal = item.total_units !== null && item.total_units !== undefined && Number(item.total_units) > 0;
     const progressText = hasTotal
       ? `${item.progress || 0}/${item.total_units}`
       : `${item.progress || 0}/?`;
