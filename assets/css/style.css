@@ -638,8 +638,6 @@ button {
   justify-content: space-between;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
-  color: var(--light-gray-70);
 }
 
 .status-pill {
@@ -670,19 +668,6 @@ button {
 .status-pill.dropped {
   color: var(--status-dropped);
   border-color: rgba(255, 135, 135, 0.35);
-}
-
-.status-date-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10px;
-  color: var(--light-gray-70);
-}
-
-.status-date-row ion-icon {
-  font-size: 11px;
-  flex-shrink: 0;
 }
 
 .progress-track {
@@ -719,6 +704,38 @@ button {
 
 .progress-fill.dropped {
   background: var(--status-dropped);
+}
+
+/* Bottom Row: Last Status Date on Left, Full Unit Count on Right */
+.media-footer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--light-gray-70);
+}
+
+.status-date-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.status-date-item ion-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.progress-unit-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+  font-weight: 500;
+  color: var(--light-gray);
 }
 
 /* ===================================
