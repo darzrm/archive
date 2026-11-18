@@ -196,6 +196,26 @@ function formatCategoryBadge(item) {
   return item.category;
 }
 
+function formatUnitLabel(unit) {
+  const unitMap = {
+    eps: 'Episode',
+    episode: 'Episode',
+    episodes: 'Episode',
+    ch: 'Chapter',
+    chapter: 'Chapter',
+    chapters: 'Chapter',
+    movie: 'Movie',
+    movies: 'Movie',
+    vol: 'Volume',
+    volume: 'Volume',
+    volumes: 'Volume',
+    item: 'Item',
+    game: 'Game'
+  };
+  if (!unit) return '';
+  return unitMap[unit.toLowerCase()] || unit;
+}
+
 function normalizeImageUrl(url) {
   if (!url) return '';
   return url.trim().replace(/^http:\/\//i, 'https://');
@@ -240,9 +260,10 @@ function renderMediaGrid() {
   grid.innerHTML = filtered.map(item => {
     const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
     const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
+    const unitText = formatUnitLabel(item.unit_label);
     const progressText = item.total_units
-      ? `${item.progress || 0} / ${item.total_units} ${item.unit_label || ''}`
-      : `${item.progress || 0} ${item.unit_label || ''}`;
+      ? `${item.progress || 0} / ${item.total_units} ${unitText}`.trim()
+      : `${item.progress || 0} ${unitText}`.trim();
 
     const statusKey = (item.status || 'planned').toLowerCase();
     let percent = 0;
@@ -288,14 +309,16 @@ function renderMediaGrid() {
           <div class="media-bottom-stack">
             <div class="media-meta-row">
               <span class="status-pill ${statusKey}">${statusKey}</span>
-              <span>${progressText}</span>
             </div>
             <div class="progress-track">
               <div class="progress-fill ${statusKey} ${extraBarClass}" style="width: ${percent}%"></div>
             </div>
-            <div class="status-date-row" title="Last status update">
-              <ion-icon name="calendar-outline"></ion-icon>
-              <span>${statusDateText}</span>
+            <div class="media-footer-row">
+              <span class="status-date-item" title="Last status update">
+                <ion-icon name="calendar-outline"></ion-icon>
+                <span>${statusDateText}</span>
+              </span>
+              <span class="progress-unit-text">${progressText}</span>
             </div>
           </div>
         </div>
@@ -433,7 +456,7 @@ async function fetchAniListMedia(query, isNovel = false) {
       cover: normalizeImageUrl(m.coverImage?.large || m.coverImage?.medium || ''),
       total: isNovel ? (m.volumes || m.chapters || null) : (m.chapters || null),
       unit: isNovel ? (m.volumes ? 'vol' : 'ch') : 'ch',
-      meta: `${label} · ${isNovel ? (m.volumes || '?') + ' Vol' : (m.chapters || '?') + ' Ch'}`
+      meta: `${label} · ${isNovel ? (m.volumes || '?') + ' Volume' : (m.chapters || '?') + ' Chapter'}`
     };
   });
 }
@@ -472,7 +495,7 @@ window.searchExternalAPI = async function () {
           cover: normalizeImageUrl(a.images?.jpg?.large_image_url || a.images?.jpg?.image_url || a.images?.webp?.large_image_url || ''),
           total: a.episodes || null,
           unit: 'eps',
-          meta: `Anime Series · ${a.episodes || '?'} Eps`
+          meta: `Anime Series · ${a.episodes || '?'} Episode`
         }));
       })(),
       (async () => {
@@ -566,7 +589,7 @@ window.searchExternalAPI = async function () {
             cover: normalizeImageUrl(m.images?.jpg?.large_image_url || m.images?.jpg?.image_url || m.images?.webp?.large_image_url || ''),
             total: m.chapters || null,
             unit: 'ch',
-            meta: `${m.type} · ${m.chapters || '?'} Ch`
+            meta: `${m.type} · ${m.chapters || '?'} Chapter`
           }));
       })(),
       fetchAniListMedia(query, false)
@@ -587,7 +610,7 @@ window.searchExternalAPI = async function () {
           cover: normalizeImageUrl(ln.images?.jpg?.large_image_url || ln.images?.jpg?.image_url || ln.images?.webp?.large_image_url || ''),
           total: ln.volumes || ln.chapters || null,
           unit: ln.volumes ? 'vol' : 'ch',
-          meta: `Light Novel · ${ln.volumes || '?'} Vol`
+          meta: `Light Novel · ${ln.volumes || '?'} Volume`
         }));
       })(),
       fetchAniListMedia(query, true)
