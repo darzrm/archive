@@ -257,9 +257,10 @@ function renderMediaGrid() {
   grid.innerHTML = filtered.map(item => {
     const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
     const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
-    const progressText = item.total_units
+        const hasTotal = item.total_units !== null && item.total_units !== undefined && Number(item.total_units) > 0;
+    const progressText = hasTotal
       ? `${item.progress || 0}/${item.total_units}`
-      : `${item.progress || 0}`;
+      : `${item.progress || 0}/?`;
 
     const statusKey = (item.status || 'planned').toLowerCase().trim();
     let percent = 0;
@@ -267,7 +268,7 @@ function renderMediaGrid() {
 
     if (statusKey === 'completed') {
       percent = 100;
-    } else if (item.total_units && Number(item.total_units) > 0) {
+    } else if (hasTotal) {
       percent = Math.min(100, Math.max(0, Math.round(((item.progress || 0) / Number(item.total_units)) * 100)));
       if (statusKey === 'planned' && percent === 0) {
         percent = 100;
