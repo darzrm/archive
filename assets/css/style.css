@@ -502,6 +502,7 @@ button {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
   transition: transform 0.35s ease;
 }
 
@@ -562,6 +563,10 @@ button {
   overflow: hidden;
 }
 
+.media-progress-wrap {
+  width: 100%;
+}
+
 .media-meta-row {
   display: flex;
   justify-content: space-between;
@@ -598,16 +603,22 @@ button {
 
 .progress-track {
   width: 100%;
-  height: 4px;
+  height: 5px;
   background: var(--jet);
   border-radius: 4px;
   overflow: hidden;
 }
 
 .progress-fill {
+  display: block;
   height: 100%;
   background: var(--white-1);
   border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-fill.completed {
+  background: #8ce99a;
 }
 
 .admin-card-actions {
@@ -772,16 +783,27 @@ button {
 
 .api-result-item img {
   width: 34px;
+  min-width: 34px;
   height: 48px;
+  flex-shrink: 0;
   object-fit: cover;
+  display: block;
   border-radius: 4px;
   background: var(--jet);
+}
+
+.api-result-info {
+  min-width: 0;
+  flex: 1;
 }
 
 .api-result-info h4 {
   font-size: 13px;
   font-weight: 500;
   color: var(--white-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .api-result-info p {
