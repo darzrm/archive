@@ -13,9 +13,11 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Application State
 let allMediaLogs = [];
+let allBlogPosts = [];
 let lastApiResults = [];
 let pendingUploadedUrls = [];
 let currentCategory = 'all';
+let currentMainView = 'library';
 let isAdminLoggedIn = false;
 let currentProfile = {
   name: 'dariraa',
@@ -29,14 +31,43 @@ function setElText(id, text) {
 }
 
 // ==========================================
-// 2. INITIALIZATION & ADMIN AUTH
+// 2. INITIALIZATION, VIEW TABS & ADMIN AUTH
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
   await checkAdminSession();
   await fetchProfileSettings();
-  await fetchMediaLogs();
+  await Promise.all([fetchMediaLogs(), fetchBlogPosts()]);
   setupFilterListeners();
 });
+
+window.switchMainView = function (viewName) {
+  currentMainView = viewName;
+
+  document.querySelectorAll('.main-view-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === viewName);
+  });
+
+  const libView = document.getElementById('view-library');
+  const blogView = document.getElementById('view-blog');
+  if (libView) libView.style.display = viewName === 'library' ? 'block' : 'none';
+  if (blogView) blogView.style.display = viewName === 'blog' ? 'block' : 'none';
+
+  updateAdminActionButtons();
+};
+
+function updateAdminActionButtons() {
+  const addMediaBtn = document.getElementById('btn-add-media');
+  const addPostBtn = document.getElementById('btn-add-post');
+
+  if (!isAdminLoggedIn) {
+    if (addMediaBtn) addMediaBtn.style.display = 'none';
+    if (addPostBtn) addPostBtn.style.display = 'none';
+    return;
+  }
+
+  if (addMediaBtn) addMediaBtn.style.display = currentMainView === 'library' ? 'inline-flex' : 'none';
+  if (addPostBtn) addPostBtn.style.display = currentMainView === 'blog' ? 'inline-flex' : 'none';
+}
 
 async function checkAdminSession() {
   const { data: { session } } = await supabaseClient.auth.getSession();
@@ -45,23 +76,23 @@ async function checkAdminSession() {
 }
 
 function updateAdminUI() {
-  const addBtn = document.getElementById('btn-add-media');
   const editProfileBtn = document.getElementById('btn-edit-profile');
   const lockIcon = document.getElementById('admin-lock-icon');
   const btnText = document.getElementById('admin-btn-text');
 
   if (isAdminLoggedIn) {
-    if (addBtn) addBtn.style.display = 'inline-flex';
     if (editProfileBtn) editProfileBtn.style.display = 'inline-flex';
     if (lockIcon) lockIcon.setAttribute('name', 'log-out-outline');
     if (btnText) btnText.textContent = 'Logout';
   } else {
-    if (addBtn) addBtn.style.display = 'none';
     if (editProfileBtn) editProfileBtn.style.display = 'none';
     if (lockIcon) lockIcon.setAttribute('name', 'lock-closed-outline');
     if (btnText) btnText.textContent = 'Admin';
   }
+
+  updateAdminActionButtons();
   renderMediaGrid();
+  renderBlogPosts();
 }
 
 window.handleAdminAuthClick = async function () {
@@ -115,7 +146,7 @@ document.getElementById('admin-login-form').addEventListener('submit', async (e)
 // ==========================================
 // 2B. IMAGE COMPRESSION & STORAGE UPLOAD/CLEANUP
 // ==========================================
-function compressImageFile(file, maxWidth = 600, quality = 0.82) {
+function compressImageFile(file, maxWidth = 800, quality = 0.82) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -153,7 +184,8 @@ function compressImageFile(file, maxWidth = 600, quality = 0.82) {
 }
 
 async function uploadImageToSupabase(file, folder = 'covers') {
-  const compressedBlob = await compressImageFile(file, folder === 'avatars' ? 400 : 600, 0.82);
+  const maxWidth = folder === 'avatars' ? 400 : (folder === 'posts' ? 900 : 600);
+  const compressedBlob = await compressImageFile(file, maxWidth, 0.82);
   const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.webp`;
 
   const { error } = await supabaseClient.storage
@@ -177,7 +209,7 @@ async function deleteOldStorageFile(fileUrl) {
   if (!fileUrl) return;
   const marker = `/storage/v1/object/public/${STORAGE_BUCKET}/`;
   const idx = fileUrl.indexOf(marker);
-  if (idx === -1) return; // Ignore external API URLs
+  if (idx === -1) return;
 
   const filePath = decodeURIComponent(fileUrl.substring(idx + marker.length).split('?')[0]);
   if (!filePath) return;
@@ -187,13 +219,7 @@ async function deleteOldStorageFile(fileUrl) {
     .remove([filePath]);
 
   if (error) {
-    Swal.fire({
-      icon: 'warning',
-      title: 'Storage Cleanup Info',
-      text: `Failed to delete old file: ${error.message}`,
-      background: '#1e1e1f',
-      color: '#fff'
-    });
+    console.warn('Storage delete warning:', error.message);
   } else if (!data || data.length === 0) {
     console.warn('File not found or blocked by RLS policy:', filePath);
   }
@@ -235,6 +261,7 @@ function applyProfileToUI() {
   if (avatarEl && currentProfile.avatar_url) {
     avatarEl.src = currentProfile.avatar_url;
   }
+  renderBlogPosts();
 }
 
 window.openProfileModal = function () {
@@ -307,7 +334,7 @@ document.getElementById('profile-form').addEventListener('submit', async (e) => 
 });
 
 // ==========================================
-// 3. LOAD DATA & AUTO-CALCULATE STATS
+// 3. LOAD MEDIA DATA & AUTO-CALCULATE STATS
 // ==========================================
 function getNormalizedCategory(item) {
   const rawCat = (item.category || '').toLowerCase().trim();
@@ -387,7 +414,7 @@ function updateStatsUI() {
 }
 
 // ==========================================
-// 4. FILTER, SEARCH & RENDER GRID
+// 4. FILTER, SEARCH & RENDER MEDIA GRID
 // ==========================================
 function setupFilterListeners() {
   document.querySelectorAll('.cat-tab').forEach(btn => {
@@ -1024,7 +1051,7 @@ window.applyApiResult = async function (idx) {
 };
 
 // ==========================================
-// 6. SUPABASE CRUD (CREATE, UPDATE, DELETE + AUTO-CLEANUP)
+// 6. SUPABASE MEDIA CRUD + AUTO-CLEANUP
 // ==========================================
 document.getElementById('media-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -1111,6 +1138,213 @@ window.deleteCurrentModalMedia = async function () {
       }
       document.getElementById('media-modal').classList.remove('active');
       await fetchMediaLogs();
+    }
+  }
+};
+
+// ==========================================
+// 7. PERSONAL BLOG / POSTS (CREATE, READ, EDIT, DELETE)
+// ==========================================
+function formatPostDateTime(createdIso, updatedIso) {
+  if (!createdIso) return '';
+  const created = new Date(createdIso);
+  if (Number.isNaN(created.getTime())) return '';
+
+  const dateStr = created.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+  const timeStr = created.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+
+  const isEdited = updatedIso && Math.abs(new Date(updatedIso) - created) > 10000;
+  return `${dateStr} · ${timeStr}${isEdited ? ' (edited)' : ''}`;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+async function fetchBlogPosts() {
+  const { data, error } = await supabaseClient
+    .from('blog_posts')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    const listEl = document.getElementById('blog-feed-list');
+    if (listEl) listEl.innerHTML = `<p class="empty-state">Failed to load posts: ${error.message}</p>`;
+    return;
+  }
+
+  allBlogPosts = data || [];
+  renderBlogPosts();
+}
+
+function renderBlogPosts() {
+  const listEl = document.getElementById('blog-feed-list');
+  if (!listEl) return;
+
+  if (allBlogPosts.length === 0) {
+    listEl.innerHTML = `<p class="empty-state">No posts yet.</p>`;
+    return;
+  }
+
+  listEl.innerHTML = allBlogPosts.map(post => {
+    const postImg = normalizeImageUrl(post.image_url);
+    const timeLabel = formatPostDateTime(post.created_at, post.updated_at);
+
+    const adminControls = isAdminLoggedIn ? `
+      <div class="blog-post-actions">
+        <button type="button" class="blog-icon-btn" onclick="openEditPostModal('${post.id}')" title="Edit Post">
+          <ion-icon name="create-outline"></ion-icon>
+        </button>
+        <button type="button" class="blog-icon-btn delete" onclick="deleteBlogPost('${post.id}')" title="Delete Post">
+          <ion-icon name="trash-outline"></ion-icon>
+        </button>
+      </div>
+    ` : '';
+
+    const imageBlock = postImg ? `
+      <div class="blog-post-image-wrap">
+        <img src="${postImg}" alt="Post attachment" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'">
+      </div>
+    ` : '';
+
+    return `
+      <article class="blog-post-card">
+        <div class="blog-post-header">
+          <div class="blog-post-author">
+            <img class="blog-post-avatar" src="${currentProfile.avatar_url}" alt="${currentProfile.name}" onerror="this.src='https://placehold.co/100x100/1e1e1f/ffffff?text=D'">
+            <div class="blog-post-meta">
+              <span class="blog-post-name">${escapeHtml(currentProfile.name)}</span>
+              <span class="blog-post-time">${timeLabel}</span>
+            </div>
+          </div>
+          ${adminControls}
+        </div>
+        <div class="blog-post-text">${escapeHtml(post.content)}</div>
+        ${imageBlock}
+      </article>
+    `;
+  }).join('');
+}
+
+window.openPostModal = function () {
+  pendingUploadedUrls = [];
+  document.getElementById('post-modal-title').textContent = 'New Post';
+  document.getElementById('post-form').reset();
+  document.getElementById('post-id').value = '';
+  setElText('post-upload-status', '');
+  document.getElementById('post-modal').classList.add('active');
+};
+
+window.openEditPostModal = function (id) {
+  const post = allBlogPosts.find(p => p.id === id);
+  if (!post) return;
+
+  pendingUploadedUrls = [];
+  document.getElementById('post-modal-title').textContent = 'Edit Post';
+  document.getElementById('post-id').value = post.id;
+  document.getElementById('post-content').value = post.content || '';
+  document.getElementById('post-image').value = post.image_url || '';
+  setElText('post-upload-status', '');
+  document.getElementById('post-modal').classList.add('active');
+};
+
+window.closePostModal = async function () {
+  document.getElementById('post-modal').classList.remove('active');
+  await cleanupPendingUploads(null);
+};
+
+window.clearPostImageInput = function () {
+  document.getElementById('post-image').value = '';
+  setElText('post-upload-status', 'Photo removed (click Publish to save).');
+};
+
+window.handlePostImageUpload = async function (event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  setElText('post-upload-status', 'Uploading photo...');
+  try {
+    const publicUrl = await uploadImageToSupabase(file, 'posts');
+    document.getElementById('post-image').value = publicUrl;
+    setElText('post-upload-status', 'Photo uploaded!');
+  } catch (err) {
+    setElText('post-upload-status', `Upload failed: ${err.message}`);
+  } finally {
+    event.target.value = '';
+  }
+};
+
+document.getElementById('post-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const id = document.getElementById('post-id').value;
+  const existingPost = id ? allBlogPosts.find(p => p.id === id) : null;
+  const oldImage = existingPost ? existingPost.image_url : null;
+  const newImage = normalizeImageUrl(document.getElementById('post-image').value) || null;
+  const contentVal = document.getElementById('post-content').value.trim();
+
+  if (!contentVal) return;
+
+  const nowIso = new Date().toISOString();
+  const payload = {
+    content: contentVal,
+    image_url: newImage,
+    updated_at: nowIso
+  };
+
+  let error;
+  if (id) {
+    ({ error } = await supabaseClient.from('blog_posts').update(payload).eq('id', id));
+  } else {
+    payload.created_at = nowIso;
+    ({ error } = await supabaseClient.from('blog_posts').insert([payload]));
+  }
+
+  if (error) {
+    Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
+  } else {
+    await cleanupPendingUploads(newImage);
+    if (oldImage && oldImage !== newImage) {
+      await deleteOldStorageFile(oldImage);
+    }
+    document.getElementById('post-modal').classList.remove('active');
+    await fetchBlogPosts();
+  }
+});
+
+window.deleteBlogPost = async function (id) {
+  const existingPost = allBlogPosts.find(p => p.id === id);
+
+  const confirm = await Swal.fire({
+    text: 'Delete this post permanently?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ff5f5f',
+    confirmButtonText: 'Delete',
+    cancelButtonText: 'Cancel',
+    background: '#1e1e1f',
+    color: '#fff'
+  });
+
+  if (confirm.isConfirmed) {
+    const { error } = await supabaseClient.from('blog_posts').delete().eq('id', id);
+    if (error) {
+      Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
+    } else {
+      if (existingPost?.image_url) {
+        await deleteOldStorageFile(existingPost.image_url);
+      }
+      await fetchBlogPosts();
     }
   }
 };
