@@ -6,8 +6,8 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Media Tracker</title>
-  <link rel="shortcut icon" href="./assets/images/profile.jpg" type="image/x-icon">
-  <link rel="stylesheet" href="./assets/css/style.css?v=29">
+  <link id="favicon-link" rel="shortcut icon" href="./assets/images/profile.jpg" type="image/x-icon">
+  <link rel="stylesheet" href="./assets/css/style.css?v=30">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -21,7 +21,11 @@
          1. TOP SECTION: PROFILE
     =========================================== -->
     <header class="card-section profile-header">
-      <div class="profile-top-actions">
+      <div class="profile-top-actions" style="display: flex; gap: 8px;">
+        <button id="btn-edit-profile" class="pill-btn" style="display: none;" onclick="openProfileModal()" title="Edit Profile">
+          <ion-icon name="create-outline"></ion-icon>
+          <span>Edit Profile</span>
+        </button>
         <button id="btn-admin-toggle" class="pill-btn" onclick="handleAdminAuthClick()" title="Admin Access">
           <ion-icon id="admin-lock-icon" name="lock-closed-outline"></ion-icon>
           <span id="admin-btn-text">Admin</span>
@@ -30,14 +34,14 @@
 
       <div class="profile-main">
         <figure class="profile-avatar">
-          <img src="./assets/images/profile.jpg" alt="Profile Avatar" onerror="this.src='https://placehold.co/200x200/1e1e1f/ffffff?text=D'">
+          <img id="profile-avatar-img" src="./assets/images/profile.jpg" alt="Profile Avatar" onerror="this.src='https://placehold.co/200x200/1e1e1f/ffffff?text=D'">
         </figure>
 
         <div class="profile-details">
           <div class="profile-name-row">
-            <h1 class="profile-name">dariraa</h1>
+            <h1 class="profile-name" id="profile-name-text">dariraa</h1>
           </div>
-          <p class="profile-bio">
+          <p class="profile-bio" id="profile-bio-text">
             glory glory man united!
           </p>
         </div>
@@ -241,6 +245,53 @@
   </div>
 
   <!-- ==========================================
+       MODAL: EDIT PROFILE
+  =========================================== -->
+  <div id="profile-modal" class="custom-modal">
+    <div class="custom-modal-backdrop" onclick="closeProfileModal()"></div>
+    <div class="custom-modal-box">
+      <div class="modal-header">
+        <h3 class="h3">Edit Profile</h3>
+        <button class="modal-close" onclick="closeProfileModal()">
+          <ion-icon name="close-outline"></ion-icon>
+        </button>
+      </div>
+
+      <form id="profile-form" class="modal-form">
+        <div class="form-group">
+          <label>Profile Avatar</label>
+          <div class="api-search-row">
+            <input type="text" id="edit-profile-avatar" class="form-input" placeholder="Image URL or upload file...">
+            <label for="profile-file-input" class="pill-btn primary-btn" style="cursor: pointer; white-space: nowrap;">
+              <ion-icon name="cloud-upload-outline"></ion-icon>
+              <span>Upload</span>
+            </label>
+            <input type="file" id="profile-file-input" accept="image/*" style="display: none;" onchange="handleProfileImageUpload(event)">
+          </div>
+          <small id="profile-upload-status" style="color: var(--light-gray-70); font-size: 11px;"></small>
+        </div>
+
+        <div class="form-group">
+          <label>Display Name</label>
+          <input type="text" id="edit-profile-name" class="form-input" placeholder="Your name" required>
+        </div>
+
+        <div class="form-group">
+          <label>Bio</label>
+          <textarea id="edit-profile-bio" class="form-input" rows="3" placeholder="Write a short bio..." style="resize: vertical; font-family: inherit;"></textarea>
+        </div>
+
+        <div class="modal-submit-row">
+          <button type="submit" class="form-btn primary-submit">
+            <ion-icon name="save-outline"></ion-icon>
+            <span>Save Profile</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================
        MODAL: ADD / EDIT MEDIA
   =========================================== -->
   <div id="media-modal" class="custom-modal">
@@ -287,8 +338,16 @@
         </div>
 
         <div class="form-group">
-          <label>Cover Image URL</label>
-          <input type="url" id="media-cover" class="form-input" placeholder="https://...">
+          <label>Cover Image (URL or Upload File)</label>
+          <div class="api-search-row">
+            <input type="url" id="media-cover" class="form-input" placeholder="https://...">
+            <label for="media-cover-file" class="pill-btn primary-btn" style="cursor: pointer; white-space: nowrap;">
+              <ion-icon name="cloud-upload-outline"></ion-icon>
+              <span>Upload</span>
+            </label>
+            <input type="file" id="media-cover-file" accept="image/*" style="display: none;" onchange="handleMediaCoverUpload(event)">
+          </div>
+          <small id="cover-upload-status" style="color: var(--light-gray-70); font-size: 11px;"></small>
         </div>
 
         <div class="form-row-3">
@@ -352,7 +411,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./assets/js/script.js?v=29"></script>
+  <script src="./assets/js/script.js?v=30"></script>
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 </body>
