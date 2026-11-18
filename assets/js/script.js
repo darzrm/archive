@@ -9,6 +9,7 @@ const TMDB_API_KEY = '727a00da59cd2b9873f7636a5bde9561';
 const RAWG_API_KEY = '';
 const STORAGE_BUCKET = 'media-assets';
 const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+const ITEMS_PER_PAGE = 8;
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -19,13 +20,18 @@ let lastApiResults = [];
 let pendingUploadedUrls = [];
 let currentCategory = 'all';
 let currentMainView = 'blog'; // Default tab priority: Notes
+let libraryViewMode = 'grid'; // 'grid' or 'list'
+let visibleMediaLimit = ITEMS_PER_PAGE;
 let isStatsExpanded = false;
 let isAdminLoggedIn = false;
 let isProfileLoaded = false;
+
 let currentProfile = {
   name: '',
   bio: '',
-  avatar_url: ''
+  avatar_url: '',
+  banner_url: '',
+  social_links: []
 };
 
 function setElText(id, text) {
@@ -34,14 +40,38 @@ function setElText(id, text) {
 }
 
 // ==========================================
-// 2. INITIALIZATION, VIEW TABS & ADMIN AUTH
+// 2. INITIALIZATION, SCROLL LISTENERS & VIEW TABS
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
+  setupScrollListeners();
   await checkAdminSession();
   await fetchProfileSettings();
   await Promise.all([fetchBlogPosts(), fetchMediaLogs()]);
   setupFilterListeners();
 });
+
+function setupScrollListeners() {
+  const stickyHeader = document.getElementById('sticky-mini-header');
+  const backToTopBtn = document.getElementById('btn-back-to-top');
+  const profileCard = document.getElementById('profile-header-card');
+
+  window.addEventListener('scroll', () => {
+    const scrollY = window.scrollY || document.documentElement.scrollTop;
+    const triggerHeight = profileCard ? (profileCard.offsetTop + profileCard.offsetHeight - 20) : 180;
+
+    if (stickyHeader) {
+      stickyHeader.classList.toggle('visible', scrollY > triggerHeight);
+    }
+
+    if (backToTopBtn) {
+      backToTopBtn.classList.toggle('visible', scrollY > 360);
+    }
+  }, { passive: true });
+}
+
+window.scrollToTopSmooth = function () {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
 
 window.switchMainView = function (viewName) {
   currentMainView = viewName;
@@ -50,12 +80,43 @@ window.switchMainView = function (viewName) {
     btn.classList.toggle('active', btn.dataset.view === viewName);
   });
 
+  document.querySelectorAll('.mini-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === viewName);
+  });
+
   const libView = document.getElementById('view-library');
   const blogView = document.getElementById('view-blog');
-  if (libView) libView.style.display = viewName === 'library' ? 'block' : 'none';
-  if (blogView) blogView.style.display = viewName === 'blog' ? 'block' : 'none';
+
+  if (libView && blogView) {
+    libView.classList.remove('active-view');
+    blogView.classList.remove('active-view');
+
+    if (viewName === 'library') {
+      blogView.style.display = 'none';
+      libView.style.display = 'block';
+      void libView.offsetWidth;
+      libView.classList.add('active-view');
+    } else {
+      libView.style.display = 'none';
+      blogView.style.display = 'block';
+      void blogView.offsetWidth;
+      blogView.classList.add('active-view');
+    }
+  }
 
   updateAdminActionButtons();
+};
+
+window.setLibraryViewMode = function (mode) {
+  libraryViewMode = mode;
+  document.getElementById('btn-view-grid')?.classList.toggle('active', mode === 'grid');
+  document.getElementById('btn-view-list')?.classList.toggle('active', mode === 'list');
+  renderMediaGrid();
+};
+
+window.loadMoreMedia = function () {
+  visibleMediaLimit += ITEMS_PER_PAGE;
+  renderMediaGrid();
 };
 
 window.toggleLibraryStats = function () {
@@ -65,18 +126,10 @@ window.toggleLibraryStats = function () {
   const textEl = document.getElementById('stats-toggle-text');
   const iconEl = document.getElementById('stats-chevron-icon');
 
-  if (panel) {
-    panel.style.display = isStatsExpanded ? 'block' : 'none';
-  }
-  if (toggleBtn) {
-    toggleBtn.classList.toggle('active', isStatsExpanded);
-  }
-  if (textEl) {
-    textEl.textContent = isStatsExpanded ? 'Hide Stats' : 'Show Stats';
-  }
-  if (iconEl) {
-    iconEl.setAttribute('name', isStatsExpanded ? 'chevron-up-outline' : 'chevron-down-outline');
-  }
+  if (panel) panel.style.display = isStatsExpanded ? 'block' : 'none';
+  if (toggleBtn) toggleBtn.classList.toggle('active', isStatsExpanded);
+  if (textEl) textEl.textContent = isStatsExpanded ? 'Hide Stats' : 'Show Stats';
+  if (iconEl) iconEl.setAttribute('name', isStatsExpanded ? 'chevron-up-outline' : 'chevron-down-outline');
 };
 
 function updateAdminActionButtons() {
@@ -208,7 +261,7 @@ function compressImageFile(file, maxWidth = 800, quality = 0.82) {
 }
 
 async function uploadImageToSupabase(file, folder = 'covers') {
-  const maxWidth = folder === 'avatars' ? 400 : (folder === 'posts' ? 900 : 600);
+  const maxWidth = folder === 'avatars' ? 400 : (folder === 'banners' ? 1200 : (folder === 'posts' ? 900 : 600));
   const compressedBlob = await compressImageFile(file, maxWidth, 0.82);
   const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.webp`;
 
@@ -249,9 +302,10 @@ async function deleteOldStorageFile(fileUrl) {
   }
 }
 
-async function cleanupPendingUploads(keepUrl = null) {
+async function cleanupPendingUploads(keepUrls = []) {
+  const keepSet = new Set((Array.isArray(keepUrls) ? keepUrls : [keepUrls]).filter(Boolean));
   for (const tempUrl of pendingUploadedUrls) {
-    if (tempUrl !== keepUrl) {
+    if (!keepSet.has(tempUrl)) {
       await deleteOldStorageFile(tempUrl);
     }
   }
@@ -259,8 +313,27 @@ async function cleanupPendingUploads(keepUrl = null) {
 }
 
 // ==========================================
-// 2C. PROFILE SETTINGS (FETCH, EDIT, UPLOAD)
+// 2C. PROFILE SETTINGS, BANNER & SOCIAL LINKS
 // ==========================================
+function detectSocialIcon(url) {
+  const lower = (url || '').toLowerCase();
+  if (lower.includes('instagram.com')) return 'logo-instagram';
+  if (lower.includes('twitter.com') || lower.includes('x.com')) return 'logo-twitter';
+  if (lower.includes('github.com')) return 'logo-github';
+  if (lower.includes('youtube.com') || lower.includes('youtu.be')) return 'logo-youtube';
+  if (lower.includes('tiktok.com')) return 'logo-tiktok';
+  if (lower.includes('discord.gg') || lower.includes('discord.com')) return 'logo-discord';
+  if (lower.includes('twitch.tv')) return 'logo-twitch';
+  if (lower.includes('linkedin.com')) return 'logo-linkedin';
+  if (lower.includes('reddit.com')) return 'logo-reddit';
+  if (lower.includes('facebook.com')) return 'logo-facebook';
+  if (lower.includes('spotify.com')) return 'musical-notes-outline';
+  if (lower.includes('steamcommunity.com') || lower.includes('store.steampowered.com')) return 'logo-steam';
+  if (lower.includes('letterboxd.com')) return 'film-outline';
+  if (lower.includes('myanimelist.net') || lower.includes('anilist.co')) return 'tv-outline';
+  return 'link-outline';
+}
+
 async function fetchProfileSettings() {
   const { data, error } = await supabaseClient
     .from('profile_settings')
@@ -272,7 +345,9 @@ async function fetchProfileSettings() {
     currentProfile = {
       name: data.name || '',
       bio: data.bio || '',
-      avatar_url: data.avatar_url || ''
+      avatar_url: data.avatar_url || '',
+      banner_url: data.banner_url || '',
+      social_links: Array.isArray(data.social_links) ? data.social_links : []
     };
   }
   isProfileLoaded = true;
@@ -282,13 +357,38 @@ async function fetchProfileSettings() {
 function applyProfileToUI() {
   setElText('profile-name-text', currentProfile.name);
   setElText('profile-bio-text', currentProfile.bio);
+  setElText('sticky-name-text', currentProfile.name);
 
   if (currentProfile.name) {
     document.title = `${currentProfile.name} — Archive`;
     setElText('footer-brand-name', currentProfile.name.toUpperCase());
   }
 
+  // Banner Header
+  const headerCard = document.getElementById('profile-header-card');
+  const bannerWrap = document.getElementById('profile-banner-wrap');
+  const bannerImg = document.getElementById('profile-banner-img');
+
+  if (headerCard && bannerWrap && bannerImg) {
+    if (currentProfile.banner_url) {
+      const cleanBanner = normalizeImageUrl(currentProfile.banner_url);
+      bannerImg.onerror = () => {
+        bannerWrap.style.display = 'none';
+        headerCard.classList.remove('has-banner');
+      };
+      bannerImg.src = cleanBanner;
+      bannerWrap.style.display = 'block';
+      headerCard.classList.add('has-banner');
+    } else {
+      bannerImg.src = '';
+      bannerWrap.style.display = 'none';
+      headerCard.classList.remove('has-banner');
+    }
+  }
+
+  // Avatar & Sticky Avatar & Favicon
   const avatarEl = document.getElementById('profile-avatar-img');
+  const stickyAvatarEl = document.getElementById('sticky-avatar-img');
   const faviconEl = document.getElementById('favicon-link');
 
   if (avatarEl) {
@@ -298,27 +398,100 @@ function applyProfileToUI() {
         avatarEl.src = 'https://placehold.co/200x200/1e1e1f/ffffff?text=?';
       };
       avatarEl.src = cleanUrl;
+      if (stickyAvatarEl) stickyAvatarEl.src = cleanUrl;
       if (faviconEl) faviconEl.href = cleanUrl;
     } else {
       avatarEl.src = TRANSPARENT_PIXEL;
+      if (stickyAvatarEl) stickyAvatarEl.src = TRANSPARENT_PIXEL;
+    }
+  }
+
+  // Social Links Bar
+  const socialsBar = document.getElementById('profile-socials-bar');
+  if (socialsBar) {
+    const validLinks = (currentProfile.social_links || []).filter(s => s && s.url);
+    if (validLinks.length > 0) {
+      socialsBar.style.display = 'flex';
+      socialsBar.innerHTML = validLinks.map(s => {
+        const href = s.url.startsWith('http') ? s.url : `https://${s.url}`;
+        const label = escapeHtml(s.label || s.url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]);
+        const iconName = detectSocialIcon(href);
+        return `
+          <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="social-chip">
+            <ion-icon name="${iconName}"></ion-icon>
+            <span>${label}</span>
+          </a>
+        `;
+      }).join('');
+    } else {
+      socialsBar.style.display = 'none';
+      socialsBar.innerHTML = '';
     }
   }
 
   renderBlogPosts();
 }
 
+window.addSocialLinkRow = function (label = '', url = '') {
+  const container = document.getElementById('social-links-editor');
+  if (!container) return;
+
+  const row = document.createElement('div');
+  row.className = 'social-edit-row';
+  row.innerHTML = `
+    <input type="text" class="form-input social-label-input" placeholder="Label (e.g. GitHub)" value="${escapeHtml(label)}">
+    <input type="url" class="form-input social-url-input" placeholder="https://..." value="${escapeHtml(url)}">
+    <button type="button" class="social-remove-btn" onclick="this.parentElement.remove()" title="Remove">
+      <ion-icon name="trash-outline"></ion-icon>
+    </button>
+  `;
+  container.appendChild(row);
+};
+
 window.openProfileModal = function () {
   pendingUploadedUrls = [];
   document.getElementById('edit-profile-name').value = currentProfile.name;
   document.getElementById('edit-profile-bio').value = currentProfile.bio;
   document.getElementById('edit-profile-avatar').value = currentProfile.avatar_url;
+  document.getElementById('edit-profile-banner').value = currentProfile.banner_url;
   setElText('profile-upload-status', '');
+  setElText('banner-upload-status', '');
+
+  const editor = document.getElementById('social-links-editor');
+  if (editor) {
+    editor.innerHTML = '';
+    (currentProfile.social_links || []).forEach(link => {
+      addSocialLinkRow(link.label || '', link.url || '');
+    });
+  }
+
   document.getElementById('profile-modal').classList.add('active');
 };
 
 window.closeProfileModal = async function () {
   document.getElementById('profile-modal').classList.remove('active');
-  await cleanupPendingUploads(null);
+  await cleanupPendingUploads([]);
+};
+
+window.clearBannerInput = function () {
+  document.getElementById('edit-profile-banner').value = '';
+  setElText('banner-upload-status', 'Banner removed (click Save Profile).');
+};
+
+window.handleBannerImageUpload = async function (event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  setElText('banner-upload-status', 'Uploading banner...');
+  try {
+    const publicUrl = await uploadImageToSupabase(file, 'banners');
+    document.getElementById('edit-profile-banner').value = publicUrl;
+    setElText('banner-upload-status', 'Banner uploaded! Click Save Profile.');
+  } catch (err) {
+    setElText('banner-upload-status', `Upload failed: ${err.message}`);
+  } finally {
+    event.target.value = '';
+  }
 };
 
 window.handleProfileImageUpload = async function (event) {
@@ -341,13 +514,27 @@ document.getElementById('profile-form').addEventListener('submit', async (e) => 
   e.preventDefault();
 
   const oldAvatar = currentProfile.avatar_url;
+  const oldBanner = currentProfile.banner_url;
   const newAvatar = document.getElementById('edit-profile-avatar').value.trim();
+  const newBanner = document.getElementById('edit-profile-banner').value.trim();
+
+  const socialRows = document.querySelectorAll('#social-links-editor .social-edit-row');
+  const collectedLinks = [];
+  socialRows.forEach(row => {
+    const label = row.querySelector('.social-label-input')?.value.trim() || '';
+    const url = row.querySelector('.social-url-input')?.value.trim() || '';
+    if (url) {
+      collectedLinks.push({ label, url });
+    }
+  });
 
   const updatedProfile = {
     id: 1,
     name: document.getElementById('edit-profile-name').value.trim(),
     bio: document.getElementById('edit-profile-bio').value.trim(),
     avatar_url: newAvatar,
+    banner_url: newBanner,
+    social_links: collectedLinks,
     updated_at: new Date().toISOString()
   };
 
@@ -358,9 +545,12 @@ document.getElementById('profile-form').addEventListener('submit', async (e) => 
   if (error) {
     Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
   } else {
-    await cleanupPendingUploads(newAvatar);
+    await cleanupPendingUploads([newAvatar, newBanner]);
     if (oldAvatar && oldAvatar !== newAvatar) {
       await deleteOldStorageFile(oldAvatar);
+    }
+    if (oldBanner && oldBanner !== newBanner) {
+      await deleteOldStorageFile(oldBanner);
     }
     currentProfile = updatedProfile;
     applyProfileToUI();
@@ -457,21 +647,27 @@ function updateStatsUI() {
 }
 
 // ==========================================
-// 4. FILTER, SEARCH & RENDER MEDIA GRID
+// 4. FILTER, SEARCH, PAGINATION & RENDER MEDIA
 // ==========================================
+function resetPaginationAndRender() {
+  visibleMediaLimit = ITEMS_PER_PAGE;
+  renderMediaGrid();
+}
+
 function setupFilterListeners() {
   document.querySelectorAll('.cat-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       currentCategory = btn.dataset.category;
-      renderMediaGrid();
+      resetPaginationAndRender();
     });
   });
 
-  document.getElementById('search-library').addEventListener('input', renderMediaGrid);
-  document.getElementById('filter-status').addEventListener('change', renderMediaGrid);
-  document.getElementById('sort-library').addEventListener('change', renderMediaGrid);
+  document.getElementById('search-library').addEventListener('input', resetPaginationAndRender);
+  document.getElementById('filter-status').addEventListener('change', resetPaginationAndRender);
+  document.getElementById('filter-rating').addEventListener('change', resetPaginationAndRender);
+  document.getElementById('sort-library').addEventListener('change', resetPaginationAndRender);
 }
 
 function formatCategoryBadge(item) {
@@ -503,19 +699,44 @@ function formatStatusDate(isoString) {
   });
 }
 
+function matchesRatingFilter(item, ratingFilter) {
+  if (ratingFilter === 'all') return true;
+  const hasRating = item.rating !== null && item.rating !== undefined && item.rating !== '';
+  const r = Number(item.rating);
+
+  if (ratingFilter === 'unrated') return !hasRating;
+  if (!hasRating || Number.isNaN(r)) return false;
+
+  if (ratingFilter === 'under_5') return r < 5;
+  if (ratingFilter === '5_plus') return r >= 5;
+  if (ratingFilter === '6_plus') return r >= 6;
+  if (ratingFilter === '7_plus') return r >= 7;
+  if (ratingFilter === '8_plus') return r >= 8;
+  if (ratingFilter === '9_plus') return r >= 9;
+  if (ratingFilter === 'exact_10') return r === 10;
+  return true;
+}
+
 function renderMediaGrid() {
   const grid = document.getElementById('media-grid');
+  const loadMoreWrap = document.getElementById('load-more-wrap');
+  const loadMoreText = document.getElementById('load-more-text');
+
   const query = document.getElementById('search-library').value.toLowerCase().trim();
   const statusFilter = document.getElementById('filter-status').value;
+  const ratingFilter = document.getElementById('filter-rating').value;
   const sortBy = document.getElementById('sort-library').value;
+
+  grid.classList.toggle('list-view', libraryViewMode === 'list');
 
   let filtered = allMediaLogs.filter(item => {
     const normCat = getNormalizedCategory(item);
     const normStatus = (item.status || '').toLowerCase().trim();
     const matchCat = currentCategory === 'all' || normCat === currentCategory;
     const matchStatus = statusFilter === 'all' || normStatus === statusFilter;
+    const matchRating = matchesRatingFilter(item, ratingFilter);
     const matchQuery = !query || item.title.toLowerCase().includes(query);
-    return matchCat && matchStatus && matchQuery;
+    return matchCat && matchStatus && matchRating && matchQuery;
   });
 
   if (sortBy === 'rating_desc') {
@@ -525,13 +746,73 @@ function renderMediaGrid() {
   }
 
   if (filtered.length === 0) {
-    grid.innerHTML = `<p class="empty-state">No media found in this category.</p>`;
+    grid.innerHTML = `<p class="empty-state">No media found matching these filters.</p>`;
+    if (loadMoreWrap) loadMoreWrap.style.display = 'none';
     return;
   }
 
-  grid.innerHTML = filtered.map(item => {
+  const displayedItems = filtered.slice(0, visibleMediaLimit);
+  const remainingCount = filtered.length - displayedItems.length;
+
+  if (loadMoreWrap) {
+    if (remainingCount > 0) {
+      loadMoreWrap.style.display = 'flex';
+      if (loadMoreText) loadMoreText.textContent = `Load More (${remainingCount} remaining)`;
+    } else {
+      loadMoreWrap.style.display = 'none';
+    }
+  }
+
+  // COMPACT LIST VIEW RENDER
+  if (libraryViewMode === 'list') {
+    grid.innerHTML = displayedItems.map(item => {
+      const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/120x180/1e1e1f/888888?text=?';
+      const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
+      const hasTotal = item.total_units !== null && item.total_units !== undefined && Number(item.total_units) > 0;
+      const progressText = hasTotal ? `${item.progress || 0}/${item.total_units}` : `${item.progress || 0}/?`;
+      const statusKey = (item.status || 'planned').toLowerCase().trim();
+      const repeatCount = Number(item.repeat_count) || 0;
+      const statusDateText = formatStatusDate(item.status_updated_at || item.updated_at || item.created_at);
+
+      const repeatHtml = repeatCount > 0
+        ? `<span class="list-repeat-tag" title="Rewatch / Reread count">↻ ${repeatCount}x</span>`
+        : '';
+
+      const editBtnHtml = isAdminLoggedIn ? `
+        <button type="button" class="list-edit-btn" onclick="openEditModal('${item.id}')" title="Edit Entry">
+          <ion-icon name="create-outline"></ion-icon>
+        </button>
+      ` : '';
+
+      return `
+        <div class="media-list-row">
+          <img class="list-thumb" src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/120x180/1e1e1f/888888?text=?'">
+          <div class="list-main-info">
+            <div class="list-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
+            <div class="list-sub-meta">
+              <span class="list-cat-tag">${formatCategoryBadge(item)}</span>
+              <span>•</span>
+              <span>${statusDateText}</span>
+              ${repeatHtml}
+            </div>
+          </div>
+          <div class="list-right-meta">
+            <span class="status-pill ${statusKey} list-hide-mobile">${statusKey}</span>
+            <span class="progress-pill ${statusKey}">${progressText}</span>
+            <span class="list-rating-pill">${ratingText}</span>
+            ${editBtnHtml}
+          </div>
+        </div>
+      `;
+    }).join('');
+    return;
+  }
+
+  // GRID VIEW RENDER
+  grid.innerHTML = displayedItems.map(item => {
     const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
     const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
+    const repeatCount = Number(item.repeat_count) || 0;
 
     const hasTotal = item.total_units !== null && item.total_units !== undefined && Number(item.total_units) > 0;
     const progressText = hasTotal
@@ -561,6 +842,10 @@ function renderMediaGrid() {
 
     const statusDateText = formatStatusDate(item.status_updated_at || item.updated_at || item.created_at);
 
+    const repeatBadgeHtml = repeatCount > 0
+      ? `<span class="badge-repeat" title="Rewatch / Reread count">↻ ${repeatCount}x</span>`
+      : '';
+
     const coverEditHtml = isAdminLoggedIn ? `
       <button type="button" class="cover-edit-btn" onclick="openEditModal('${item.id}')" title="Edit Entry">
         <ion-icon name="create-outline"></ion-icon>
@@ -570,15 +855,16 @@ function renderMediaGrid() {
     return `
       <div class="media-card">
         <div class="media-cover-wrap">
-          <img src="${cover}" alt="${item.title}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=No+Cover'">
+          <img src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=No+Cover'">
           <div class="cover-left-badges">
             <span class="badge-cat">${formatCategoryBadge(item)}</span>
             <span class="badge-rating">${ratingText}</span>
+            ${repeatBadgeHtml}
           </div>
           ${coverEditHtml}
         </div>
         <div class="media-body">
-          <h3 class="media-title" title="${item.title}">${item.title}</h3>
+          <h3 class="media-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h3>
           <div class="media-bottom-stack">
             <div class="media-meta-row">
               <span class="status-pill ${statusKey}">${statusKey}</span>
@@ -608,6 +894,7 @@ window.openMediaModal = function () {
   document.getElementById('media-modal-title').textContent = 'Add Media';
   document.getElementById('media-form').reset();
   document.getElementById('media-id').value = '';
+  document.getElementById('media-repeat').value = 0;
   document.getElementById('btn-modal-delete').style.display = 'none';
   document.getElementById('api-search-results').style.display = 'none';
   setElText('cover-upload-status', '');
@@ -633,6 +920,7 @@ window.openEditModal = function (id) {
   document.getElementById('media-total').value = item.total_units || '';
   document.getElementById('media-unit').value = item.unit_label || 'eps';
   document.getElementById('media-rating').value = (item.rating !== null && item.rating !== undefined) ? item.rating : '';
+  document.getElementById('media-repeat').value = Number(item.repeat_count) || 0;
   document.getElementById('api-search-results').style.display = 'none';
   setElText('cover-upload-status', '');
 
@@ -641,7 +929,7 @@ window.openEditModal = function (id) {
 
 window.closeMediaModal = async function () {
   document.getElementById('media-modal').classList.remove('active');
-  await cleanupPendingUploads(null);
+  await cleanupPendingUploads([]);
 };
 
 window.handleMediaCoverUpload = async function (event) {
@@ -699,6 +987,12 @@ window.stepModalProgress = function () {
   if (totalVal > 0 && nextVal >= totalVal) {
     document.getElementById('media-status').value = 'completed';
   }
+};
+
+window.stepModalRepeat = function () {
+  const repInput = document.getElementById('media-repeat');
+  const nextVal = (parseInt(repInput.value, 10) || 0) + 1;
+  repInput.value = nextVal;
 };
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 4500) {
@@ -1048,8 +1342,8 @@ window.searchExternalAPI = async function () {
     <div class="api-result-item" onclick="applyApiResult(${idx})">
       <img src="${it.cover || 'https://placehold.co/60x90/1e1e1f/888?text=?'}" alt="" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/60x90/1e1e1f/888?text=?'">
       <div class="api-result-info">
-        <h4>${it.title}</h4>
-        <p>${it.meta}</p>
+        <h4>${escapeHtml(it.title)}</h4>
+        <p>${escapeHtml(it.meta)}</p>
       </div>
     </div>
   `).join('');
@@ -1110,6 +1404,7 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
   const statusVal = document.getElementById('media-status').value;
   const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
   let progressVal = parseInt(document.getElementById('media-progress').value, 10) || 0;
+  const repeatVal = Math.max(0, parseInt(document.getElementById('media-repeat').value, 10) || 0);
 
   if (statusVal === 'completed' && totalUnits && totalUnits > 0) {
     progressVal = totalUnits;
@@ -1131,6 +1426,7 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
     total_units: totalUnits,
     unit_label: document.getElementById('media-unit').value,
     rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null,
+    repeat_count: repeatVal,
     updated_at: statusTimestamp
   };
 
@@ -1144,7 +1440,7 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
   if (error) {
     Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
   } else {
-    await cleanupPendingUploads(newCover);
+    await cleanupPendingUploads([newCover]);
     if (oldCover && oldCover !== newCover) {
       await deleteOldStorageFile(oldCover);
     }
@@ -1175,7 +1471,7 @@ window.deleteCurrentModalMedia = async function () {
     if (error) {
       Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
     } else {
-      await cleanupPendingUploads(null);
+      await cleanupPendingUploads([]);
       if (existingItem?.cover_url) {
         await deleteOldStorageFile(existingItem.cover_url);
       }
@@ -1306,7 +1602,7 @@ window.openEditPostModal = function (id) {
 
 window.closePostModal = async function () {
   document.getElementById('post-modal').classList.remove('active');
-  await cleanupPendingUploads(null);
+  await cleanupPendingUploads([]);
 };
 
 window.clearPostImageInput = function () {
@@ -1359,7 +1655,7 @@ document.getElementById('post-form').addEventListener('submit', async (e) => {
   if (error) {
     Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
   } else {
-    await cleanupPendingUploads(newImage);
+    await cleanupPendingUploads([newImage]);
     if (oldImage && oldImage !== newImage) {
       await deleteOldStorageFile(oldImage);
     }
