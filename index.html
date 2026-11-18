@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Kazvera — Personal Media Tracker</title>
   <link rel="shortcut icon" href="./assets/images/eec.png" type="image/x-icon">
-  <link rel="stylesheet" href="./assets/css/style.css?v=4">
+  <link rel="stylesheet" href="./assets/css/style.css?v=6">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -281,7 +281,7 @@
         <div class="form-row-3">
           <div class="form-group">
             <label>Status</label>
-            <select id="media-status" class="form-input">
+            <select id="media-status" class="form-input" onchange="handleStatusFormChange()">
               <option value="completed">Completed</option>
               <option value="ongoing">Ongoing</option>
               <option value="planned">Planned</option>
@@ -296,7 +296,7 @@
 
           <div class="form-group">
             <label>Total Units</label>
-            <input type="number" id="media-total" class="form-input" min="0" placeholder="Optional">
+            <input type="number" id="media-total" class="form-input" min="0" placeholder="Optional" oninput="handleTotalUnitsChange()">
           </div>
         </div>
 
@@ -304,10 +304,10 @@
           <div class="form-group">
             <label>Unit Label</label>
             <select id="media-unit" class="form-input">
-              <option value="eps">Episodes (eps)</option>
+              <option value="eps">Episodes</option>
               <option value="movie">Movie</option>
-              <option value="ch">Chapters (ch)</option>
-              <option value="vol">Volumes (vol)</option>
+              <option value="ch">Chapter</option>
+              <option value="vol">Volumes</option>
               <option value="item">Item / Game</option>
             </select>
           </div>
@@ -328,7 +328,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./assets/js/script.js?v=4"></script>
+  <script src="./assets/js/script.js?v=6"></script>
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 </body>
