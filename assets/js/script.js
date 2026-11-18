@@ -6,6 +6,7 @@
 const SUPABASE_URL = 'https://uendrdxiixmikkeanlod.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_IdPLjwQhVQwXGGxUnBVblg_oIQ5Zz89';
 const TMDB_API_KEY = '727a00da59cd2b9873f7636a5bde9561';
+const RAWG_API_KEY = ''; // Optional: add free RAWG API key for PC/Mobile games
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -265,7 +266,7 @@ function renderMediaGrid() {
 }
 
 // ==========================================
-// 5. ADD / EDIT MODAL & AUTO-SEARCH API
+// 5. ADD / EDIT MODAL & MULTI-API SEARCH
 // ==========================================
 window.openMediaModal = function () {
   document.getElementById('media-modal-title').textContent = 'Add Media';
@@ -322,6 +323,62 @@ window.handleCategoryFormChange = function () {
   }
 };
 
+// Fetch helper with timeout so blocked domains never hang search
+async function fetchWithTimeout(url, options = {}, timeoutMs = 4500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Helper: AniList GraphQL Search (Comic & Light Novel)
+async function fetchAniListMedia(query, isNovel = false) {
+  const gql = `
+    query ($search: String) {
+      Page(perPage: 6) {
+        media(search: $search, type: MANGA, ${isNovel ? 'format: NOVEL' : 'format_not: NOVEL'}) {
+          title { english romaji }
+          coverImage { large }
+          chapters
+          volumes
+          countryOfOrigin
+        }
+      }
+    }
+  `;
+  const res = await fetchWithTimeout('https://graphql.anilist.co', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ query: gql, variables: { search: query } })
+  });
+  const json = await res.json();
+  return (json.data?.Page?.media || []).map(m => {
+    const originMap = { JP: 'Manga', KR: 'Manhwa', CN: 'Manhua' };
+    const label = isNovel ? 'Light Novel' : (originMap[m.countryOfOrigin] || 'Comic');
+    return {
+      title: m.title.english || m.title.romaji,
+      cover: m.coverImage?.large || '',
+      total: isNovel ? (m.volumes || m.chapters || null) : (m.chapters || null),
+      unit: isNovel ? (m.volumes ? 'vol' : 'ch') : 'ch',
+      meta: `${label} · ${isNovel ? (m.volumes || '?') + ' Vol' : (m.chapters || '?') + ' Ch'}`
+    };
+  });
+}
+
+// Deduplicate results with identical titles
+function deduplicateResults(list) {
+  const seen = new Set();
+  return list.filter(item => {
+    const key = item.title.toLowerCase().trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 window.searchExternalAPI = async function () {
   const query = document.getElementById('api-search-input').value.trim();
   const cat = document.getElementById('media-category').value;
@@ -332,139 +389,207 @@ window.searchExternalAPI = async function () {
   resultsBox.style.display = 'block';
   resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">Searching...</p>`;
 
-  try {
-    let items = [];
+  let items = [];
 
-    if (cat === 'series') {
-      if (TMDB_API_KEY) {
-        try {
-          const tmdbRes = await fetch(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
-          const tmdbData = await tmdbRes.json();
-          const tvItems = (tmdbData.results || []).slice(0, 5).map(t => ({
-            tmdbId: t.id,
-            title: t.name,
-            cover: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : '',
-            total: null,
-            unit: 'eps',
-            meta: `TV Series · ${t.first_air_date?.slice(0, 4) || ''}`
-          }));
-          items = [...items, ...tvItems];
-        } catch (e) {
-          console.error('TMDB TV error:', e);
-        }
-      }
-
-      try {
-        const jikanRes = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=4`);
-        const jikanData = await jikanRes.json();
-        const animeItems = (jikanData.data || []).map(a => ({
+  if (cat === 'series') {
+    const [tvmazeRes, tmdbRes, jikanRes] = await Promise.allSettled([
+      // 1. TVMaze API (Fast, unblocked, global TV series)
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        return (data || []).slice(0, 6).map(entry => ({
+          tvmazeId: entry.show.id,
+          title: entry.show.name,
+          cover: entry.show.image?.original || entry.show.image?.medium || '',
+          total: null,
+          unit: 'eps',
+          meta: `TV Series · ${entry.show.premiered?.slice(0, 4) || 'Show'}`
+        }));
+      })(),
+      // 2. TMDB TV (Used if accessible)
+      (async () => {
+        if (!TMDB_API_KEY) return [];
+        const res = await fetchWithTimeout(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.results || []).slice(0, 5).map(t => ({
+          tmdbId: t.id,
+          title: t.name,
+          cover: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : '',
+          total: null,
+          unit: 'eps',
+          meta: `TV Series · ${t.first_air_date?.slice(0, 4) || 'TMDB'}`
+        }));
+      })(),
+      // 3. Jikan Anime TV
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=5`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || []).map(a => ({
           title: a.title_english || a.title,
           cover: a.images?.jpg?.large_image_url || '',
           total: a.episodes || null,
           unit: 'eps',
           meta: `Anime Series · ${a.episodes || '?'} Eps`
         }));
-        items = [...items, ...animeItems];
-      } catch (e) {
-        console.error('Jikan TV error:', e);
-      }
+      })()
+    ]);
 
-    } else if (cat === 'movie') {
-      if (TMDB_API_KEY) {
-        try {
-          const tmdbRes = await fetch(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
-          const tmdbData = await tmdbRes.json();
-          const movItems = (tmdbData.results || []).slice(0, 5).map(m => ({
-            title: m.title,
-            cover: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : '',
-            total: 1,
-            unit: 'movie',
-            meta: `Movie · ${m.release_date?.slice(0, 4) || ''}`
-          }));
-          items = [...items, ...movItems];
-        } catch (e) {
-          console.error('TMDB Movie error:', e);
-        }
-      }
+    if (tvmazeRes.status === 'fulfilled') items.push(...tvmazeRes.value);
+    if (tmdbRes.status === 'fulfilled') items.push(...tmdbRes.value);
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    items = deduplicateResults(items);
 
-      try {
-        const jikanRes = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=movie&limit=4`);
-        const jikanData = await jikanRes.json();
-        const animeMov = (jikanData.data || []).map(a => ({
+  } else if (cat === 'movie') {
+    const [itunesRes, tmdbRes, jikanRes] = await Promise.allSettled([
+      // 1. iTunes Movie Search API (Fast, unblocked, global movies)
+      (async () => {
+        const res = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=movie&limit=6`);
+        const data = await res.json();
+        return (data.results || []).map(m => ({
+          title: m.trackName,
+          cover: m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : '',
+          total: 1,
+          unit: 'movie',
+          meta: `Movie · ${m.releaseDate?.slice(0, 4) || 'Film'}`
+        }));
+      })(),
+      // 2. TMDB Movie (Used if accessible)
+      (async () => {
+        if (!TMDB_API_KEY) return [];
+        const res = await fetchWithTimeout(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.results || []).slice(0, 5).map(m => ({
+          title: m.title,
+          cover: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : '',
+          total: 1,
+          unit: 'movie',
+          meta: `Movie · ${m.release_date?.slice(0, 4) || 'TMDB'}`
+        }));
+      })(),
+      // 3. Jikan Anime Movie
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=movie&limit=5`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || []).map(a => ({
           title: a.title_english || a.title,
           cover: a.images?.jpg?.large_image_url || '',
           total: 1,
           unit: 'movie',
-          meta: `Anime Movie · ${a.year || ''}`
+          meta: `Anime Movie · ${a.year || 'Film'}`
         }));
-        items = [...items, ...animeMov];
-      } catch (e) {
-        console.error('Jikan Movie error:', e);
-      }
+      })()
+    ]);
 
-    } else if (cat === 'comic') {
-      const res = await fetch(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=6`);
-      const data = await res.json();
-      items = (data.data || [])
-        .filter(m => m.type !== 'Light Novel' && m.type !== 'Novel')
-        .map(m => ({
-          title: m.title_english || m.title,
-          cover: m.images?.jpg?.large_image_url || '',
-          total: m.chapters || null,
-          unit: 'ch',
-          meta: `${m.type} · ${m.chapters || '?'} Ch`
+    if (itunesRes.status === 'fulfilled') items.push(...itunesRes.value);
+    if (tmdbRes.status === 'fulfilled') items.push(...tmdbRes.value);
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'comic') {
+    const [aniRes, jikanRes] = await Promise.allSettled([
+      fetchAniListMedia(query, false),
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=5`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || [])
+          .filter(m => m.type !== 'Light Novel' && m.type !== 'Novel')
+          .map(m => ({
+            title: m.title_english || m.title,
+            cover: m.images?.jpg?.large_image_url || '',
+            total: m.chapters || null,
+            unit: 'ch',
+            meta: `${m.type} · ${m.chapters || '?'} Ch`
+          }));
+      })()
+    ]);
+
+    if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'other' && subCat === 'light_novel') {
+    const [aniRes, jikanRes] = await Promise.allSettled([
+      fetchAniListMedia(query, true),
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&type=lightnovel&limit=5`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || []).map(ln => ({
+          title: ln.title_english || ln.title,
+          cover: ln.images?.jpg?.large_image_url || '',
+          total: ln.volumes || ln.chapters || null,
+          unit: ln.volumes ? 'vol' : 'ch',
+          meta: `Light Novel · ${ln.volumes || '?'} Vol`
         }));
+      })()
+    ]);
 
-    } else if (cat === 'other' && subCat === 'light_novel') {
-      const res = await fetch(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&type=lightnovel&limit=6`);
-      const data = await res.json();
-      items = (data.data || []).map(ln => ({
-        title: ln.title_english || ln.title,
-        cover: ln.images?.jpg?.large_image_url || '',
-        total: ln.volumes || ln.chapters || null,
-        unit: ln.volumes ? 'vol' : 'ch',
-        meta: `Light Novel · ${ln.volumes || '?'} Vol`
-      }));
+    if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    items = deduplicateResults(items);
 
-    } else if (cat === 'other' && subCat === 'game') {
-      const res = await fetch('https://api.vndb.org/kana/vn', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filters: ['search', '=', query],
-          fields: 'title, image.url, released',
-          results: 6
-        })
-      });
-      const data = await res.json();
-      items = (data.results || []).map(g => ({
-        title: g.title,
-        cover: g.image?.url || '',
-        total: 1,
-        unit: 'item',
-        meta: `Game / VN · ${g.released || ''}`
-      }));
-    }
+  } else if (cat === 'other' && subCat === 'game') {
+    const [rawgRes, vndbRes] = await Promise.allSettled([
+      (async () => {
+        if (!RAWG_API_KEY) return [];
+        const res = await fetchWithTimeout(`https://api.rawg.io/api/games?key=${RAWG_API_KEY}&search=${encodeURIComponent(query)}&page_size=5`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.results || []).map(g => ({
+          title: g.name,
+          cover: g.background_image || '',
+          total: 1,
+          unit: 'item',
+          meta: `Game · ${g.released?.slice(0, 4) || ''}`
+        }));
+      })(),
+      (async () => {
+        const res = await fetchWithTimeout('https://api.vndb.org/kana/vn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filters: ['search', '=', query],
+            fields: 'title, image.url, released',
+            results: 6
+          })
+        });
+        const data = await res.json();
+        return (data.results || []).map(g => ({
+          title: g.title,
+          cover: g.image?.url || '',
+          total: 1,
+          unit: 'item',
+          meta: `Visual Novel · ${g.released || ''}`
+        }));
+      })()
+    ]);
 
-    lastApiResults = items;
-
-    if (items.length === 0) {
-      resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">No results found. Please fill in the fields manually below.</p>`;
-      return;
-    }
-
-    resultsBox.innerHTML = items.map((it, idx) => `
-      <div class="api-result-item" onclick="applyApiResult(${idx})">
-        <img src="${it.cover || 'https://placehold.co/60x90/1e1e1f/888?text=?'}" alt="">
-        <div class="api-result-info">
-          <h4>${it.title}</h4>
-          <p>${it.meta}</p>
-        </div>
-      </div>
-    `).join('');
-  } catch (err) {
-    resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: #ff5f5f;">API Error: ${err.message}</p>`;
+    if (rawgRes.status === 'fulfilled') items.push(...rawgRes.value);
+    if (vndbRes.status === 'fulfilled') items.push(...vndbRes.value);
+    items = deduplicateResults(items);
   }
+
+  lastApiResults = items;
+
+  if (items.length === 0) {
+    resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">No results found. Please fill in the fields manually below.</p>`;
+    return;
+  }
+
+  resultsBox.innerHTML = items.map((it, idx) => `
+    <div class="api-result-item" onclick="applyApiResult(${idx})">
+      <img src="${it.cover || 'https://placehold.co/60x90/1e1e1f/888?text=?'}" alt="" onerror="this.src='https://placehold.co/60x90/1e1e1f/888?text=?'">
+      <div class="api-result-info">
+        <h4>${it.title}</h4>
+        <p>${it.meta}</p>
+      </div>
+    </div>
+  `).join('');
 };
 
 window.applyApiResult = async function (idx) {
@@ -477,10 +602,23 @@ window.applyApiResult = async function (idx) {
   if (item.unit) document.getElementById('media-unit').value = item.unit;
   document.getElementById('api-search-results').style.display = 'none';
 
-  // Auto-fetch total episodes if selected item is a TMDB TV Series
+  // Auto-fetch total episodes from TVMaze
+  if (item.tvmazeId) {
+    try {
+      const epRes = await fetchWithTimeout(`https://api.tvmaze.com/shows/${item.tvmazeId}/episodes`);
+      const epData = await epRes.json();
+      if (Array.isArray(epData) && epData.length > 0) {
+        document.getElementById('media-total').value = epData.length;
+      }
+    } catch (e) {
+      console.error('TVMaze episode count error:', e);
+    }
+  }
+
+  // Auto-fetch total episodes from TMDB
   if (item.tmdbId && TMDB_API_KEY) {
     try {
-      const detailRes = await fetch(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}`);
+      const detailRes = await fetchWithTimeout(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}`);
       const detailData = await detailRes.json();
       if (detailData.number_of_episodes) {
         document.getElementById('media-total').value = detailData.number_of_episodes;
