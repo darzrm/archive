@@ -242,7 +242,7 @@ button {
     text-align: left;
     align-items: center;
     padding-top: 0;
-    padding-right: 130px;
+    padding-right: 110px;
   }
 
   .profile-name-row,
@@ -339,6 +339,38 @@ button {
     justify-content: space-between;
     align-items: center;
   }
+}
+
+.library-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Minimal Add Media Button inside Library */
+.minimal-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 11px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--light-gray);
+  background: transparent;
+  border: 1px solid var(--jet);
+  transition: var(--transition-1);
+}
+
+.minimal-add-btn ion-icon {
+  font-size: 14px;
+}
+
+.minimal-add-btn:hover {
+  color: var(--white-1);
+  border-color: var(--white-1);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .category-tabs {
@@ -508,10 +540,19 @@ button {
   transform: scale(1.04);
 }
 
-.badge-cat {
+/* Cover Top-Left Stack: Media Type on top, Rating directly beneath */
+.cover-left-badges {
   position: absolute;
   top: 8px;
   left: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  z-index: 2;
+}
+
+.badge-cat {
   background: rgba(18, 18, 18, 0.85);
   backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -525,9 +566,6 @@ button {
 }
 
 .badge-rating {
-  position: absolute;
-  top: 8px;
-  right: 8px;
   background: rgba(18, 18, 18, 0.88);
   backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -536,13 +574,39 @@ button {
   font-weight: 600;
   padding: 3px 7px;
   border-radius: 6px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 3px;
 }
 
+/* Cover Top-Right Edit Icon Button */
+.cover-edit-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(18, 18, 18, 0.85);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--white-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  z-index: 2;
+  transition: var(--transition-1);
+}
+
+.cover-edit-btn:hover {
+  background: var(--white-1);
+  color: var(--smoky-black);
+  border-color: var(--white-1);
+}
+
 .media-body {
-  padding: 11px 12px;
+  padding: 11px 12px 12px;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -561,17 +625,20 @@ button {
   overflow: hidden;
 }
 
-.media-progress-wrap {
-  width: 100%;
+.media-bottom-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
 }
 
 .media-meta-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 6px;
   font-size: 11px;
   color: var(--light-gray-70);
-  margin-bottom: 6px;
 }
 
 .status-pill {
@@ -602,6 +669,19 @@ button {
 .status-pill.dropped {
   color: var(--status-dropped);
   border-color: rgba(255, 135, 135, 0.35);
+}
+
+.status-date-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--light-gray-70);
+}
+
+.status-date-row ion-icon {
+  font-size: 11px;
+  flex-shrink: 0;
 }
 
 .progress-track {
@@ -638,52 +718,6 @@ button {
 
 .progress-fill.dropped {
   background: var(--status-dropped);
-}
-
-/* Simplified Card Footer: Last Status Date + Single Edit Button */
-.card-bottom-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 6px;
-  padding-top: 7px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.status-date-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10px;
-  color: var(--light-gray-70);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.status-date-tag ion-icon {
-  font-size: 11px;
-  flex-shrink: 0;
-}
-
-.card-edit-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 10px;
-  font-weight: 500;
-  background: var(--eerie-black-1);
-  border: 1px solid var(--jet);
-  color: var(--light-gray);
-  flex-shrink: 0;
-  transition: var(--transition-1);
-}
-
-.card-edit-btn:hover {
-  color: var(--white-1);
-  border-color: var(--white-1);
 }
 
 /* ===================================
