@@ -625,25 +625,72 @@ window.searchExternalAPI = async function () {
     if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
     items = deduplicateResults(items);
 
-    } else if (cat === 'game') {
-    const [cheapSharkRes, vndbRes, rawgRes] = await Promise.allSettled([
+   } else if (cat === 'game') {
+    const [wikiGameRes, vndbRes, rawgRes] = await Promise.allSettled([
       (async () => {
-        const res = await fetchWithTimeout(`https://www.cheapshark.com/api/1.0/games?title=${encodeURIComponent(query)}&limit=6`);
-        if (!res.ok) return [];
-        const data = await res.json();
-        return (data || []).map(g => {
-          // Ubah thumbnail kecil menjadi gambar kapsul Steam HD jika ada steamAppID
-          const cover = g.steamAppID
-            ? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${g.steamAppID}/library_600x900.jpg`
-            : normalizeImageUrl(g.thumb || '');
-          return {
-            title: g.external,
-            cover,
-            total: 1,
-            unit: 'item',
-            meta: `PC Game${g.steamAppID ? ' · Steam' : ''}`
-          };
+        // 1. Cari entitas di Wikidata berdasarkan judul
+        const searchRes = await fetchWithTimeout(
+          `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=en&format=json&origin=*&limit=8`
+        );
+        if (!searchRes.ok) return [];
+        const searchData = await searchRes.json();
+        const candidates = (searchData.search || []).filter(item => {
+          const desc = (item.description || '').toLowerCase();
+          return desc.includes('video game') || desc.includes('game');
         });
+
+        if (candidates.length === 0) return [];
+
+        // 2. Ambil detail gambar cover & sitelink Wikipedia dari Wikidata
+        const ids = candidates.map(c => c.id).join('|');
+        const entityRes = await fetchWithTimeout(
+          `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${ids}&props=claims|sitelinks|labels|descriptions&languages=en&format=json&origin=*`
+        );
+        const entityData = await entityRes.json();
+        const entities = entityData.entities || {};
+
+        const results = await Promise.all(
+          candidates.map(async c => {
+            const ent = entities[c.id];
+            if (!ent) return null;
+
+            const title = ent.labels?.en?.value || c.label;
+            const desc = ent.descriptions?.en?.value || 'Video Game';
+            let cover = '';
+
+            // Coba ambil gambar langsung dari Wikidata (P18)
+            const p18 = ent.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+            if (p18) {
+              cover = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(p18)}?width=500`;
+            }
+
+            // Jika di Wikidata tidak ada gambar (biasanya cover berhak cipta ada di Wikipedia EN), ambil dari Wikipedia PageImages
+            const enWikiTitle = ent.sitelinks?.enwiki?.title;
+            if (!cover && enWikiTitle) {
+              try {
+                const wpRes = await fetchWithTimeout(
+                  `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(enWikiTitle)}&prop=pageimages&pithumbsize=500&format=json&origin=*`
+                );
+                const wpData = await wpRes.json();
+                const pages = wpData.query?.pages || {};
+                const pageObj = Object.values(pages)[0];
+                if (pageObj?.thumbnail?.source) {
+                  cover = normalizeImageUrl(pageObj.thumbnail.source);
+                }
+              } catch (_) {}
+            }
+
+            return {
+              title,
+              cover,
+              total: 1,
+              unit: 'item',
+              meta: desc.charAt(0).toUpperCase() + desc.slice(1)
+            };
+          })
+        );
+
+        return results.filter(Boolean);
       })(),
       (async () => {
         const res = await fetchWithTimeout('https://api.vndb.org/kana/vn', {
@@ -652,7 +699,7 @@ window.searchExternalAPI = async function () {
           body: JSON.stringify({
             filters: ['search', '=', query],
             fields: 'title, image.url, released',
-            results: 6
+            results: 5
           })
         });
         const data = await res.json();
@@ -679,10 +726,11 @@ window.searchExternalAPI = async function () {
       })()
     ]);
 
-    if (cheapSharkRes.status === 'fulfilled') items.push(...cheapSharkRes.value);
+    if (wikiGameRes.status === 'fulfilled') items.push(...wikiGameRes.value);
     if (vndbRes.status === 'fulfilled') items.push(...vndbRes.value);
     if (rawgRes.status === 'fulfilled') items.push(...rawgRes.value);
     items = deduplicateResults(items);
+
 
 
   } else if (cat === 'music') {
