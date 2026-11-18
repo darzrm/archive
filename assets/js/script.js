@@ -309,6 +309,7 @@ function renderMediaGrid() {
           <div class="media-bottom-stack">
             <div class="media-meta-row">
               <span class="status-pill ${statusKey}">${statusKey}</span>
+              <span class="progress-unit-text">${progressText}</span>
             </div>
             <div class="progress-track">
               <div class="progress-fill ${statusKey} ${extraBarClass}" style="width: ${percent}%"></div>
@@ -318,7 +319,6 @@ function renderMediaGrid() {
                 <ion-icon name="calendar-outline"></ion-icon>
                 <span>${statusDateText}</span>
               </span>
-              <span class="progress-unit-text">${progressText}</span>
             </div>
           </div>
         </div>
