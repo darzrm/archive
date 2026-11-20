@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Archive</title>
   <link id="favicon-link" rel="shortcut icon" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" type="image/x-icon">
-  <link rel="stylesheet" href="./assets/css/style.css?v=40">
+  <link rel="stylesheet" href="./assets/css/style.css?v=42">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -30,7 +30,7 @@
 
       <div class="sticky-mini-tabs">
         <button type="button" class="mini-tab-btn active" data-view="blog" onclick="switchMainView('blog')">Notes</button>
-        <button type="button" class="mini-tab-btn" data-view="library" onclick="switchMainView('library')">Library</button>
+        <button type="button" id="mini-tab-library" class="mini-tab-btn" data-view="library" onclick="switchMainView('library')">Library</button>
       </div>
     </div>
   </div>
@@ -83,21 +83,29 @@
             <ion-icon name="chatbox-ellipses-outline"></ion-icon>
             <span>Notes</span>
           </button>
-          <button type="button" class="main-view-btn" data-view="library" onclick="switchMainView('library')">
+          <button type="button" id="main-tab-library" class="main-view-btn" data-view="library" onclick="switchMainView('library')">
             <ion-icon name="albums-outline"></ion-icon>
             <span>Library</span>
+            <ion-icon id="library-private-lock" name="lock-closed-outline" style="display: none; font-size: 12px; opacity: 0.75;"></ion-icon>
           </button>
         </div>
 
-        <button type="button" id="btn-add-post" class="minimal-add-btn" style="display: none;" onclick="openPostModal()">
-          <ion-icon name="create-outline"></ion-icon>
-          <span>New Post</span>
-        </button>
+        <div class="main-right-actions">
+          <button type="button" id="btn-add-post" class="minimal-add-btn" style="display: none;" onclick="openPostModal()">
+            <ion-icon name="create-outline"></ion-icon>
+            <span>New Post</span>
+          </button>
 
-        <button type="button" id="btn-add-media" class="minimal-add-btn" style="display: none;" onclick="openMediaModal()">
-          <ion-icon name="add-outline"></ion-icon>
-          <span>Add Media</span>
-        </button>
+          <button type="button" id="btn-toggle-library-privacy" class="minimal-add-btn" style="display: none;" onclick="toggleLibraryPrivacy()" title="Toggle Library Public / Private">
+            <ion-icon id="library-privacy-icon" name="eye-outline"></ion-icon>
+            <span id="library-privacy-text">Public</span>
+          </button>
+
+          <button type="button" id="btn-add-media" class="minimal-add-btn" style="display: none;" onclick="openMediaModal()">
+            <ion-icon name="add-outline"></ion-icon>
+            <span>Add Media</span>
+          </button>
+        </div>
       </div>
 
       <!-- TAB 1: PERSONAL NOTES VIEW -->
@@ -571,7 +579,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./assets/js/script.js?v=41"></script>
+  <script src="./assets/js/script.js?v=42"></script>
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 </body>
