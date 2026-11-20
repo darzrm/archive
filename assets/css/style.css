@@ -506,13 +506,13 @@ body {
 }
 
 /*-----------------------------------*\
-  #COLLAPSIBLE STATS ACCORDION
+  #MODERN BENTO STATS ACCORDION
 \*-----------------------------------*/
 
 .stats-accordion-wrap {
   background: var(--eerie-black-2);
   border: 1px solid var(--jet);
-  border-radius: 16px;
+  border-radius: 18px;
   margin-bottom: 14px;
   overflow: hidden;
 }
@@ -521,7 +521,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: 13px 16px;
   cursor: pointer;
   user-select: none;
   transition: background 0.15s ease;
@@ -546,7 +546,7 @@ body {
   color: var(--light-gray-70);
   background: var(--onyx);
   border: 1px solid var(--jet);
-  padding: 2px 8px;
+  padding: 2px 9px;
   border-radius: 99px;
 }
 
@@ -560,32 +560,76 @@ body {
 }
 
 .collapsible-stats-panel {
-  padding: 0 14px 14px;
+  padding: 16px;
   border-top: 1px solid var(--jet);
-  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  background: rgba(14, 14, 15, 0.45);
 }
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+.stats-section-block {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
-.stat-card {
-  background: var(--onyx);
+.stats-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--light-gray-70);
+}
+
+.stats-group-heading ion-icon {
+  font-size: 14px;
+  color: var(--white-1);
+}
+
+/* Bento Category Grid */
+.stats-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 9px;
+}
+
+.stat-bento-card {
+  background: var(--eerie-black-2);
   border: 1px solid var(--jet);
   border-radius: 14px;
-  padding: 12px 14px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.stat-bento-card:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  transform: translateY(-2px);
+}
+
+.stat-bento-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.stat-bento-top ion-icon {
+  font-size: 14px;
+  color: var(--light-gray-70);
 }
 
 .stat-label {
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
   color: var(--light-gray-70);
 }
 
@@ -594,11 +638,113 @@ body {
   font-weight: 700;
   color: var(--white-1);
   line-height: 1.2;
+  margin-top: 2px;
 }
 
 .stat-sub {
   font-size: 11px;
+  color: var(--mono-muted);
+}
+
+/* Units & Counts Pill Grid */
+.stats-units-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+
+.stat-unit-pill-card {
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  border-radius: 12px;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 2px;
+  transition: border-color 0.2s ease;
+}
+
+.stat-unit-pill-card:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.unit-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--white-1);
+  line-height: 1.2;
+}
+
+.unit-lbl {
+  font-size: 10px;
+  font-weight: 500;
   color: var(--light-gray-70);
+}
+
+/* Bottom Summary Highlights (Total Completed & Mean Rating) */
+.stats-bottom-highlights {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.stat-highlight-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.015) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.highlight-icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: var(--white-1);
+  flex-shrink: 0;
+}
+
+.highlight-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.highlight-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.highlight-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--white-1);
+  line-height: 1.1;
+}
+
+.highlight-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--white-1);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  padding: 2px 8px;
+  border-radius: 99px;
 }
 
 /*-----------------------------------*\
@@ -693,6 +839,7 @@ body {
 .toolbar-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   background: var(--eerie-black-2);
   border: 1px solid var(--jet);
@@ -703,6 +850,12 @@ body {
   font-weight: 500;
   color: var(--light-gray);
   transition: var(--transition-1);
+}
+
+.toolbar-btn.icon-only-btn {
+  width: 38px;
+  padding: 0;
+  font-size: 16px;
 }
 
 .toolbar-btn:hover,
@@ -718,50 +871,12 @@ body {
   background: var(--white-1);
 }
 
-/* Compact Icon-Only Per-Page Selector */
-.toolbar-icon-select-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  flex-shrink: 0;
-}
-
-.toolbar-select-icon {
-  position: absolute;
-  font-size: 16px;
-  color: var(--light-gray);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.per-page-icon-select {
-  width: 100% !important;
-  height: 100% !important;
-  padding: 0 !important;
-  color: transparent !important;
-  background-color: var(--eerie-black-2);
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-}
-
-.per-page-icon-select option {
-  color: var(--white-1);
-  background-color: var(--eerie-black-2);
-}
-
-.toolbar-icon-select-wrap:hover .toolbar-select-icon {
-  color: var(--white-1);
-}
-
 .toolbar-popover-menu {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
   width: 260px;
+  max-width: calc(100vw - 28px);
   background: var(--eerie-black-2);
   border: 1px solid var(--jet);
   border-radius: 14px;
@@ -771,6 +886,12 @@ body {
   display: none;
   flex-direction: column;
   gap: 12px;
+}
+
+.compact-popover-menu {
+  width: 170px;
+  padding: 10px;
+  gap: 8px;
 }
 
 .toolbar-popover-menu.open {
@@ -852,6 +973,46 @@ body {
 .sort-dir-btn.active {
   background: var(--white-1);
   color: var(--smoky-black);
+}
+
+/* Custom Page Option List */
+.page-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.page-option-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--light-gray-70);
+  transition: var(--transition-1);
+}
+
+.page-option-item:hover {
+  background: var(--onyx);
+  color: var(--white-1);
+}
+
+.page-option-item ion-icon {
+  font-size: 15px;
+  opacity: 0;
+}
+
+.page-option-item.active {
+  background: var(--white-1);
+  color: var(--smoky-black);
+  font-weight: 600;
+}
+
+.page-option-item.active ion-icon {
+  opacity: 1;
 }
 
 .view-mode-toggle {
@@ -1896,8 +2057,11 @@ textarea.form-input {
   .media-grid {
     grid-template-columns: repeat(3, 1fr);
   }
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .stats-bento-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .stats-units-grid {
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
@@ -1905,6 +2069,15 @@ textarea.form-input {
   .media-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;
+  }
+  .stats-bento-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .stats-units-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .stats-bottom-highlights {
+    grid-template-columns: 1fr;
   }
   .form-row {
     grid-template-columns: 1fr;
@@ -1932,8 +2105,14 @@ textarea.form-input {
   .list-hide-mobile {
     display: none;
   }
+  /* Popover Anti-Clip Mobile Positioning */
   .toolbar-popover-menu {
-    right: auto;
-    left: 0;
+    position: fixed;
+    top: auto;
+    left: 14px !important;
+    right: 14px !important;
+    width: auto;
+    max-width: none;
+    margin-top: 8px;
   }
 }
