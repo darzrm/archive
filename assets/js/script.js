@@ -1,10 +1,16 @@
+'use strict';
+
 // ==========================================
-// 1. SUPABASE CONFIGURATION & STATE
+// 1. SUPABASE & EXTERNAL API CONFIGURATION
 // ==========================================
 const SUPABASE_URL = 'https://uendrdxiixmikkeanlod.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_IdPLjwQhVQwXGGxUnBVblg_oIQ5Zz89';
+const SUPABASE_KEY = 'sb_publishable_IdPLjwQhVQwXGGxUnBVblg_oIQ5Zz89';
+const TMDB_API_KEY = '727a00da59cd2b9873f7636a5bde9561';
+const RAWG_API_KEY = '';
+const STORAGE_BUCKET = 'media-assets';
+const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
