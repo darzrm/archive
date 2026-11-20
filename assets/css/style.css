@@ -871,12 +871,12 @@ body {
   background: var(--white-1);
 }
 
-/* Popover default opens to the right (left: 0) so it never clips off the left edge */
+/* Desktop / Laptop (> 680px): tombol di kanan -> pop-up rata kanan (ke arah kiri) */
 .toolbar-popover-menu {
   position: absolute;
   top: calc(100% + 6px);
-  left: 0;
-  right: auto;
+  left: auto;
+  right: 0;
   width: 260px;
   max-width: calc(100vw - 28px);
   background: var(--eerie-black-2);
@@ -890,11 +890,6 @@ body {
   gap: 12px;
 }
 
-.toolbar-popover-menu.align-right {
-  left: auto;
-  right: 0;
-}
-
 .compact-popover-menu {
   width: 170px;
   padding: 10px;
@@ -904,6 +899,14 @@ body {
 .toolbar-popover-menu.open {
   display: flex;
   animation: viewFadeIn 0.16s ease;
+}
+
+/* Mobile / Tablet Kecil (<= 680px): tombol turun ke kiri -> pop-up rata kiri (ke arah kanan) */
+@media (max-width: 680px) {
+  .toolbar-popover-menu {
+    left: 0;
+    right: auto;
+  }
 }
 
 .popover-header {
