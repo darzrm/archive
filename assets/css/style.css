@@ -933,7 +933,7 @@ body {
 }
 
 .compact-popover-menu {
-  width: 170px;
+  width: 175px;
   padding: 10px;
   gap: 8px;
 }
@@ -1043,6 +1043,12 @@ body {
   font-weight: 500;
   color: var(--light-gray-70);
   transition: var(--transition-1);
+}
+
+.page-option-item .size-count-hint {
+  font-size: 11px;
+  opacity: 0.7;
+  font-weight: 400;
 }
 
 .page-option-item:hover {
@@ -1267,13 +1273,19 @@ body {
 }
 
 .status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 2px 7px;
   border-radius: 6px;
+  font-size: 10px;
   font-weight: 600;
+  line-height: 1.2;
   text-transform: capitalize;
   background: rgba(255, 255, 255, 0.08);
   color: var(--white-1);
   border: 1px solid rgba(255, 255, 255, 0.16);
+  white-space: nowrap;
 }
 
 .status-pill.completed {
@@ -1365,7 +1377,7 @@ body {
 }
 
 /*-----------------------------------*\
-  #COMPACT LIST VIEW MODE
+  #COMPACT LIST VIEW MODE (WITH PROGRESS BAR & COMPACT STATUS)
 \*-----------------------------------*/
 
 .media-grid.list-view {
@@ -1381,7 +1393,7 @@ body {
   background: var(--eerie-black-2);
   border: 1px solid var(--jet);
   border-radius: 12px;
-  padding: 8px 12px;
+  padding: 9px 12px;
   cursor: pointer;
   transition: border-color 0.2s ease, background 0.2s ease;
 }
@@ -1392,9 +1404,9 @@ body {
 }
 
 .list-thumb {
-  width: 36px;
-  height: 50px;
-  border-radius: 6px;
+  width: 38px;
+  height: 54px;
+  border-radius: 7px;
   object-fit: cover;
   background: var(--onyx);
   flex-shrink: 0;
@@ -1405,13 +1417,14 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 5px;
 }
 
 .list-title {
   font-size: 13px;
   font-weight: 600;
   color: var(--white-1);
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1426,6 +1439,14 @@ body {
   flex-wrap: wrap;
 }
 
+/* Compact Status Pill inside List View */
+.media-list-row .status-pill {
+  padding: 1px 6px;
+  font-size: 9px;
+  border-radius: 5px;
+  letter-spacing: 0.2px;
+}
+
 .list-cat-tag {
   text-transform: uppercase;
   font-size: 9px;
@@ -1437,6 +1458,19 @@ body {
 .list-repeat-tag {
   color: var(--white-1);
   font-weight: 600;
+  font-size: 10px;
+}
+
+/* Progress Bar inside Compact List View */
+.list-progress-wrap {
+  width: 100%;
+  max-width: 240px;
+  margin-top: 1px;
+}
+
+.list-progress-track {
+  height: 3.5px;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .list-right-meta {
@@ -2271,6 +2305,9 @@ textarea.form-input {
   }
   .list-hide-mobile {
     display: none;
+  }
+  .list-progress-wrap {
+    max-width: 140px;
   }
   .back-to-top-btn {
     right: 14px;
