@@ -10,7 +10,7 @@ const RAWG_API_KEY = '';
 const STORAGE_BUCKET = 'media-assets';
 const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Application State
 let allMediaLogs = [];
@@ -18,21 +18,25 @@ let allBlogPosts = [];
 let lastApiResults = [];
 let pendingUploadedUrls = [];
 let currentCategory = 'all';
-let currentMainView = 'blog'; // Default tab priority: Notes
-let libraryViewMode = 'grid'; // 'grid' or 'list'
+let currentMainView = 'blog';
+let libraryViewMode = 'grid';
 let itemsPerPage = 8;
 let visibleMediaLimit = 8;
-let sortDirection = 'desc'; // 'desc' or 'asc'
 let isStatsExpanded = false;
 let isAdminLoggedIn = false;
 let isProfileLoaded = false;
+
+// Sort State (Default: Rating Best)
+let currentSortField = 'rating';
+let currentSortDir = 'desc';
 
 let currentProfile = {
   name: '',
   bio: '',
   avatar_url: '',
   banner_url: '',
-  social_links: []
+  social_links: [],
+  is_library_private: false
 };
 
 function setElText(id, text) {
@@ -41,9 +45,9 @@ function setElText(id, text) {
 }
 
 // ==========================================
-// 1B. MINIMALIST TOAST & SHARE HELPER
+// MINIMALIST TOAST NOTIFICATION
 // ==========================================
-window.showToast = function (message, type = 'info') {
+function showToast(message, type = 'success', duration = 2600) {
   const container = document.getElementById('toast-container');
   if (!container) return;
 
@@ -61,42 +65,30 @@ window.showToast = function (message, type = 'info') {
   `;
 
   container.appendChild(toast);
+
   setTimeout(() => {
     toast.classList.add('hide');
     setTimeout(() => toast.remove(), 240);
-  }, 2400);
-};
-
-window.shareCurrentPage = async function () {
-  const url = window.location.href;
-  const title = document.title || 'Archive';
-
-  try {
-    if (navigator.share) {
-      await navigator.share({ title, url });
-    } else if (navigator.clipboard) {
-      await navigator.clipboard.writeText(url);
-      showToast('Link copied to clipboard!', 'success');
-    } else {
-      showToast(url, 'info');
-    }
-  } catch (err) {
-    if (err.name !== 'AbortError') {
-      showToast('Failed to share link', 'error');
-    }
-  }
-};
+  }, duration);
+}
 
 // ==========================================
 // 2. INITIALIZATION, SCROLL LISTENERS & VIEW TABS
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
-  setupScrollListeners();
-  setupPopoverOutsideClick();
-  await checkAdminSession();
-  await fetchProfileSettings();
-  await Promise.all([fetchBlogPosts(), fetchMediaLogs()]);
-  setupFilterListeners();
+  try {
+    setupScrollListeners();
+    setupOutsidePopoverCloser();
+    setupFilterListeners();
+    updateSortUIControls();
+
+    await checkAdminSession();
+    await fetchProfileSettings();
+    await Promise.all([fetchBlogPosts(), fetchMediaLogs()]);
+  } catch (err) {
+    console.error('Initialization error:', err);
+    showToast('Init error: ' + err.message, 'error', 5000);
+  }
 });
 
 function setupScrollListeners() {
@@ -118,11 +110,56 @@ function setupScrollListeners() {
   }, { passive: true });
 }
 
+function setupOutsidePopoverCloser() {
+  document.addEventListener('click', (e) => {
+    const filterWrap = document.getElementById('filter-popover-wrap');
+    const sortWrap = document.getElementById('sort-popover-wrap');
+
+    if (filterWrap && !filterWrap.contains(e.target)) {
+      const fm = document.getElementById('filter-popover-menu');
+      const fb = document.getElementById('btn-filter-toggle');
+      if (fm) fm.classList.remove('open');
+      if (fb) fb.classList.remove('active');
+    }
+    if (sortWrap && !sortWrap.contains(e.target)) {
+      const sm = document.getElementById('sort-popover-menu');
+      const sb = document.getElementById('btn-sort-toggle');
+      if (sm) sm.classList.remove('open');
+      if (sb) sb.classList.remove('active');
+    }
+  });
+}
+
+window.toggleToolbarPopover = function (type) {
+  const filterMenu = document.getElementById('filter-popover-menu');
+  const sortMenu = document.getElementById('sort-popover-menu');
+  const filterBtn = document.getElementById('btn-filter-toggle');
+  const sortBtn = document.getElementById('btn-sort-toggle');
+
+  if (type === 'filter') {
+    const willOpen = filterMenu ? !filterMenu.classList.contains('open') : false;
+    if (sortMenu) sortMenu.classList.remove('open');
+    if (sortBtn) sortBtn.classList.remove('active');
+    if (filterMenu) filterMenu.classList.toggle('open', willOpen);
+    if (filterBtn) filterBtn.classList.toggle('active', willOpen);
+  } else {
+    const willOpen = sortMenu ? !sortMenu.classList.contains('open') : false;
+    if (filterMenu) filterMenu.classList.remove('open');
+    if (filterBtn) filterBtn.classList.remove('active');
+    if (sortMenu) sortMenu.classList.toggle('open', willOpen);
+    if (sortBtn) sortBtn.classList.toggle('active', willOpen);
+  }
+};
+
 window.scrollToTopSmooth = function () {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
 window.switchMainView = function (viewName) {
+  if (viewName === 'library' && currentProfile.is_library_private && !isAdminLoggedIn) {
+    viewName = 'blog';
+  }
+
   currentMainView = viewName;
 
   document.querySelectorAll('.main-view-btn').forEach(btn => {
@@ -156,15 +193,63 @@ window.switchMainView = function (viewName) {
   updateAdminActionButtons();
 };
 
+function updateLibraryTabVisibility() {
+  const isPrivate = Boolean(currentProfile.is_library_private);
+  const canViewLibrary = !isPrivate || isAdminLoggedIn;
+
+  const mainLibBtn = document.getElementById('main-tab-library');
+  const miniLibBtn = document.getElementById('mini-tab-library');
+  const lockBadge = document.getElementById('library-private-lock');
+
+  if (mainLibBtn) mainLibBtn.style.display = canViewLibrary ? 'inline-flex' : 'none';
+  if (miniLibBtn) miniLibBtn.style.display = canViewLibrary ? 'inline-flex' : 'none';
+  if (lockBadge) lockBadge.style.display = (isPrivate && isAdminLoggedIn) ? 'inline-block' : 'none';
+
+  if (!canViewLibrary && currentMainView === 'library') {
+    switchMainView('blog');
+  }
+}
+
+window.toggleLibraryPrivacy = async function () {
+  if (!isAdminLoggedIn) return;
+
+  const nextState = !currentProfile.is_library_private;
+  const { error } = await supabaseClient
+    .from('profile_settings')
+    .upsert([{
+      id: 1,
+      name: currentProfile.name,
+      bio: currentProfile.bio,
+      avatar_url: currentProfile.avatar_url,
+      banner_url: currentProfile.banner_url,
+      social_links: currentProfile.social_links,
+      is_library_private: nextState,
+      updated_at: new Date().toISOString()
+    }]);
+
+  if (error) {
+    showToast(error.message, 'error');
+    return;
+  }
+
+  currentProfile.is_library_private = nextState;
+  updateLibraryTabVisibility();
+  updateAdminActionButtons();
+  showToast(nextState ? 'Library set to Private' : 'Library set to Public', 'info');
+};
+
 window.setLibraryViewMode = function (mode) {
   libraryViewMode = mode;
-  document.getElementById('btn-view-grid')?.classList.toggle('active', mode === 'grid');
-  document.getElementById('btn-view-list')?.classList.toggle('active', mode === 'list');
+  const gridBtn = document.getElementById('btn-view-grid');
+  const listBtn = document.getElementById('btn-view-list');
+  if (gridBtn) gridBtn.classList.toggle('active', mode === 'grid');
+  if (listBtn) listBtn.classList.toggle('active', mode === 'list');
   renderMediaGrid();
 };
 
-window.handlePerPageChange = function () {
-  const val = document.getElementById('per-page-select')?.value || '8';
+window.onPerPageChange = function () {
+  const selectEl = document.getElementById('items-per-page-select');
+  const val = selectEl ? selectEl.value : '8';
   if (val === 'all') {
     itemsPerPage = Infinity;
     visibleMediaLimit = Infinity;
@@ -176,7 +261,9 @@ window.handlePerPageChange = function () {
 };
 
 window.loadMoreMedia = function () {
-  if (itemsPerPage !== Infinity) {
+  if (itemsPerPage === Infinity) {
+    visibleMediaLimit = Infinity;
+  } else {
     visibleMediaLimit += itemsPerPage;
   }
   renderMediaGrid();
@@ -198,14 +285,27 @@ window.toggleLibraryStats = function () {
 function updateAdminActionButtons() {
   const addMediaBtn = document.getElementById('btn-add-media');
   const addPostBtn = document.getElementById('btn-add-post');
+  const privacyBtn = document.getElementById('btn-toggle-library-privacy');
+  const privacyIcon = document.getElementById('library-privacy-icon');
+  const privacyText = document.getElementById('library-privacy-text');
 
   if (!isAdminLoggedIn) {
     if (addMediaBtn) addMediaBtn.style.display = 'none';
     if (addPostBtn) addPostBtn.style.display = 'none';
+    if (privacyBtn) privacyBtn.style.display = 'none';
     return;
   }
 
-  if (addMediaBtn) addMediaBtn.style.display = currentMainView === 'library' ? 'inline-flex' : 'none';
+  const inLibrary = currentMainView === 'library';
+
+  if (privacyBtn) {
+    privacyBtn.style.display = inLibrary ? 'inline-flex' : 'none';
+    const isPriv = Boolean(currentProfile.is_library_private);
+    if (privacyIcon) privacyIcon.setAttribute('name', isPriv ? 'eye-off-outline' : 'eye-outline');
+    if (privacyText) privacyText.textContent = isPriv ? 'Private' : 'Public';
+  }
+
+  if (addMediaBtn) addMediaBtn.style.display = inLibrary ? 'inline-flex' : 'none';
   if (addPostBtn) addPostBtn.style.display = currentMainView === 'blog' ? 'inline-flex' : 'none';
 }
 
@@ -230,6 +330,7 @@ function updateAdminUI() {
     if (btnText) btnText.textContent = 'Admin';
   }
 
+  updateLibraryTabVisibility();
   updateAdminActionButtons();
   renderMediaGrid();
   if (isProfileLoaded) renderBlogPosts();
@@ -250,7 +351,7 @@ window.handleAdminAuthClick = async function () {
       await supabaseClient.auth.signOut();
       isAdminLoggedIn = false;
       updateAdminUI();
-      showToast('Logged out', 'info');
+      showToast('Logged out from Admin mode', 'info');
     }
   } else {
     document.getElementById('login-modal').classList.add('active');
@@ -261,21 +362,24 @@ window.closeLoginModal = function () {
   document.getElementById('login-modal').classList.remove('active');
 };
 
-document.getElementById('admin-login-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const email = document.getElementById('login-email').value;
-  const password = document.getElementById('login-password').value;
+const loginForm = document.getElementById('admin-login-form');
+if (loginForm) {
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
 
-  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-  if (error) {
-    Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
-  } else {
-    isAdminLoggedIn = true;
-    closeLoginModal();
-    updateAdminUI();
-    showToast('Admin login successful', 'success');
-  }
-});
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      isAdminLoggedIn = true;
+      closeLoginModal();
+      updateAdminUI();
+      showToast('Admin login successful', 'success');
+    }
+  });
+}
 
 // ==========================================
 // 2B. IMAGE COMPRESSION & STORAGE UPLOAD/CLEANUP
@@ -348,15 +452,7 @@ async function deleteOldStorageFile(fileUrl) {
   const filePath = decodeURIComponent(fileUrl.substring(idx + marker.length).split('?')[0]);
   if (!filePath) return;
 
-  const { data, error } = await supabaseClient.storage
-    .from(STORAGE_BUCKET)
-    .remove([filePath]);
-
-  if (error) {
-    console.warn('Storage delete warning:', error.message);
-  } else if (!data || data.length === 0) {
-    console.warn('File not found or blocked by RLS policy:', filePath);
-  }
+  await supabaseClient.storage.from(STORAGE_BUCKET).remove([filePath]);
 }
 
 async function cleanupPendingUploads(keepUrls = []) {
@@ -398,13 +494,18 @@ async function fetchProfileSettings() {
     .eq('id', 1)
     .single();
 
+  if (error) {
+    console.warn('Profile fetch warning:', error.message);
+  }
+
   if (!error && data) {
     currentProfile = {
       name: data.name || '',
       bio: data.bio || '',
       avatar_url: data.avatar_url || '',
       banner_url: data.banner_url || '',
-      social_links: Array.isArray(data.social_links) ? data.social_links : []
+      social_links: Array.isArray(data.social_links) ? data.social_links : [],
+      is_library_private: Boolean(data.is_library_private)
     };
   }
   isProfileLoaded = true;
@@ -421,7 +522,6 @@ function applyProfileToUI() {
     setElText('footer-brand-name', currentProfile.name.toUpperCase());
   }
 
-  // Banner Header
   const headerCard = document.getElementById('profile-header-card');
   const bannerWrap = document.getElementById('profile-banner-wrap');
   const bannerImg = document.getElementById('profile-banner-img');
@@ -443,7 +543,6 @@ function applyProfileToUI() {
     }
   }
 
-  // Avatar & Sticky Avatar & Favicon
   const avatarEl = document.getElementById('profile-avatar-img');
   const stickyAvatarEl = document.getElementById('sticky-avatar-img');
   const faviconEl = document.getElementById('favicon-link');
@@ -463,7 +562,6 @@ function applyProfileToUI() {
     }
   }
 
-  // Social Links Bar
   const socialsBar = document.getElementById('profile-socials-bar');
   if (socialsBar) {
     const validLinks = (currentProfile.social_links || []).filter(s => s && s.url);
@@ -486,6 +584,8 @@ function applyProfileToUI() {
     }
   }
 
+  updateLibraryTabVisibility();
+  updateAdminActionButtons();
   renderBlogPosts();
 }
 
@@ -536,7 +636,8 @@ window.clearBannerInput = function () {
 };
 
 window.handleBannerImageUpload = async function (event) {
-  const file = event.target.files?.[0];
+  const file = event.target.files ? event.target.files[0] : null;
+  event.target.value = '';
   if (!file) return;
 
   setElText('banner-upload-status', 'Uploading banner...');
@@ -544,15 +645,16 @@ window.handleBannerImageUpload = async function (event) {
     const publicUrl = await uploadImageToSupabase(file, 'banners');
     document.getElementById('edit-profile-banner').value = publicUrl;
     setElText('banner-upload-status', 'Banner uploaded! Click Save Profile.');
+    showToast('Banner uploaded', 'success');
   } catch (err) {
     setElText('banner-upload-status', `Upload failed: ${err.message}`);
-  } finally {
-    event.target.value = '';
+    showToast(err.message, 'error');
   }
 };
 
 window.handleProfileImageUpload = async function (event) {
-  const file = event.target.files?.[0];
+  const file = event.target.files ? event.target.files[0] : null;
+  event.target.value = '';
   if (!file) return;
 
   setElText('profile-upload-status', 'Uploading avatar...');
@@ -560,111 +662,190 @@ window.handleProfileImageUpload = async function (event) {
     const publicUrl = await uploadImageToSupabase(file, 'avatars');
     document.getElementById('edit-profile-avatar').value = publicUrl;
     setElText('profile-upload-status', 'Avatar uploaded! Click Save Profile.');
+    showToast('Avatar uploaded', 'success');
   } catch (err) {
     setElText('profile-upload-status', `Upload failed: ${err.message}`);
-  } finally {
-    event.target.value = '';
+    showToast(err.message, 'error');
   }
 };
 
-document.getElementById('profile-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
+const profileForm = document.getElementById('profile-form');
+if (profileForm) {
+  profileForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
 
-  const oldAvatar = currentProfile.avatar_url;
-  const oldBanner = currentProfile.banner_url;
-  const newAvatar = document.getElementById('edit-profile-avatar').value.trim();
-  const newBanner = document.getElementById('edit-profile-banner').value.trim();
+    const oldAvatar = currentProfile.avatar_url;
+    const oldBanner = currentProfile.banner_url;
+    const newAvatar = document.getElementById('edit-profile-avatar').value.trim();
+    const newBanner = document.getElementById('edit-profile-banner').value.trim();
 
-  const socialRows = document.querySelectorAll('#social-links-editor .social-edit-row');
-  const collectedLinks = [];
-  socialRows.forEach(row => {
-    const label = row.querySelector('.social-label-input')?.value.trim() || '';
-    const url = row.querySelector('.social-url-input')?.value.trim() || '';
-    if (url) {
-      collectedLinks.push({ label, url });
+    const socialRows = document.querySelectorAll('#social-links-editor .social-edit-row');
+    const collectedLinks = [];
+    socialRows.forEach(row => {
+      const labelEl = row.querySelector('.social-label-input');
+      const urlEl = row.querySelector('.social-url-input');
+      const label = labelEl ? labelEl.value.trim() : '';
+      const url = urlEl ? urlEl.value.trim() : '';
+      if (url) {
+        collectedLinks.push({ label, url });
+      }
+    });
+
+    const updatedProfile = {
+      id: 1,
+      name: document.getElementById('edit-profile-name').value.trim(),
+      bio: document.getElementById('edit-profile-bio').value.trim(),
+      avatar_url: newAvatar,
+      banner_url: newBanner,
+      social_links: collectedLinks,
+      is_library_private: Boolean(currentProfile.is_library_private),
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabaseClient
+      .from('profile_settings')
+      .upsert([updatedProfile]);
+
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      await cleanupPendingUploads([newAvatar, newBanner]);
+      if (oldAvatar && oldAvatar !== newAvatar) {
+        await deleteOldStorageFile(oldAvatar);
+      }
+      if (oldBanner && oldBanner !== newBanner) {
+        await deleteOldStorageFile(oldBanner);
+      }
+      currentProfile = updatedProfile;
+      applyProfileToUI();
+      document.getElementById('profile-modal').classList.remove('active');
+      showToast('Profile updated', 'success');
     }
   });
+}
 
-  const updatedProfile = {
-    id: 1,
-    name: document.getElementById('edit-profile-name').value.trim(),
-    bio: document.getElementById('edit-profile-bio').value.trim(),
-    avatar_url: newAvatar,
-    banner_url: newBanner,
-    social_links: collectedLinks,
-    updated_at: new Date().toISOString()
-  };
+// ==========================================
+// 3. MULTI-CATEGORY, MULTI-TRACK & SMART STATUS HELPERS
+// ==========================================
+const CATEGORY_LABELS = {
+  tv_show: 'TV Show',
+  movie: 'Movie',
+  comic: 'Comic',
+  novel: 'Novel',
+  game: 'Game',
+  music: 'Music'
+};
 
-  const { error } = await supabaseClient
-    .from('profile_settings')
-    .upsert([updatedProfile]);
+const DEFAULT_UNITS_BY_CAT = {
+  tv_show: 'eps',
+  movie: 'movie',
+  comic: 'ch',
+  novel: 'vol',
+  game: 'item',
+  music: 'track'
+};
 
-  if (error) {
-    Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
-  } else {
-    await cleanupPendingUploads([newAvatar, newBanner]);
-    if (oldAvatar && oldAvatar !== newAvatar) {
-      await deleteOldStorageFile(oldAvatar);
-    }
-    if (oldBanner && oldBanner !== newBanner) {
-      await deleteOldStorageFile(oldBanner);
-    }
-    currentProfile = updatedProfile;
-    applyProfileToUI();
-    document.getElementById('profile-modal').classList.remove('active');
-    showToast('Profile updated', 'success');
+function getLegacyCategory(item) {
+  const rawCat = (item.category || '').toLowerCase().trim();
+  if (rawCat === 'series' || rawCat === 'tv_show') return 'tv_show';
+  if (rawCat === 'other') {
+    if (item.sub_category === 'light_novel') return 'novel';
+    if (item.sub_category === 'game') return 'game';
   }
-});
+  return rawCat || 'tv_show';
+}
 
-// ==========================================
-// 3. MULTI-CATEGORY PARSING & STATS CALCULATION
-// ==========================================
-function normalizeSingleCategory(raw) {
-  const c = (raw || '').toLowerCase().trim();
-  if (c === 'series' || c === 'tv_show') return 'tv_show';
-  return c || 'tv_show';
+function getItemTracks(item) {
+  if (Array.isArray(item.tracks) && item.tracks.length > 0) {
+    return item.tracks.map(t => ({
+      category: t.category || getLegacyCategory(item),
+      status: (t.status || item.status || 'planned').toLowerCase().trim(),
+      progress: Number(t.progress) || 0,
+      total_units: (t.total_units !== null && t.total_units !== undefined && t.total_units !== '') ? Number(t.total_units) : null,
+      unit_label: t.unit_label || DEFAULT_UNITS_BY_CAT[t.category] || 'eps'
+    }));
+  }
+
+  const cat = getLegacyCategory(item);
+  return [{
+    category: cat,
+    status: (item.status || 'planned').toLowerCase().trim(),
+    progress: Number(item.progress) || 0,
+    total_units: (item.total_units !== null && item.total_units !== undefined && item.total_units !== '') ? Number(item.total_units) : null,
+    unit_label: item.unit_label || DEFAULT_UNITS_BY_CAT[cat] || 'eps'
+  }];
 }
 
 function getItemCategories(item) {
-  let cats = [];
-
-  if (Array.isArray(item.categories) && item.categories.length > 0) {
-    cats = item.categories.map(normalizeSingleCategory);
-  } else if (typeof item.category === 'string' && item.category.trim()) {
-    cats = item.category
-      .split(',')
-      .map(s => normalizeSingleCategory(s))
-      .filter(Boolean);
+  const tracks = getItemTracks(item);
+  const cats = new Set(tracks.map(t => t.category));
+  if (Array.isArray(item.categories)) {
+    item.categories.forEach(c => { if (c) cats.add(c); });
   }
-
-  if (item.sub_category) {
-    const sub = item.sub_category.toLowerCase().trim();
-    if (sub === 'light_novel' && !cats.includes('novel')) cats.push('novel');
-    else if (sub && sub !== 'other' && !cats.includes(sub)) cats.push(normalizeSingleCategory(sub));
-  }
-
-  cats = cats.filter(c => c !== 'other');
-  if (cats.length === 0) cats = ['tv_show'];
-  return [...new Set(cats)];
+  return Array.from(cats);
 }
 
-function getNormalizedCategory(item) {
-  return getItemCategories(item)[0];
+function getItemSeasons(item) {
+  return Array.isArray(item.seasons) ? item.seasons : [];
 }
 
-function parseJsonArrayField(val) {
-  if (Array.isArray(val)) return val;
-  if (typeof val === 'string' && val.trim()) {
-    try {
-      const parsed = JSON.parse(val);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (_) {
-      return [];
-    }
+function getItemTotalUnitsValue(item) {
+  const tracks = getItemTracks(item);
+  const sumTotal = tracks.reduce((sum, t) => sum + (Number(t.total_units) || 0), 0);
+  if (sumTotal > 0) return sumTotal;
+  return tracks.reduce((sum, t) => sum + (Number(t.progress) || 0), 0);
+}
+
+function computeSyncedStatus(tracks) {
+  const statuses = tracks.map(t => (t.status || 'planned').toLowerCase().trim());
+
+  if (statuses.includes('ongoing')) {
+    return { key: 'ongoing', label: 'Ongoing' };
   }
-  return [];
+  if (statuses.length > 0 && statuses.every(s => s === 'completed')) {
+    return { key: 'completed', label: 'Completed' };
+  }
+  if (statuses.includes('dropped')) {
+    return { key: 'dropped', label: 'Dropped' };
+  }
+  return { key: 'planned', label: 'Planned' };
 }
 
+function computeCombinedProgress(tracks, syncedStatusKey) {
+  const totalProgress = tracks.reduce((sum, t) => sum + (Number(t.progress) || 0), 0);
+  const allHaveTotal = tracks.every(t => t.total_units !== null && Number(t.total_units) > 0);
+  const totalUnits = allHaveTotal
+    ? tracks.reduce((sum, t) => sum + Number(t.total_units), 0)
+    : null;
+
+  const text = totalUnits !== null ? `${totalProgress}/${totalUnits}` : `${totalProgress}/?`;
+
+  let percent = 0;
+  if (syncedStatusKey === 'completed') {
+    percent = 100;
+  } else if (totalUnits !== null && totalUnits > 0) {
+    percent = Math.min(100, Math.max(0, Math.round((totalProgress / totalUnits) * 100)));
+  } else if (syncedStatusKey === 'planned') {
+    percent = 100;
+  } else {
+    percent = totalProgress > 0 ? 45 : 0;
+  }
+
+  return {
+    text,
+    percent,
+    isPlannedEmpty: syncedStatusKey === 'planned' && totalProgress === 0
+  };
+}
+
+function formatEntryBadgeLabel(extraPartsCount) {
+  const totalEntries = extraPartsCount + 1;
+  return totalEntries === 1 ? '1 Entry' : `${totalEntries} Entries`;
+}
+
+// ==========================================
+// 3B. LOAD MEDIA DATA & AUTO-CALCULATE STATS
+// ==========================================
 async function fetchMediaLogs() {
   const { data, error } = await supabaseClient
     .from('media_logs')
@@ -672,7 +853,8 @@ async function fetchMediaLogs() {
     .order('updated_at', { ascending: false });
 
   if (error) {
-    document.getElementById('media-grid').innerHTML = `<p class="empty-state">Failed to load data: ${error.message}</p>`;
+    const grid = document.getElementById('media-grid');
+    if (grid) grid.innerHTML = `<p class="empty-state">Failed to load data: ${escapeHtml(error.message)}</p>`;
     return;
   }
 
@@ -682,48 +864,69 @@ async function fetchMediaLogs() {
 }
 
 function updateStatsUI() {
-  const tvItems = allMediaLogs.filter(i => getItemCategories(i).includes('tv_show'));
-  const movieItems = allMediaLogs.filter(i => getItemCategories(i).includes('movie'));
-  const comicItems = allMediaLogs.filter(i => getItemCategories(i).includes('comic'));
-  const novelItems = allMediaLogs.filter(i => getItemCategories(i).includes('novel'));
-  const gameItems = allMediaLogs.filter(i => getItemCategories(i).includes('game'));
-  const musicItems = allMediaLogs.filter(i => getItemCategories(i).includes('music'));
+  let tvEps = 0, tvCount = 0;
+  let movieTotal = 0, movieDone = 0;
+  let comicCh = 0, comicCount = 0;
+  let novelTotal = 0, novelDone = 0;
+  let gameTotal = 0, gameDone = 0;
+  let musicTotal = 0, musicTracks = 0;
+  let totalCompleted = 0;
 
-  const totalTvEps = tvItems.reduce((sum, i) => sum + (Number(i.progress) || 0), 0);
-  const completedMovies = movieItems.filter(i => (i.status || '').toLowerCase().trim() === 'completed').length;
-  const totalComicCh = comicItems.reduce((sum, i) => sum + (Number(i.progress) || 0), 0);
-  const completedNovels = novelItems.filter(i => (i.status || '').toLowerCase().trim() === 'completed').length;
-  const completedGames = gameItems.filter(i => (i.status || '').toLowerCase().trim() === 'completed').length;
-  const totalMusicTracks = musicItems.reduce((sum, i) => sum + (Number(i.progress) || 0), 0);
+  allMediaLogs.forEach(item => {
+    const tracks = getItemTracks(item);
+    const synced = computeSyncedStatus(tracks);
+    if (synced.key === 'completed') totalCompleted += 1;
+
+    tracks.forEach(t => {
+      if (t.category === 'tv_show') {
+        tvCount += 1;
+        tvEps += (Number(t.progress) || 0);
+      } else if (t.category === 'movie') {
+        movieTotal += 1;
+        if (t.status === 'completed') movieDone += 1;
+      } else if (t.category === 'comic') {
+        comicCount += 1;
+        comicCh += (Number(t.progress) || 0);
+      } else if (t.category === 'novel') {
+        novelTotal += 1;
+        if (t.status === 'completed') novelDone += 1;
+      } else if (t.category === 'game') {
+        gameTotal += 1;
+        if (t.status === 'completed') gameDone += 1;
+      } else if (t.category === 'music') {
+        musicTotal += 1;
+        musicTracks += (Number(t.progress) || 0);
+      }
+    });
+  });
 
   const totalEntries = allMediaLogs.length;
-  const totalCompleted = allMediaLogs.filter(i => (i.status || '').toLowerCase().trim() === 'completed').length;
   const completionRate = totalEntries > 0 ? Math.round((totalCompleted / totalEntries) * 100) : 0;
 
-  const ratedItems = allMediaLogs.filter(i => i.rating !== null && i.rating !== undefined && i.rating !== '');
+  const ratedItems = allMediaLogs.filter(i => i.rating !== null && i.rating !== undefined);
   const avgRating = ratedItems.length
     ? (ratedItems.reduce((sum, i) => sum + Number(i.rating), 0) / ratedItems.length).toFixed(2)
     : '0.0';
 
   setElText('total-entries-label', `${totalEntries} Entries`);
 
-  setElText('stat-tv-eps', totalTvEps.toLocaleString('en-US'));
-  setElText('stat-tv-count', `${tvItems.length} Show`);
+  setElText('stat-tv-eps', tvEps.toLocaleString('en-US'));
+  setElText('stat-tv-count', `${tvCount} Show`);
 
-  setElText('stat-movies-total', movieItems.length.toLocaleString('en-US'));
-  setElText('stat-movies-done', `${completedMovies} Completed`);
+  setElText('stat-movies-total', movieTotal.toLocaleString('en-US'));
+  setElText('stat-movies-done', `${movieDone} Completed`);
 
-  setElText('stat-comic-ch', totalComicCh.toLocaleString('en-US'));
-  setElText('stat-comic-count', `${comicItems.length} Comic`);
+  setElText('stat-comic-ch', comicCh.toLocaleString('en-US'));
+  setElText('stat-comic-count', `${comicCount} Comic`);
 
-  setElText('stat-novel-total', novelItems.length.toLocaleString('en-US'));
-  setElText('stat-novel-done', `${completedNovels} Completed`);
+  setElText('stat-novel-total', novelTotal.toLocaleString('en-US'));
+  setElText('stat-novel-done', `${novelDone} Completed`);
 
-  setElText('stat-game-total', gameItems.length.toLocaleString('en-US'));
-  setElText('stat-game-done', `${completedGames} Completed`);
+  setElText('stat-game-total', gameTotal.toLocaleString('en-US'));
+  setElText('stat-game-done', `${gameDone} Completed`);
 
-  setElText('stat-music-total', musicItems.length.toLocaleString('en-US'));
-  setElText('stat-music-tracks', `${totalMusicTracks.toLocaleString('en-US')} Track`);
+  setElText('stat-music-total', musicTotal.toLocaleString('en-US'));
+  setElText('stat-music-tracks', `${musicTracks.toLocaleString('en-US')} Track`);
 
   setElText('stat-completed-total', totalCompleted.toLocaleString('en-US'));
   setElText('stat-completion-rate', `${completionRate}% Rate`);
@@ -733,99 +936,91 @@ function updateStatsUI() {
 }
 
 // ==========================================
-// 4. POPOVER FILTER, SORT, PAGINATION & RENDER
+// 4. FILTER (CUSTOM RANGES), SORT (2-WAY), PAGINATION & RENDER MEDIA
 // ==========================================
-window.toggleToolbarPopover = function (type, event) {
-  if (event) event.stopPropagation();
-  const filterMenu = document.getElementById('filter-popover-menu');
-  const sortMenu = document.getElementById('sort-popover-menu');
-  const filterBtn = document.getElementById('btn-toggle-filter-menu');
-  const sortBtn = document.getElementById('btn-toggle-sort-menu');
-
-  if (type === 'filter') {
-    const willOpen = !filterMenu?.classList.contains('open');
-    filterMenu?.classList.toggle('open', willOpen);
-    filterBtn?.classList.toggle('active', willOpen);
-    sortMenu?.classList.remove('open');
-    sortBtn?.classList.remove('active');
-  } else if (type === 'sort') {
-    const willOpen = !sortMenu?.classList.contains('open');
-    sortMenu?.classList.toggle('open', willOpen);
-    sortBtn?.classList.toggle('active', willOpen);
-    filterMenu?.classList.remove('open');
-    filterBtn?.classList.remove('active');
-  }
-};
-
-function setupPopoverOutsideClick() {
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.popover-wrapper')) {
-      document.getElementById('filter-popover-menu')?.classList.remove('open');
-      document.getElementById('sort-popover-menu')?.classList.remove('open');
-      document.getElementById('btn-toggle-filter-menu')?.classList.remove('active');
-      document.getElementById('btn-toggle-sort-menu')?.classList.remove('active');
-    }
-  });
+function resetPaginationAndRender() {
+  visibleMediaLimit = itemsPerPage;
+  updateFilterActiveIndicator();
+  renderMediaGrid();
 }
 
-window.setSortDirection = function (dir) {
-  sortDirection = dir;
-  document.getElementById('btn-sort-desc')?.classList.toggle('active', dir === 'desc');
-  document.getElementById('btn-sort-asc')?.classList.toggle('active', dir === 'asc');
-  updateToolbarIndicators();
-  resetPaginationAndRender();
-};
-
-window.handleUnratedCheckboxChange = function () {
+function updateFilterActiveIndicator() {
+  const statusVal = document.getElementById('filter-status')?.value || 'all';
+  const rMin = document.getElementById('filter-rating-min')?.value || '';
+  const rMax = document.getElementById('filter-rating-max')?.value || '';
   const unratedOnly = document.getElementById('filter-unrated-only')?.checked || false;
-  const minInput = document.getElementById('filter-rating-min');
-  const maxInput = document.getElementById('filter-rating-max');
-  if (minInput) minInput.disabled = unratedOnly;
-  if (maxInput) maxInput.disabled = unratedOnly;
-  resetPaginationAndRender();
-};
+  const uMin = document.getElementById('filter-units-min')?.value || '';
+  const uMax = document.getElementById('filter-units-max')?.value || '';
+
+  const isFiltered = statusVal !== 'all' || rMin !== '' || rMax !== '' || unratedOnly || uMin !== '' || uMax !== '';
+  const dot = document.getElementById('filter-active-dot');
+  if (dot) {
+    dot.style.display = isFiltered ? 'inline-block' : 'none';
+  }
+}
 
 window.resetLibraryFilters = function () {
   const statusEl = document.getElementById('filter-status');
   const rMinEl = document.getElementById('filter-rating-min');
   const rMaxEl = document.getElementById('filter-rating-max');
   const unratedEl = document.getElementById('filter-unrated-only');
-  const pMinEl = document.getElementById('filter-progress-min');
-  const pMaxEl = document.getElementById('filter-progress-max');
+  const uMinEl = document.getElementById('filter-units-min');
+  const uMaxEl = document.getElementById('filter-units-max');
 
   if (statusEl) statusEl.value = 'all';
   if (rMinEl) { rMinEl.value = ''; rMinEl.disabled = false; }
   if (rMaxEl) { rMaxEl.value = ''; rMaxEl.disabled = false; }
   if (unratedEl) unratedEl.checked = false;
-  if (pMinEl) pMinEl.value = '';
-  if (pMaxEl) pMaxEl.value = '';
+  if (uMinEl) uMinEl.value = '';
+  if (uMaxEl) uMaxEl.value = '';
 
   resetPaginationAndRender();
 };
 
-function updateToolbarIndicators() {
-  const statusVal = document.getElementById('filter-status')?.value || 'all';
-  const rMin = document.getElementById('filter-rating-min')?.value.trim() || '';
-  const rMax = document.getElementById('filter-rating-max')?.value.trim() || '';
-  const unratedOnly = document.getElementById('filter-unrated-only')?.checked || false;
-  const pMin = document.getElementById('filter-progress-min')?.value.trim() || '';
-  const pMax = document.getElementById('filter-progress-max')?.value.trim() || '';
+function updateSortUIControls() {
+  const fieldEl = document.getElementById('sort-library-field');
+  if (fieldEl) fieldEl.value = currentSortField;
 
-  const hasFilter = statusVal !== 'all' || rMin !== '' || rMax !== '' || unratedOnly || pMin !== '' || pMax !== '';
-  const filterDot = document.getElementById('filter-active-dot');
-  if (filterDot) filterDot.style.display = hasFilter ? 'inline-block' : 'none';
+  const descBtn = document.getElementById('btn-sort-desc');
+  const ascBtn = document.getElementById('btn-sort-asc');
+  const labelEl = document.getElementById('sort-btn-label');
 
-  const sortField = document.getElementById('sort-field')?.value || 'updated';
-  const hasCustomSort = sortField !== 'updated' || sortDirection !== 'desc';
-  const sortDot = document.getElementById('sort-active-dot');
-  if (sortDot) sortDot.style.display = hasCustomSort ? 'inline-block' : 'none';
+  if (descBtn) descBtn.classList.toggle('active', currentSortDir === 'desc');
+  if (ascBtn) ascBtn.classList.toggle('active', currentSortDir === 'asc');
+
+  if (currentSortField === 'rating') {
+    if (descBtn) descBtn.textContent = 'Best';
+    if (ascBtn) ascBtn.textContent = 'Worst';
+    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Rating (Best)' : 'Rating (Worst)';
+  } else if (currentSortField === 'units') {
+    if (descBtn) descBtn.textContent = 'Longest';
+    if (ascBtn) ascBtn.textContent = 'Shortest';
+    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Count (Longest)' : 'Count (Shortest)';
+  } else if (currentSortField === 'title') {
+    if (descBtn) descBtn.textContent = 'Z → A';
+    if (ascBtn) ascBtn.textContent = 'A → Z';
+    if (labelEl) labelEl.textContent = currentSortDir === 'asc' ? 'Title (A→Z)' : 'Title (Z→A)';
+  } else {
+    if (descBtn) descBtn.textContent = 'Newest';
+    if (ascBtn) ascBtn.textContent = 'Oldest';
+    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Updated (New)' : 'Updated (Old)';
+  }
 }
 
-function resetPaginationAndRender() {
-  visibleMediaLimit = itemsPerPage;
-  updateToolbarIndicators();
-  renderMediaGrid();
-}
+window.onSortOptionChange = function () {
+  const fieldEl = document.getElementById('sort-library-field');
+  const fieldVal = fieldEl ? fieldEl.value : 'rating';
+  currentSortField = fieldVal;
+  currentSortDir = fieldVal === 'title' ? 'asc' : 'desc';
+  updateSortUIControls();
+  resetPaginationAndRender();
+};
+
+window.setSortDirection = function (dir) {
+  currentSortDir = dir;
+  updateSortUIControls();
+  resetPaginationAndRender();
+};
 
 function setupFilterListeners() {
   document.querySelectorAll('.cat-tab').forEach(btn => {
@@ -837,31 +1032,29 @@ function setupFilterListeners() {
     });
   });
 
-  document.getElementById('search-library')?.addEventListener('input', resetPaginationAndRender);
-  document.getElementById('filter-status')?.addEventListener('change', resetPaginationAndRender);
-  document.getElementById('filter-rating-min')?.addEventListener('input', resetPaginationAndRender);
-  document.getElementById('filter-rating-max')?.addEventListener('input', resetPaginationAndRender);
-  document.getElementById('filter-progress-min')?.addEventListener('input', resetPaginationAndRender);
-  document.getElementById('filter-progress-max')?.addEventListener('input', resetPaginationAndRender);
-  document.getElementById('sort-field')?.addEventListener('change', resetPaginationAndRender);
-}
+  const searchInput = document.getElementById('search-library');
+  const statusSelect = document.getElementById('filter-status');
+  const rMinInput = document.getElementById('filter-rating-min');
+  const rMaxInput = document.getElementById('filter-rating-max');
+  const unratedCheck = document.getElementById('filter-unrated-only');
+  const uMinInput = document.getElementById('filter-units-min');
+  const uMaxInput = document.getElementById('filter-units-max');
 
-function formatCategoryLabel(cat) {
-  const labelMap = {
-    tv_show: 'TV Show',
-    movie: 'Movie',
-    comic: 'Comic',
-    novel: 'Novel',
-    game: 'Game',
-    music: 'Music'
-  };
-  return labelMap[cat] || cat;
-}
+  if (searchInput) searchInput.addEventListener('input', resetPaginationAndRender);
+  if (statusSelect) statusSelect.addEventListener('change', resetPaginationAndRender);
+  if (rMinInput) rMinInput.addEventListener('input', resetPaginationAndRender);
+  if (rMaxInput) rMaxInput.addEventListener('input', resetPaginationAndRender);
+  if (uMinInput) uMinInput.addEventListener('input', resetPaginationAndRender);
+  if (uMaxInput) uMaxInput.addEventListener('input', resetPaginationAndRender);
 
-function formatCategoryBadgesHtml(item) {
-  return getItemCategories(item)
-    .map(c => `<span class="badge-cat">${formatCategoryLabel(c)}</span>`)
-    .join('');
+  if (unratedCheck) {
+    unratedCheck.addEventListener('change', () => {
+      const isChecked = unratedCheck.checked;
+      if (rMinInput) rMinInput.disabled = isChecked;
+      if (rMaxInput) rMaxInput.disabled = isChecked;
+      resetPaginationAndRender();
+    });
+  }
 }
 
 function normalizeImageUrl(url) {
@@ -880,41 +1073,30 @@ function formatStatusDate(isoString) {
   });
 }
 
-function matchesAdvancedFilters(item) {
-  const statusFilter = document.getElementById('filter-status')?.value || 'all';
-  const unratedOnly = document.getElementById('filter-unrated-only')?.checked || false;
-  const rMinRaw = document.getElementById('filter-rating-min')?.value.trim() || '';
-  const rMaxRaw = document.getElementById('filter-rating-max')?.value.trim() || '';
-  const pMinRaw = document.getElementById('filter-progress-min')?.value.trim() || '';
-  const pMaxRaw = document.getElementById('filter-progress-max')?.value.trim() || '';
-
-  const normStatus = (item.status || '').toLowerCase().trim();
-  if (statusFilter !== 'all' && normStatus !== statusFilter) return false;
+function matchesCustomFilters(item) {
+  const rMinRaw = document.getElementById('filter-rating-min')?.value ?? '';
+  const rMaxRaw = document.getElementById('filter-rating-max')?.value ?? '';
+  const unratedOnly = document.getElementById('filter-unrated-only')?.checked ?? false;
+  const uMinRaw = document.getElementById('filter-units-min')?.value ?? '';
+  const uMaxRaw = document.getElementById('filter-units-max')?.value ?? '';
 
   const hasRating = item.rating !== null && item.rating !== undefined && item.rating !== '';
-  const rVal = Number(item.rating);
+  const rVal = hasRating ? Number(item.rating) : null;
 
+  // Rating Range Filter
   if (unratedOnly) {
-    if (hasRating && !Number.isNaN(rVal)) return false;
-  } else {
-    if (rMinRaw !== '') {
-      const minR = parseFloat(rMinRaw);
-      if (!hasRating || Number.isNaN(rVal) || rVal < minR) return false;
-    }
-    if (rMaxRaw !== '') {
-      const maxR = parseFloat(rMaxRaw);
-      if (!hasRating || Number.isNaN(rVal) || rVal > maxR) return false;
-    }
+    if (hasRating) return false;
+  } else if (rMinRaw !== '' || rMaxRaw !== '') {
+    if (!hasRating || Number.isNaN(rVal)) return false;
+    if (rMinRaw !== '' && rVal < parseFloat(rMinRaw)) return false;
+    if (rMaxRaw !== '' && rVal > parseFloat(rMaxRaw)) return false;
   }
 
-  const progVal = Number(item.progress) || 0;
-  if (pMinRaw !== '') {
-    const minP = parseFloat(pMinRaw);
-    if (progVal < minP) return false;
-  }
-  if (pMaxRaw !== '') {
-    const maxP = parseFloat(pMaxRaw);
-    if (progVal > maxP) return false;
+  // Total Count (Eps/Ch) Range Filter
+  if (uMinRaw !== '' || uMaxRaw !== '') {
+    const totalUnits = getItemTotalUnitsValue(item);
+    if (uMinRaw !== '' && totalUnits < parseInt(uMinRaw, 10)) return false;
+    if (uMaxRaw !== '' && totalUnits > parseInt(uMaxRaw, 10)) return false;
   }
 
   return true;
@@ -922,39 +1104,62 @@ function matchesAdvancedFilters(item) {
 
 function renderMediaGrid() {
   const grid = document.getElementById('media-grid');
+  if (!grid) return;
+
   const loadMoreWrap = document.getElementById('load-more-wrap');
   const loadMoreText = document.getElementById('load-more-text');
 
-  const query = (document.getElementById('search-library')?.value || '').toLowerCase().trim();
-  const sortField = document.getElementById('sort-field')?.value || 'updated';
-  const dirMult = sortDirection === 'asc' ? 1 : -1;
+  const searchEl = document.getElementById('search-library');
+  const statusEl = document.getElementById('filter-status');
+
+  const query = searchEl ? searchEl.value.toLowerCase().trim() : '';
+  const statusFilter = statusEl ? statusEl.value : 'all';
 
   grid.classList.toggle('list-view', libraryViewMode === 'list');
 
   let filtered = allMediaLogs.filter(item => {
     const cats = getItemCategories(item);
+    const tracks = getItemTracks(item);
+    const seasons = getItemSeasons(item);
+    const synced = computeSyncedStatus(tracks);
+
     const matchCat = currentCategory === 'all' || cats.includes(currentCategory);
-    const matchQuery = !query || item.title.toLowerCase().includes(query);
-    return matchCat && matchQuery && matchesAdvancedFilters(item);
+    const matchStatus = statusFilter === 'all' || synced.key === statusFilter || tracks.some(t => t.status === statusFilter);
+    const matchRange = matchesCustomFilters(item);
+    const matchTitle = (item.title || '').toLowerCase().includes(query);
+    const matchSeason = seasons.some(s => (s.name || '').toLowerCase().includes(query));
+    const matchQuery = !query || matchTitle || matchSeason;
+
+    return matchCat && matchStatus && matchRange && matchQuery;
   });
 
+  // Sortir berdasarkan pilihan dan arah
   filtered.sort((a, b) => {
-    if (sortField === 'rating') {
-      const rA = (a.rating !== null && a.rating !== undefined && a.rating !== '') ? Number(a.rating) : -1;
-      const rB = (b.rating !== null && b.rating !== undefined && b.rating !== '') ? Number(b.rating) : -1;
-      return (rA - rB) * dirMult;
+    if (currentSortField === 'rating') {
+      const aHas = a.rating !== null && a.rating !== undefined && a.rating !== '';
+      const bHas = b.rating !== null && b.rating !== undefined && b.rating !== '';
+      if (!aHas && !bHas) return 0;
+      if (!aHas) return 1;
+      if (!bHas) return -1;
+
+      const diff = Number(a.rating) - Number(b.rating);
+      return currentSortDir === 'desc' ? -diff : diff;
     }
-    if (sortField === 'progress') {
-      const pA = Number(a.progress) || 0;
-      const pB = Number(b.progress) || 0;
-      return (pA - pB) * dirMult;
+
+    if (currentSortField === 'units') {
+      const uA = getItemTotalUnitsValue(a);
+      const uB = getItemTotalUnitsValue(b);
+      return currentSortDir === 'desc' ? (uB - uA) : (uA - uB);
     }
-    if (sortField === 'title') {
-      return a.title.localeCompare(b.title) * (sortDirection === 'asc' ? 1 : -1);
+
+    if (currentSortField === 'title') {
+      const cmp = (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' });
+      return currentSortDir === 'asc' ? cmp : -cmp;
     }
-    const tA = new Date(a.updated_at || a.created_at || 0).getTime();
-    const tB = new Date(b.updated_at || b.created_at || 0).getTime();
-    return (tA - tB) * dirMult;
+
+    const timeA = new Date(a.updated_at || a.created_at || 0).getTime();
+    const timeB = new Date(b.updated_at || b.created_at || 0).getTime();
+    return currentSortDir === 'desc' ? (timeB - timeA) : (timeA - timeB);
   });
 
   if (filtered.length === 0) {
@@ -963,7 +1168,7 @@ function renderMediaGrid() {
     return;
   }
 
-  const displayedItems = itemsPerPage === Infinity ? filtered : filtered.slice(0, visibleMediaLimit);
+  const displayedItems = visibleMediaLimit === Infinity ? filtered : filtered.slice(0, visibleMediaLimit);
   const remainingCount = filtered.length - displayedItems.length;
 
   if (loadMoreWrap) {
@@ -978,40 +1183,43 @@ function renderMediaGrid() {
   // COMPACT LIST VIEW RENDER
   if (libraryViewMode === 'list') {
     grid.innerHTML = displayedItems.map(item => {
+      const safeId = escapeHtml(String(item.id));
       const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/120x180/1e1e1f/888888?text=?';
-      const ratingText = (item.rating !== null && item.rating !== undefined && item.rating !== '') ? `★ ${Number(item.rating).toFixed(1)}` : '—';
-      const hasTotal = item.total_units !== null && item.total_units !== undefined && Number(item.total_units) > 0;
-      const progressText = hasTotal ? `${item.progress || 0}/${item.total_units}` : `${item.progress || 0}/?`;
-      const statusKey = (item.status || 'planned').toLowerCase().trim();
+      const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
+      const tracks = getItemTracks(item);
+      const cats = getItemCategories(item);
+      const seasons = getItemSeasons(item);
+      const synced = computeSyncedStatus(tracks);
+      const combined = computeCombinedProgress(tracks, synced.key);
       const repeatCount = Number(item.repeat_count) || 0;
-      const statusDateText = formatStatusDate(item.status_updated_at || item.updated_at || item.created_at);
-      const catsLabel = getItemCategories(item).map(formatCategoryLabel).join(' · ');
+      const statusDateText = formatStatusDate(item.updated_at || item.created_at);
 
-      const repeatHtml = repeatCount > 0
-        ? `<span class="list-repeat-tag" title="Rewatch / Reread count">↻ ${repeatCount}x</span>`
-        : '';
+      const catLabels = cats.map(c => CATEGORY_LABELS[c] || c).join(' / ');
+      const seasonTag = seasons.length > 0 ? `<span>• ${formatEntryBadgeLabel(seasons.length)}</span>` : '';
+      const repeatHtml = repeatCount > 0 ? `<span class="list-repeat-tag">• ↻ ${repeatCount}x</span>` : '';
 
       const editBtnHtml = isAdminLoggedIn ? `
-        <button type="button" class="list-edit-btn" onclick="event.stopPropagation(); openEditModal('${item.id}')" title="Edit Entry">
+        <button type="button" class="list-edit-btn" onclick="event.stopPropagation(); openEditModal('${safeId}')" title="Edit Entry">
           <ion-icon name="create-outline"></ion-icon>
         </button>
       ` : '';
 
       return `
-        <div class="media-list-row" onclick="openMediaDetailModal('${item.id}')">
+        <div class="media-list-row" onclick="openMediaDetailModal('${safeId}')">
           <img class="list-thumb" src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/120x180/1e1e1f/888888?text=?'">
           <div class="list-main-info">
             <div class="list-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
             <div class="list-sub-meta">
-              <span class="list-cat-tag">${catsLabel}</span>
+              <span class="list-cat-tag">${escapeHtml(catLabels)}</span>
               <span>•</span>
               <span>${statusDateText}</span>
+              ${seasonTag}
               ${repeatHtml}
             </div>
           </div>
           <div class="list-right-meta">
-            <span class="status-pill ${statusKey} list-hide-mobile">${statusKey}</span>
-            <span class="progress-pill ${statusKey}">${progressText}</span>
+            <span class="status-pill ${synced.key} list-hide-mobile">${escapeHtml(synced.label)}</span>
+            <span class="progress-pill ${synced.key}">${combined.text}</span>
             <span class="list-rating-pill">${ratingText}</span>
             ${editBtnHtml}
           </div>
@@ -1023,74 +1231,55 @@ function renderMediaGrid() {
 
   // GRID VIEW RENDER
   grid.innerHTML = displayedItems.map(item => {
+    const safeId = escapeHtml(String(item.id));
     const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
-    const ratingText = (item.rating !== null && item.rating !== undefined && item.rating !== '') ? `★ ${Number(item.rating).toFixed(1)}` : '—';
+    const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
     const repeatCount = Number(item.repeat_count) || 0;
-    const seasons = parseJsonArrayField(item.seasons);
+    const tracks = getItemTracks(item);
+    const cats = getItemCategories(item);
+    const seasons = getItemSeasons(item);
+    const synced = computeSyncedStatus(tracks);
+    const combined = computeCombinedProgress(tracks, synced.key);
 
-    const hasTotal = item.total_units !== null && item.total_units !== undefined && Number(item.total_units) > 0;
-    const progressText = hasTotal
-      ? `${item.progress || 0}/${item.total_units}`
-      : `${item.progress || 0}/?`;
-
-    const statusKey = (item.status || 'planned').toLowerCase().trim();
-    let percent = 0;
-    let extraBarClass = '';
-
-    if (statusKey === 'completed') {
-      percent = 100;
-    } else if (hasTotal) {
-      percent = Math.min(100, Math.max(0, Math.round(((item.progress || 0) / Number(item.total_units)) * 100)));
-      if (statusKey === 'planned' && percent === 0) {
-        percent = 100;
-        extraBarClass = 'planned-empty';
-      }
-    } else {
-      if (statusKey === 'planned') {
-        percent = 100;
-        extraBarClass = 'planned-empty';
-      } else {
-        percent = (item.progress || 0) > 0 ? 45 : 0;
-      }
-    }
-
-    const statusDateText = formatStatusDate(item.status_updated_at || item.updated_at || item.created_at);
+    const catBadgesHtml = cats.map(c => `<span class="badge-cat">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('');
+    const extraBarClass = combined.isPlannedEmpty ? 'planned-empty' : '';
+    const statusDateText = formatStatusDate(item.updated_at || item.created_at);
 
     const repeatBadgeHtml = repeatCount > 0
       ? `<span class="badge-repeat" title="Rewatch / Reread count">↻ ${repeatCount}x</span>`
       : '';
 
-    const seasonBadgeHtml = seasons.length > 0
-      ? `<span class="badge-seasons">${seasons.length} Season${seasons.length > 1 ? 's' : ''}</span>`
+    const seasonsBadgeHtml = seasons.length > 0
+      ? `<span class="badge-seasons">${formatEntryBadgeLabel(seasons.length)}</span>`
       : '';
 
     const coverEditHtml = isAdminLoggedIn ? `
-      <button type="button" class="cover-edit-btn" onclick="event.stopPropagation(); openEditModal('${item.id}')" title="Edit Entry">
+      <button type="button" class="cover-edit-btn" onclick="event.stopPropagation(); openEditModal('${safeId}')" title="Edit Entry">
         <ion-icon name="create-outline"></ion-icon>
       </button>
     ` : '';
 
     return `
-      <div class="media-card" onclick="openMediaDetailModal('${item.id}')">
+      <div class="media-card" onclick="openMediaDetailModal('${safeId}')">
         <div class="media-cover-wrap">
           <img src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=No+Cover'">
           <div class="cover-left-badges">
-            <div class="badge-cat-row">${formatCategoryBadgesHtml(item)}</div>
+            <div class="badge-cat-row">${catBadgesHtml}</div>
             <span class="badge-rating">${ratingText}</span>
             ${repeatBadgeHtml}
           </div>
-          ${seasonBadgeHtml}
+          ${seasonsBadgeHtml}
           ${coverEditHtml}
         </div>
         <div class="media-body">
           <h3 class="media-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h3>
           <div class="media-bottom-stack">
             <div class="media-meta-row">
-              <span class="status-pill ${statusKey}">${statusKey}</span>
-              <span class="progress-pill ${statusKey}">${progressText}</span>
+              <span class="status-pill ${synced.key}">${escapeHtml(synced.label)}</span>
+              <span class="progress-pill ${synced.key}">${combined.text}</span>
             </div>
             <div class="progress-track">
-              <div class="progress-fill ${statusKey} ${extraBarClass}" style="width: ${percent}%"></div>
+              <div class="progress-fill ${synced.key} ${extraBarClass}" style="width: ${combined.percent}%"></div>
             </div>
             <div class="media-footer-row">
               <span class="status-date-item" title="Last status update">
@@ -1109,44 +1298,49 @@ function renderMediaGrid() {
 // 4B. MEDIA DETAIL MODAL
 // ==========================================
 window.openMediaDetailModal = function (id) {
-  const item = allMediaLogs.find(m => m.id === id);
+  const item = allMediaLogs.find(m => String(m.id) === String(id));
   if (!item) return;
 
-  setElText('detail-modal-title', item.title);
-  const bodyEl = document.getElementById('detail-modal-body');
-  if (!bodyEl) return;
-
+  const safeId = escapeHtml(String(item.id));
   const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
-  const statusKey = (item.status || 'planned').toLowerCase().trim();
-  const ratingText = (item.rating !== null && item.rating !== undefined && item.rating !== '') ? `★ ${Number(item.rating).toFixed(1)} / 10` : 'Unrated';
-  const hasTotal = item.total_units !== null && item.total_units !== undefined && Number(item.total_units) > 0;
-  const progressText = hasTotal ? `${item.progress || 0} / ${item.total_units} ${item.unit_label || ''}` : `${item.progress || 0} ${item.unit_label || ''}`;
+  const tracks = getItemTracks(item);
+  const cats = getItemCategories(item);
+  const seasons = getItemSeasons(item);
+  const synced = computeSyncedStatus(tracks);
+  const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : 'Unrated';
   const repeatCount = Number(item.repeat_count) || 0;
-  const statusDateText = formatStatusDate(item.status_updated_at || item.updated_at || item.created_at);
-  const seasons = parseJsonArrayField(item.seasons);
-  const tracks = parseJsonArrayField(item.tracks);
 
-  const notesHtml = item.notes ? `
-    <div>
-      <div class="detail-section-title">Notes / Review</div>
-      <div class="detail-row-item" style="display: block; white-space: pre-wrap; line-height: 1.55; color: var(--light-gray);">${escapeHtml(item.notes)}</div>
-    </div>
-  ` : '';
+  setElText('detail-modal-title', item.title);
+
+  const tracksHtml = tracks.map(t => {
+    const hasTotal = t.total_units !== null && t.total_units > 0;
+    const progStr = hasTotal ? `${t.progress} / ${t.total_units} ${t.unit_label}` : `${t.progress} / ? ${t.unit_label}`;
+    return `
+      <div class="detail-row-item">
+        <div>
+          <strong style="color: var(--white-1);">${escapeHtml(CATEGORY_LABELS[t.category] || t.category)}</strong>
+          <span style="color: var(--light-gray-70); margin-left: 8px;">${progStr}</span>
+        </div>
+        <span class="status-pill ${t.status}">${t.status}</span>
+      </div>
+    `;
+  }).join('');
 
   const seasonsHtml = seasons.length > 0 ? `
     <div>
-      <div class="detail-section-title">Seasons (${seasons.length})</div>
+      <div class="detail-section-title">Entries & Parts (${seasons.length + 1} Total)</div>
       <div class="detail-list">
         ${seasons.map(s => {
-          const sStatus = (s.status || 'planned').toLowerCase();
-          const sProg = s.total ? `${s.progress || 0}/${s.total}` : `${s.progress || 0}/?`;
+          const sStatus = (s.status || 'planned').toLowerCase().trim();
+          const sProg = (s.total_units && Number(s.total_units) > 0) ? `${s.progress || 0}/${s.total_units}` : `${s.progress || 0}/?`;
+          const sRating = s.rating ? ` · ★ ${Number(s.rating).toFixed(1)}` : '';
           return `
             <div class="detail-row-item">
-              <span style="font-weight: 500; color: var(--white-1);">${escapeHtml(s.name || 'Season')}</span>
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <span class="status-pill ${sStatus}">${sStatus}</span>
-                <span class="progress-pill ${sStatus}">${sProg}</span>
+              <div style="min-width: 0;">
+                <div style="font-weight: 600; color: var(--white-1);">${escapeHtml(s.name || 'Part')}</div>
+                <div style="font-size: 11px; color: var(--light-gray-70);">${sProg}${sRating}</div>
               </div>
+              <span class="status-pill ${sStatus}">${sStatus}</span>
             </div>
           `;
         }).join('')}
@@ -1154,240 +1348,187 @@ window.openMediaDetailModal = function (id) {
     </div>
   ` : '';
 
-  const tracksHtml = tracks.length > 0 ? `
-    <div>
-      <div class="detail-section-title">Tracklist (${tracks.length})</div>
-      <div class="detail-list">
-        ${tracks.map((t, i) => {
-          const tStatus = (t.status || 'planned').toLowerCase();
-          const tRating = (t.rating !== null && t.rating !== undefined && t.rating !== '') ? `★ ${Number(t.rating).toFixed(1)}` : '';
-          return `
-            <div class="detail-row-item">
-              <div style="min-width: 0; flex: 1;">
-                <div style="font-weight: 500; color: var(--white-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${i + 1}. ${escapeHtml(t.title || 'Untitled Track')}</div>
-                ${t.artist ? `<div style="font-size: 10px; color: var(--light-gray-70);">${escapeHtml(t.artist)}</div>` : ''}
-              </div>
-              <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-                ${tRating ? `<span style="font-size: 11px; font-weight: 600;">${tRating}</span>` : ''}
-                <span class="status-pill ${tStatus}">${tStatus}</span>
-              </div>
-            </div>
-          `;
-        }).join('')}
-      </div>
+  const editActionHtml = isAdminLoggedIn ? `
+    <div class="modal-submit-row">
+      <button type="button" class="form-btn primary-submit" onclick="closeMediaDetailModal(); openEditModal('${safeId}');">
+        <ion-icon name="create-outline"></ion-icon>
+        <span>Edit Entry</span>
+      </button>
     </div>
   ` : '';
 
-  const adminEditAction = isAdminLoggedIn ? `
-    <button type="button" class="form-btn primary-submit" onclick="closeMediaDetailModal(); openEditModal('${item.id}')">
-      <ion-icon name="create-outline"></ion-icon> Edit Entry
-    </button>
-  ` : '';
-
-  bodyEl.innerHTML = `
+  document.getElementById('media-detail-body').innerHTML = `
     <div class="detail-hero">
-      <img class="detail-poster" src="${cover}" alt="${escapeHtml(item.title)}" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=No+Cover'">
+      <img class="detail-poster" src="${cover}" alt="${escapeHtml(item.title)}" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=No+Cover'">
       <div class="detail-meta-col">
-        <div class="badge-cat-row">${formatCategoryBadgesHtml(item)}</div>
+        <div class="badge-cat-row">
+          ${cats.map(c => `<span class="badge-cat">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('')}
+        </div>
         <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-          <span class="status-pill ${statusKey}">${statusKey}</span>
-          <span class="progress-pill ${statusKey}">${progressText.trim()}</span>
+          <span class="status-pill ${synced.key}">${escapeHtml(synced.label)}</span>
           <span class="badge-rating">${ratingText}</span>
           ${repeatCount > 0 ? `<span class="badge-repeat">↻ ${repeatCount}x</span>` : ''}
         </div>
-        <div style="font-size: 11px; color: var(--light-gray-70);">Updated: ${statusDateText}</div>
+        <div style="font-size: 11px; color: var(--light-gray-70);">
+          Updated ${formatStatusDate(item.updated_at || item.created_at)}
+        </div>
       </div>
     </div>
-    ${notesHtml}
+
+    <div>
+      <div class="detail-section-title">Progress Tracks</div>
+      <div class="detail-list">${tracksHtml}</div>
+    </div>
+
     ${seasonsHtml}
-    ${tracksHtml}
-    ${adminEditAction}
+    ${editActionHtml}
   `;
 
-  document.getElementById('media-detail-modal')?.classList.add('active');
+  document.getElementById('media-detail-modal').classList.add('active');
 };
 
 window.closeMediaDetailModal = function () {
-  document.getElementById('media-detail-modal')?.classList.remove('active');
+  document.getElementById('media-detail-modal').classList.remove('active');
 };
 
 // ==========================================
-// 5. ADD / EDIT MODAL, MULTI-CATEGORY, SEASONS & TRACKS
+// 5. ADD / EDIT MODAL
 // ==========================================
-function getSelectedModalCategories() {
-  const checked = Array.from(document.querySelectorAll('#media-cat-checkboxes input[type="checkbox"]:checked'))
-    .map(cb => cb.value);
-  return checked.length > 0 ? checked : ['tv_show'];
-}
+window.addMediaTrackRow = function (track = null) {
+  const container = document.getElementById('media-tracks-editor');
+  if (!container) return;
 
-function setSelectedModalCategories(cats) {
-  const set = new Set(cats && cats.length ? cats : ['tv_show']);
-  document.querySelectorAll('#media-cat-checkboxes input[type="checkbox"]').forEach(cb => {
-    cb.checked = set.has(cb.value);
-  });
-}
+  const cat = (track && track.category) ? track.category : 'tv_show';
+  const status = (track && track.status) ? track.status : 'completed';
+  const progress = (track && track.progress !== undefined) ? track.progress : 0;
+  const total = (track && track.total_units !== undefined) ? track.total_units : '';
+  const unit = (track && track.unit_label) ? track.unit_label : (DEFAULT_UNITS_BY_CAT[cat] || 'eps');
 
-window.handleCategoryCheckboxChange = function () {
-  const cats = getSelectedModalCategories();
-  const primary = cats[0];
-  const unitSelect = document.getElementById('media-unit');
-
-  if (primary === 'tv_show') unitSelect.value = 'eps';
-  else if (primary === 'movie') unitSelect.value = 'movie';
-  else if (primary === 'comic') unitSelect.value = 'ch';
-  else if (primary === 'novel') unitSelect.value = 'vol';
-  else if (primary === 'game') unitSelect.value = 'item';
-  else if (primary === 'music') unitSelect.value = 'track';
-
-  const seasonsSection = document.getElementById('seasons-editor-section');
-  const tracksSection = document.getElementById('tracks-editor-section');
-  if (seasonsSection) seasonsSection.style.display = cats.includes('tv_show') ? 'flex' : 'none';
-  if (tracksSection) tracksSection.style.display = cats.includes('music') ? 'flex' : 'none';
-};
-
-window.addSeasonRow = function (data = {}) {
-  const list = document.getElementById('seasons-editor-list');
-  if (!list) return;
-
-  const idx = list.children.length + 1;
-  const card = document.createElement('div');
-  card.className = 'season-edit-card';
-  card.innerHTML = `
-    <div class="season-edit-top">
-      <input type="text" class="form-input season-name-input" placeholder="Season ${idx}" value="${escapeHtml(data.name || `Season ${idx}`)}">
-      <button type="button" class="social-remove-btn" onclick="this.closest('.season-edit-card').remove(); syncProgressFromSeasons();" title="Remove Season">
-        <ion-icon name="trash-outline"></ion-icon>
-      </button>
-    </div>
-    <div class="season-edit-grid">
-      <select class="form-input season-status-input" onchange="syncProgressFromSeasons()">
-        <option value="planned" ${data.status === 'planned' ? 'selected' : ''}>Planned</option>
-        <option value="ongoing" ${data.status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
-        <option value="completed" ${data.status === 'completed' ? 'selected' : ''}>Completed</option>
-        <option value="dropped" ${data.status === 'dropped' ? 'selected' : ''}>Dropped</option>
-      </select>
-      <input type="number" class="form-input season-prog-input" min="0" placeholder="Done" value="${data.progress ?? 0}" oninput="syncProgressFromSeasons()">
-      <input type="number" class="form-input season-total-input" min="0" placeholder="Total" value="${data.total ?? ''}" oninput="syncProgressFromSeasons()">
-      <input type="number" class="form-input season-rating-input" min="0" max="10" step="0.1" placeholder="Score" value="${data.rating ?? ''}">
-    </div>
-  `;
-  list.appendChild(card);
-};
-
-window.syncProgressFromSeasons = function () {
-  const cards = document.querySelectorAll('#seasons-editor-list .season-edit-card');
-  if (cards.length === 0) return;
-
-  let sumProg = 0;
-  let sumTotal = 0;
-  let hasAnyTotal = false;
-
-  cards.forEach(c => {
-    const st = c.querySelector('.season-status-input')?.value || 'planned';
-    const tot = parseInt(c.querySelector('.season-total-input')?.value, 10);
-    let prg = parseInt(c.querySelector('.season-prog-input')?.value, 10) || 0;
-
-    if (st === 'completed' && tot > 0) {
-      prg = tot;
-      c.querySelector('.season-prog-input').value = tot;
-    }
-    sumProg += prg;
-    if (tot > 0) {
-      sumTotal += tot;
-      hasAnyTotal = true;
-    }
-  });
-
-  document.getElementById('media-progress').value = sumProg;
-  if (hasAnyTotal) {
-    document.getElementById('media-total').value = sumTotal;
-  }
-};
-
-function collectSeasonsFromModal() {
-  const cards = document.querySelectorAll('#seasons-editor-list .season-edit-card');
-  const arr = [];
-  cards.forEach(c => {
-    const name = c.querySelector('.season-name-input')?.value.trim() || 'Season';
-    const status = c.querySelector('.season-status-input')?.value || 'planned';
-    const progress = parseInt(c.querySelector('.season-prog-input')?.value, 10) || 0;
-    const totRaw = c.querySelector('.season-total-input')?.value;
-    const ratRaw = c.querySelector('.season-rating-input')?.value;
-    arr.push({
-      name,
-      status,
-      progress,
-      total: totRaw !== '' ? parseInt(totRaw, 10) : null,
-      rating: ratRaw !== '' ? parseFloat(ratRaw) : null
-    });
-  });
-  return arr;
-}
-
-window.addTrackRow = function (data = {}) {
-  const list = document.getElementById('tracks-editor-list');
-  if (!list) return;
-
-  const idx = list.children.length + 1;
   const card = document.createElement('div');
   card.className = 'track-edit-card';
   card.innerHTML = `
     <div class="track-edit-top">
-      <input type="text" class="form-input track-title-input" placeholder="Track #${idx} Title" value="${escapeHtml(data.title || '')}">
-      <button type="button" class="social-remove-btn" onclick="this.closest('.track-edit-card').remove(); syncProgressFromTracks();" title="Remove Track">
+      <select class="form-input track-cat-select" onchange="onTrackCategoryChange(this)">
+        <option value="tv_show" ${cat === 'tv_show' ? 'selected' : ''}>TV Show</option>
+        <option value="movie" ${cat === 'movie' ? 'selected' : ''}>Movie</option>
+        <option value="comic" ${cat === 'comic' ? 'selected' : ''}>Comic</option>
+        <option value="novel" ${cat === 'novel' ? 'selected' : ''}>Novel</option>
+        <option value="game" ${cat === 'game' ? 'selected' : ''}>Game</option>
+        <option value="music" ${cat === 'music' ? 'selected' : ''}>Music</option>
+      </select>
+      <button type="button" class="social-remove-btn" onclick="removeMediaTrackRow(this)" title="Remove Category">
         <ion-icon name="trash-outline"></ion-icon>
       </button>
     </div>
     <div class="track-edit-grid">
-      <input type="text" class="form-input track-artist-input" placeholder="Artist" value="${escapeHtml(data.artist || '')}">
-      <select class="form-input track-status-input" onchange="syncProgressFromTracks()">
-        <option value="planned" ${data.status === 'planned' ? 'selected' : ''}>Planned</option>
-        <option value="ongoing" ${data.status === 'ongoing' ? 'selected' : ''}>Listening</option>
-        <option value="completed" ${data.status === 'completed' ? 'selected' : ''}>Completed</option>
-        <option value="dropped" ${data.status === 'dropped' ? 'selected' : ''}>Skipped</option>
+      <select class="form-input track-status-select" onchange="onTrackStatusOrTotalChange(this)">
+        <option value="completed" ${status === 'completed' ? 'selected' : ''}>Completed</option>
+        <option value="ongoing" ${status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
+        <option value="planned" ${status === 'planned' ? 'selected' : ''}>Planned</option>
+        <option value="dropped" ${status === 'dropped' ? 'selected' : ''}>Dropped</option>
       </select>
-      <input type="number" class="form-input track-rating-input" min="0" max="10" step="0.1" placeholder="Rating" value="${data.rating ?? ''}">
-      <input type="text" class="form-input track-note-input" placeholder="Note" value="${escapeHtml(data.note || '')}">
+      <div class="progress-input-row">
+        <input type="number" class="form-input track-progress-input" min="0" value="${progress}" placeholder="Prog">
+        <button type="button" class="step-plus-btn" onclick="stepTrackProgress(this)" title="+1">+1</button>
+      </div>
+      <input type="number" class="form-input track-total-input" min="0" value="${total !== null ? total : ''}" placeholder="Total" oninput="onTrackStatusOrTotalChange(this)">
+      <select class="form-input track-unit-select">
+        <option value="eps" ${unit === 'eps' ? 'selected' : ''}>Episode</option>
+        <option value="movie" ${unit === 'movie' ? 'selected' : ''}>Movie</option>
+        <option value="ch" ${unit === 'ch' ? 'selected' : ''}>Chapter</option>
+        <option value="vol" ${unit === 'vol' ? 'selected' : ''}>Volume</option>
+        <option value="pages" ${unit === 'pages' ? 'selected' : ''}>Pages</option>
+        <option value="track" ${unit === 'track' ? 'selected' : ''}>Track</option>
+        <option value="item" ${unit === 'item' ? 'selected' : ''}>Item</option>
+      </select>
     </div>
   `;
-  list.appendChild(card);
-  syncProgressFromTracks();
+  container.appendChild(card);
 };
 
-window.syncProgressFromTracks = function () {
-  const cards = document.querySelectorAll('#tracks-editor-list .track-edit-card');
-  if (cards.length === 0) return;
-
-  let doneCount = 0;
-  cards.forEach(c => {
-    if (c.querySelector('.track-status-input')?.value === 'completed') doneCount++;
-  });
-
-  document.getElementById('media-total').value = cards.length;
-  document.getElementById('media-progress').value = doneCount;
+window.removeMediaTrackRow = function (btn) {
+  const container = document.getElementById('media-tracks-editor');
+  if (container && container.children.length <= 1) {
+    showToast('At least 1 category track is required', 'info');
+    return;
+  }
+  const card = btn.closest('.track-edit-card');
+  if (card) card.remove();
 };
 
-function collectTracksFromModal() {
-  const cards = document.querySelectorAll('#tracks-editor-list .track-edit-card');
-  const arr = [];
-  cards.forEach(c => {
-    const title = c.querySelector('.track-title-input')?.value.trim() || '';
-    const artist = c.querySelector('.track-artist-input')?.value.trim() || '';
-    const status = c.querySelector('.track-status-input')?.value || 'planned';
-    const ratRaw = c.querySelector('.track-rating-input')?.value;
-    const note = c.querySelector('.track-note-input')?.value.trim() || '';
-    if (title || artist) {
-      arr.push({
-        title,
-        artist,
-        status,
-        rating: ratRaw !== '' ? parseFloat(ratRaw) : null,
-        note
-      });
-    }
-  });
-  return arr;
-}
+window.onTrackCategoryChange = function (selectEl) {
+  const card = selectEl.closest('.track-edit-card');
+  const unitSelect = card ? card.querySelector('.track-unit-select') : null;
+  if (unitSelect && DEFAULT_UNITS_BY_CAT[selectEl.value]) {
+    unitSelect.value = DEFAULT_UNITS_BY_CAT[selectEl.value];
+  }
+};
+
+window.onTrackStatusOrTotalChange = function (el) {
+  const card = el.closest('.track-edit-card');
+  if (!card) return;
+  const statusEl = card.querySelector('.track-status-select');
+  const totalEl = card.querySelector('.track-total-input');
+  const progInput = card.querySelector('.track-progress-input');
+
+  const status = statusEl ? statusEl.value : '';
+  const totalVal = totalEl ? parseInt(totalEl.value, 10) : NaN;
+
+  if (status === 'completed' && totalVal > 0 && progInput) {
+    progInput.value = totalVal;
+  }
+};
+
+window.stepTrackProgress = function (btn) {
+  const card = btn.closest('.track-edit-card');
+  if (!card) return;
+  const progInput = card.querySelector('.track-progress-input');
+  const totalEl = card.querySelector('.track-total-input');
+  const statusSelect = card.querySelector('.track-status-select');
+
+  if (!progInput) return;
+  const totalVal = totalEl ? parseInt(totalEl.value, 10) : NaN;
+  const nextVal = (parseInt(progInput.value, 10) || 0) + 1;
+  progInput.value = nextVal;
+
+  if (totalVal > 0 && nextVal >= totalVal && statusSelect) {
+    statusSelect.value = 'completed';
+  }
+};
+
+window.addSeasonItemRow = function (season = null) {
+  const container = document.getElementById('media-seasons-editor');
+  if (!container) return;
+
+  const name = (season && season.name) ? season.name : '';
+  const status = (season && season.status) ? season.status : 'completed';
+  const progress = (season && season.progress !== undefined) ? season.progress : 0;
+  const total = (season && season.total_units !== undefined) ? season.total_units : '';
+  const rating = (season && season.rating !== undefined) ? season.rating : '';
+
+  const card = document.createElement('div');
+  card.className = 'season-edit-card';
+  card.innerHTML = `
+    <div class="season-edit-top">
+      <input type="text" class="form-input season-name-input" placeholder="e.g. Season 2 / OVA / Movie Sequel" value="${escapeHtml(name)}">
+      <button type="button" class="social-remove-btn" onclick="this.closest('.season-edit-card').remove()" title="Remove Part">
+        <ion-icon name="trash-outline"></ion-icon>
+      </button>
+    </div>
+    <div class="season-edit-grid">
+      <select class="form-input season-status-select">
+        <option value="completed" ${status === 'completed' ? 'selected' : ''}>Completed</option>
+        <option value="ongoing" ${status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
+        <option value="planned" ${status === 'planned' ? 'selected' : ''}>Planned</option>
+        <option value="dropped" ${status === 'dropped' ? 'selected' : ''}>Dropped</option>
+      </select>
+      <input type="number" class="form-input season-progress-input" min="0" value="${progress}" placeholder="Prog">
+      <input type="number" class="form-input season-total-input" min="0" value="${total !== null ? total : ''}" placeholder="Total">
+      <input type="number" class="form-input season-rating-input" step="0.1" min="1.0" max="10.0" value="${rating !== null ? rating : ''}" placeholder="Score">
+    </div>
+  `;
+  container.appendChild(card);
+};
 
 window.openMediaModal = function () {
   pendingUploadedUrls = [];
@@ -1395,53 +1536,54 @@ window.openMediaModal = function () {
   document.getElementById('media-form').reset();
   document.getElementById('media-id').value = '';
   document.getElementById('media-repeat').value = 0;
-  if (document.getElementById('media-notes')) document.getElementById('media-notes').value = '';
   document.getElementById('btn-modal-delete').style.display = 'none';
   document.getElementById('api-search-results').style.display = 'none';
-  if (document.getElementById('seasons-editor-list')) document.getElementById('seasons-editor-list').innerHTML = '';
-  if (document.getElementById('tracks-editor-list')) document.getElementById('tracks-editor-list').innerHTML = '';
   setElText('cover-upload-status', '');
 
-  setSelectedModalCategories(['tv_show']);
-  handleCategoryCheckboxChange();
+  const tracksEditor = document.getElementById('media-tracks-editor');
+  if (tracksEditor) {
+    tracksEditor.innerHTML = '';
+    addMediaTrackRow({ category: 'tv_show', status: 'completed', progress: 0, total_units: '', unit_label: 'eps' });
+  }
+
+  const seasonsEditor = document.getElementById('media-seasons-editor');
+  if (seasonsEditor) seasonsEditor.innerHTML = '';
+
   document.getElementById('media-modal').classList.add('active');
 };
 
 window.openEditModal = function (id) {
-  const item = allMediaLogs.find(m => m.id === id);
-  if (!item) return;
+  const item = allMediaLogs.find(m => String(m.id) === String(id));
+  if (!item) {
+    showToast('Media entry not found', 'error');
+    return;
+  }
 
   pendingUploadedUrls = [];
   document.getElementById('media-modal-title').textContent = 'Edit Media';
   document.getElementById('media-id').value = item.id;
   document.getElementById('btn-modal-delete').style.display = 'inline-flex';
 
-  const cats = getItemCategories(item);
-  setSelectedModalCategories(cats);
-  handleCategoryCheckboxChange();
-
-  document.getElementById('media-title').value = item.title;
+  document.getElementById('media-title').value = item.title || '';
   document.getElementById('media-cover').value = item.cover_url || '';
-  document.getElementById('media-status').value = (item.status || 'planned').toLowerCase().trim();
-  document.getElementById('media-progress').value = item.progress || 0;
-  document.getElementById('media-total').value = item.total_units || '';
-  document.getElementById('media-unit').value = item.unit_label || 'eps';
   document.getElementById('media-rating').value = (item.rating !== null && item.rating !== undefined) ? item.rating : '';
   document.getElementById('media-repeat').value = Number(item.repeat_count) || 0;
-  if (document.getElementById('media-notes')) document.getElementById('media-notes').value = item.notes || '';
   document.getElementById('api-search-results').style.display = 'none';
   setElText('cover-upload-status', '');
 
-  const seasonsList = document.getElementById('seasons-editor-list');
-  if (seasonsList) {
-    seasonsList.innerHTML = '';
-    parseJsonArrayField(item.seasons).forEach(s => addSeasonRow(s));
+  const tracksEditor = document.getElementById('media-tracks-editor');
+  if (tracksEditor) {
+    tracksEditor.innerHTML = '';
+    const tracks = getItemTracks(item);
+    tracks.forEach(t => addMediaTrackRow(t));
+    const apiCatSelect = document.getElementById('api-search-cat');
+    if (apiCatSelect && tracks[0]) apiCatSelect.value = tracks[0].category || 'tv_show';
   }
 
-  const tracksList = document.getElementById('tracks-editor-list');
-  if (tracksList) {
-    tracksList.innerHTML = '';
-    parseJsonArrayField(item.tracks).forEach(t => addTrackRow(t));
+  const seasonsEditor = document.getElementById('media-seasons-editor');
+  if (seasonsEditor) {
+    seasonsEditor.innerHTML = '';
+    getItemSeasons(item).forEach(s => addSeasonItemRow(s));
   }
 
   document.getElementById('media-modal').classList.add('active');
@@ -1453,7 +1595,8 @@ window.closeMediaModal = async function () {
 };
 
 window.handleMediaCoverUpload = async function (event) {
-  const file = event.target.files?.[0];
+  const file = event.target.files ? event.target.files[0] : null;
+  event.target.value = '';
   if (!file) return;
 
   setElText('cover-upload-status', 'Uploading cover...');
@@ -1461,39 +1604,10 @@ window.handleMediaCoverUpload = async function (event) {
     const publicUrl = await uploadImageToSupabase(file, 'covers');
     document.getElementById('media-cover').value = publicUrl;
     setElText('cover-upload-status', 'Cover uploaded successfully!');
+    showToast('Cover uploaded', 'success');
   } catch (err) {
     setElText('cover-upload-status', `Upload failed: ${err.message}`);
-  } finally {
-    event.target.value = '';
-  }
-};
-
-window.handleStatusFormChange = function () {
-  const status = document.getElementById('media-status').value;
-  const totalVal = parseInt(document.getElementById('media-total').value, 10);
-
-  if (status === 'completed' && totalVal > 0) {
-    document.getElementById('media-progress').value = totalVal;
-  }
-};
-
-window.handleTotalUnitsChange = function () {
-  const status = document.getElementById('media-status').value;
-  const totalVal = parseInt(document.getElementById('media-total').value, 10);
-
-  if (status === 'completed' && totalVal > 0) {
-    document.getElementById('media-progress').value = totalVal;
-  }
-};
-
-window.stepModalProgress = function () {
-  const progInput = document.getElementById('media-progress');
-  const totalVal = parseInt(document.getElementById('media-total').value, 10);
-  const nextVal = (parseInt(progInput.value, 10) || 0) + 1;
-  progInput.value = nextVal;
-
-  if (totalVal > 0 && nextVal >= totalVal) {
-    document.getElementById('media-status').value = 'completed';
+    showToast(err.message, 'error');
   }
 };
 
@@ -1533,12 +1647,14 @@ async function fetchAniListMedia(query, isNovel = false) {
     body: JSON.stringify({ query: gql, variables: { search: query } })
   });
   const json = await res.json();
-  return (json.data?.Page?.media || []).map(m => {
+  const mediaList = (json.data && json.data.Page && json.data.Page.media) ? json.data.Page.media : [];
+  return mediaList.map(m => {
     const originMap = { JP: 'Manga', KR: 'Manhwa', CN: 'Manhua' };
     const label = isNovel ? 'Novel' : (originMap[m.countryOfOrigin] || 'Comic');
+    const coverImg = m.coverImage ? (m.coverImage.large || m.coverImage.medium || '') : '';
     return {
       title: m.title.english || m.title.romaji,
-      cover: normalizeImageUrl(m.coverImage?.large || m.coverImage?.medium || ''),
+      cover: normalizeImageUrl(coverImg),
       total: isNovel ? (m.volumes || m.chapters || null) : (m.chapters || null),
       unit: isNovel ? (m.volumes ? 'vol' : 'ch') : 'ch',
       meta: `${label} · ${isNovel ? (m.volumes || '?') + ' Volume' : (m.chapters || '?') + ' Chapter'}`
@@ -1558,8 +1674,7 @@ function deduplicateResults(list) {
 
 window.searchExternalAPI = async function () {
   const query = document.getElementById('api-search-input').value.trim();
-  const cats = getSelectedModalCategories();
-  const cat = cats[0] || 'tv_show';
+  const cat = document.getElementById('api-search-cat').value;
   const resultsBox = document.getElementById('api-search-results');
 
   if (!query) return;
@@ -1576,7 +1691,7 @@ window.searchExternalAPI = async function () {
         const data = await res.json();
         return (data.data || []).map(a => ({
           title: a.title_english || a.title,
-          cover: normalizeImageUrl(a.images?.jpg?.large_image_url || a.images?.jpg?.image_url || a.images?.webp?.large_image_url || ''),
+          cover: normalizeImageUrl((a.images && a.images.jpg && (a.images.jpg.large_image_url || a.images.jpg.image_url)) || ''),
           total: a.episodes || null,
           unit: 'eps',
           meta: `Anime TV · ${a.episodes || '?'} Episode`
@@ -1588,10 +1703,10 @@ window.searchExternalAPI = async function () {
         return (data || []).slice(0, 5).map(entry => ({
           tvmazeId: entry.show.id,
           title: entry.show.name,
-          cover: normalizeImageUrl(entry.show.image?.original || entry.show.image?.medium || ''),
+          cover: normalizeImageUrl((entry.show.image && (entry.show.image.original || entry.show.image.medium)) || ''),
           total: null,
           unit: 'eps',
-          meta: `TV Show · ${entry.show.premiered?.slice(0, 4) || 'Show'}`
+          meta: `TV Show · ${entry.show.premiered ? entry.show.premiered.slice(0, 4) : 'Show'}`
         }));
       })(),
       (async () => {
@@ -1605,7 +1720,7 @@ window.searchExternalAPI = async function () {
           cover: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : '',
           total: null,
           unit: 'eps',
-          meta: `TV Show · ${t.first_air_date?.slice(0, 4) || 'TMDB'}`
+          meta: `TV Show · ${t.first_air_date ? t.first_air_date.slice(0, 4) : 'TMDB'}`
         }));
       })()
     ]);
@@ -1623,7 +1738,7 @@ window.searchExternalAPI = async function () {
         const data = await res.json();
         return (data.data || []).map(a => ({
           title: a.title_english || a.title,
-          cover: normalizeImageUrl(a.images?.jpg?.large_image_url || a.images?.jpg?.image_url || a.images?.webp?.large_image_url || ''),
+          cover: normalizeImageUrl((a.images && a.images.jpg && (a.images.jpg.large_image_url || a.images.jpg.image_url)) || ''),
           total: 1,
           unit: 'movie',
           meta: `Anime Movie · ${a.year || 'Film'}`
@@ -1637,7 +1752,7 @@ window.searchExternalAPI = async function () {
           cover: normalizeImageUrl(m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : ''),
           total: 1,
           unit: 'movie',
-          meta: `Movie · ${m.releaseDate?.slice(0, 4) || 'Film'}`
+          meta: `Movie · ${m.releaseDate ? m.releaseDate.slice(0, 4) : 'Film'}`
         }));
       })(),
       (async () => {
@@ -1650,7 +1765,7 @@ window.searchExternalAPI = async function () {
           cover: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : '',
           total: 1,
           unit: 'movie',
-          meta: `Movie · ${m.release_date?.slice(0, 4) || 'TMDB'}`
+          meta: `Movie · ${m.release_date ? m.release_date.slice(0, 4) : 'TMDB'}`
         }));
       })()
     ]);
@@ -1670,7 +1785,7 @@ window.searchExternalAPI = async function () {
           .filter(m => m.type !== 'Light Novel' && m.type !== 'Novel')
           .map(m => ({
             title: m.title_english || m.title,
-            cover: normalizeImageUrl(m.images?.jpg?.large_image_url || m.images?.jpg?.image_url || m.images?.webp?.large_image_url || ''),
+            cover: normalizeImageUrl((m.images && m.images.jpg && (m.images.jpg.large_image_url || m.images.jpg.image_url)) || ''),
             total: m.chapters || null,
             unit: 'ch',
             meta: `${m.type} · ${m.chapters || '?'} Chapter`
@@ -1707,7 +1822,7 @@ window.searchExternalAPI = async function () {
         const data = await res.json();
         return (data.data || []).map(ln => ({
           title: ln.title_english || ln.title,
-          cover: normalizeImageUrl(ln.images?.jpg?.large_image_url || ln.images?.jpg?.image_url || ln.images?.webp?.large_image_url || ''),
+          cover: normalizeImageUrl((ln.images && ln.images.jpg && (ln.images.jpg.large_image_url || ln.images.jpg.image_url)) || ''),
           total: ln.volumes || ln.chapters || null,
           unit: ln.volumes ? 'vol' : 'ch',
           meta: `Light Novel · ${ln.volumes || '?'} Volume`
@@ -1733,7 +1848,6 @@ window.searchExternalAPI = async function () {
           const desc = (item.description || '').toLowerCase();
           return desc.includes('video game') || desc.includes('game');
         });
-
         if (candidates.length === 0) return [];
 
         const ids = candidates.map(c => c.id).join('|');
@@ -1747,41 +1861,26 @@ window.searchExternalAPI = async function () {
           candidates.map(async c => {
             const ent = entities[c.id];
             if (!ent) return null;
-
-            const title = ent.labels?.en?.value || c.label;
-            const desc = ent.descriptions?.en?.value || 'Video Game';
+            const title = (ent.labels && ent.labels.en && ent.labels.en.value) || c.label;
+            const desc = (ent.descriptions && ent.descriptions.en && ent.descriptions.en.value) || 'Video Game';
             let cover = '';
-
-            const p18 = ent.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
-            if (p18) {
-              cover = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(p18)}?width=500`;
-            }
-
-            const enWikiTitle = ent.sitelinks?.enwiki?.title;
+            const p18 = ent.claims && ent.claims.P18 && ent.claims.P18[0] && ent.claims.P18[0].mainsnak && ent.claims.P18[0].mainsnak.datavalue && ent.claims.P18[0].mainsnak.datavalue.value;
+            if (p18) cover = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(p18)}?width=500`;
+            const enWikiTitle = ent.sitelinks && ent.sitelinks.enwiki && ent.sitelinks.enwiki.title;
             if (!cover && enWikiTitle) {
               try {
                 const wpRes = await fetchWithTimeout(
                   `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(enWikiTitle)}&prop=pageimages&pithumbsize=500&format=json&origin=*`
                 );
                 const wpData = await wpRes.json();
-                const pages = wpData.query?.pages || {};
-                const pageObj = Object.values(pages)[0];
-                if (pageObj?.thumbnail?.source) {
-                  cover = normalizeImageUrl(pageObj.thumbnail.source);
-                }
+                const pagesObj = (wpData.query && wpData.query.pages) ? wpData.query.pages : {};
+                const pageObj = Object.values(pagesObj)[0];
+                if (pageObj && pageObj.thumbnail && pageObj.thumbnail.source) cover = normalizeImageUrl(pageObj.thumbnail.source);
               } catch (_) {}
             }
-
-            return {
-              title,
-              cover,
-              total: 1,
-              unit: 'item',
-              meta: desc.charAt(0).toUpperCase() + desc.slice(1)
-            };
+            return { title, cover, total: 1, unit: 'item', meta: desc.charAt(0).toUpperCase() + desc.slice(1) };
           })
         );
-
         return results.filter(Boolean);
       })(),
       (async () => {
@@ -1797,7 +1896,7 @@ window.searchExternalAPI = async function () {
         const data = await res.json();
         return (data.results || []).map(g => ({
           title: g.title,
-          cover: normalizeImageUrl(g.image?.url || ''),
+          cover: normalizeImageUrl(g.image ? g.image.url : ''),
           total: 1,
           unit: 'item',
           meta: `Visual Novel · ${g.released || ''}`
@@ -1813,7 +1912,7 @@ window.searchExternalAPI = async function () {
           cover: normalizeImageUrl(g.background_image || ''),
           total: 1,
           unit: 'item',
-          meta: `Game · ${g.released?.slice(0, 4) || ''}`
+          meta: `Game · ${g.released ? g.released.slice(0, 4) : ''}`
         }));
       })()
     ]);
@@ -1832,7 +1931,7 @@ window.searchExternalAPI = async function () {
         cover: normalizeImageUrl(m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : ''),
         total: m.trackCount || 1,
         unit: 'track',
-        meta: `Album · ${m.trackCount || '?'} Tracks · ${m.releaseDate?.slice(0, 4) || ''}`
+        meta: `Album · ${m.trackCount || '?'} Tracks · ${m.releaseDate ? m.releaseDate.slice(0, 4) : ''}`
       }));
       items = deduplicateResults(items);
     } catch (e) {
@@ -1860,127 +1959,169 @@ window.searchExternalAPI = async function () {
 
 window.applyApiResult = async function (idx) {
   const item = lastApiResults[idx];
+  const searchedCat = document.getElementById('api-search-cat').value;
   if (!item) return;
 
-  document.getElementById('media-title').value = item.title;
-  document.getElementById('media-cover').value = item.cover || '';
-  if (item.total) document.getElementById('media-total').value = item.total;
-  if (item.unit) document.getElementById('media-unit').value = item.unit;
-  handleTotalUnitsChange();
+  if (!document.getElementById('media-title').value.trim()) {
+    document.getElementById('media-title').value = item.title;
+  }
+  if (!document.getElementById('media-cover').value.trim() && item.cover) {
+    document.getElementById('media-cover').value = item.cover;
+  }
+
+  const trackCards = Array.from(document.querySelectorAll('#media-tracks-editor .track-edit-card'));
+  let targetCard = trackCards.find(c => {
+    const sel = c.querySelector('.track-cat-select');
+    return sel && sel.value === searchedCat;
+  }) || trackCards[0];
+
+  if (targetCard) {
+    targetCard.querySelector('.track-cat-select').value = searchedCat;
+    if (item.total) targetCard.querySelector('.track-total-input').value = item.total;
+    if (item.unit) targetCard.querySelector('.track-unit-select').value = item.unit;
+    onTrackStatusOrTotalChange(targetCard.querySelector('.track-total-input'));
+  }
+
   document.getElementById('api-search-results').style.display = 'none';
 
-  if (item.tvmazeId) {
+  if (item.tvmazeId && targetCard) {
     try {
       const epRes = await fetchWithTimeout(`https://api.tvmaze.com/shows/${item.tvmazeId}/episodes`);
       const epData = await epRes.json();
       if (Array.isArray(epData) && epData.length > 0) {
-        document.getElementById('media-total').value = epData.length;
-        handleTotalUnitsChange();
+        targetCard.querySelector('.track-total-input').value = epData.length;
+        onTrackStatusOrTotalChange(targetCard.querySelector('.track-total-input'));
       }
-    } catch (e) {
-      console.error('TVMaze episode count error:', e);
-    }
+    } catch (_) {}
   }
 
-  if (item.tmdbId && TMDB_API_KEY) {
+  if (item.tmdbId && TMDB_API_KEY && targetCard) {
     try {
       const detailRes = await fetchWithTimeout(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}`);
       const detailData = await detailRes.json();
       if (detailData.number_of_episodes) {
-        document.getElementById('media-total').value = detailData.number_of_episodes;
-        handleTotalUnitsChange();
+        targetCard.querySelector('.track-total-input').value = detailData.number_of_episodes;
+        onTrackStatusOrTotalChange(targetCard.querySelector('.track-total-input'));
       }
-    } catch (e) {
-      console.error('TMDB detail error:', e);
-    }
+    } catch (_) {}
   }
 };
 
 // ==========================================
 // 6. SUPABASE MEDIA CRUD + AUTO-CLEANUP
 // ==========================================
-document.getElementById('media-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
+const mediaForm = document.getElementById('media-form');
+if (mediaForm) {
+  mediaForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
 
-  const id = document.getElementById('media-id').value;
-  const existingItem = id ? allMediaLogs.find(m => m.id === id) : null;
-  const oldCover = existingItem ? existingItem.cover_url : null;
-  const newCover = normalizeImageUrl(document.getElementById('media-cover').value) || null;
+    const id = document.getElementById('media-id').value;
+    const existingItem = id ? allMediaLogs.find(m => String(m.id) === String(id)) : null;
+    const oldCover = existingItem ? existingItem.cover_url : null;
+    const newCover = normalizeImageUrl(document.getElementById('media-cover').value) || null;
 
-  const selectedCats = getSelectedModalCategories();
-  const primaryCat = selectedCats[0];
-  const ratingRaw = document.getElementById('media-rating').value;
-  const totalRaw = document.getElementById('media-total').value;
-  const statusVal = document.getElementById('media-status').value;
-  const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
-  let progressVal = parseInt(document.getElementById('media-progress').value, 10) || 0;
-  const repeatVal = Math.max(0, parseInt(document.getElementById('media-repeat').value, 10) || 0);
-  const notesVal = document.getElementById('media-notes')?.value.trim() || null;
-  const seasonsArr = collectSeasonsFromModal();
-  const tracksArr = collectTracksFromModal();
+    const trackCards = document.querySelectorAll('#media-tracks-editor .track-edit-card');
+    const tracks = [];
+    trackCards.forEach(card => {
+      const cat = card.querySelector('.track-cat-select').value;
+      const status = card.querySelector('.track-status-select').value;
+      const totalRaw = card.querySelector('.track-total-input').value;
+      const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
+      let progressVal = parseInt(card.querySelector('.track-progress-input').value, 10) || 0;
+      const unitLabel = card.querySelector('.track-unit-select').value;
 
-  if (statusVal === 'completed' && totalUnits && totalUnits > 0) {
-    progressVal = totalUnits;
-  }
+      if (status === 'completed' && totalUnits && totalUnits > 0) {
+        progressVal = totalUnits;
+      }
 
-  const prevStatus = existingItem ? (existingItem.status || '').toLowerCase().trim() : null;
-  const statusChanged = !existingItem || prevStatus !== statusVal;
-  const statusTimestamp = statusChanged
-    ? new Date().toISOString()
-    : (existingItem.status_updated_at || existingItem.updated_at || new Date().toISOString());
+      tracks.push({
+        category: cat,
+        status,
+        progress: progressVal,
+        total_units: totalUnits,
+        unit_label: unitLabel
+      });
+    });
 
-  const basePayload = {
-    title: document.getElementById('media-title').value.trim(),
-    category: selectedCats.length > 1 ? selectedCats.join(',') : primaryCat,
-    sub_category: null,
-    cover_url: newCover,
-    status: statusVal,
-    progress: progressVal,
-    total_units: totalUnits,
-    unit_label: document.getElementById('media-unit').value,
-    rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null,
-    repeat_count: repeatVal,
-    updated_at: statusTimestamp
-  };
-
-  const extendedPayload = {
-    ...basePayload,
-    notes: notesVal,
-    seasons: seasonsArr,
-    tracks: tracksArr
-  };
-
-  let error;
-  if (id) {
-    ({ error } = await supabaseClient.from('media_logs').update(extendedPayload).eq('id', id));
-    if (error && /column .* does not exist/i.test(error.message)) {
-      ({ error } = await supabaseClient.from('media_logs').update(basePayload).eq('id', id));
+    if (tracks.length === 0) {
+      showToast('Please add at least 1 category track', 'error');
+      return;
     }
-  } else {
-    ({ error } = await supabaseClient.from('media_logs').insert([extendedPayload]));
-    if (error && /column .* does not exist/i.test(error.message)) {
-      ({ error } = await supabaseClient.from('media_logs').insert([basePayload]));
-    }
-  }
 
-  if (error) {
-    Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
-  } else {
-    await cleanupPendingUploads([newCover]);
-    if (oldCover && oldCover !== newCover) {
-      await deleteOldStorageFile(oldCover);
+    const seasonCards = document.querySelectorAll('#media-seasons-editor .season-edit-card');
+    const seasons = [];
+    seasonCards.forEach(card => {
+      const name = card.querySelector('.season-name-input').value.trim();
+      if (!name) return;
+      const status = card.querySelector('.season-status-select').value;
+      const totalRaw = card.querySelector('.season-total-input').value;
+      const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
+      let progressVal = parseInt(card.querySelector('.season-progress-input').value, 10) || 0;
+      const ratingRaw = card.querySelector('.season-rating-input').value;
+
+      if (status === 'completed' && totalUnits && totalUnits > 0) {
+        progressVal = totalUnits;
+      }
+
+      seasons.push({
+        name,
+        status,
+        progress: progressVal,
+        total_units: totalUnits,
+        rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null
+      });
+    });
+
+    const categories = Array.from(new Set(tracks.map(t => t.category)));
+    const primaryTrack = tracks[0];
+    const syncedStatus = computeSyncedStatus(tracks);
+
+    const ratingRaw = document.getElementById('media-rating').value;
+    const repeatVal = Math.max(0, parseInt(document.getElementById('media-repeat').value, 10) || 0);
+
+    const payload = {
+      title: document.getElementById('media-title').value.trim(),
+      category: primaryTrack.category,
+      categories,
+      tracks,
+      seasons,
+      sub_category: null,
+      cover_url: newCover,
+      status: syncedStatus.key,
+      progress: primaryTrack.progress,
+      total_units: primaryTrack.total_units,
+      unit_label: primaryTrack.unit_label,
+      rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null,
+      repeat_count: repeatVal,
+      updated_at: new Date().toISOString()
+    };
+
+    let error;
+    if (id) {
+      ({ error } = await supabaseClient.from('media_logs').update(payload).eq('id', id));
+    } else {
+      ({ error } = await supabaseClient.from('media_logs').insert([payload]));
     }
-    document.getElementById('media-modal').classList.remove('active');
-    await fetchMediaLogs();
-    showToast(id ? 'Entry updated' : 'Added to library', 'success');
-  }
-});
+
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      await cleanupPendingUploads([newCover]);
+      if (oldCover && oldCover !== newCover) {
+        await deleteOldStorageFile(oldCover);
+      }
+      document.getElementById('media-modal').classList.remove('active');
+      await fetchMediaLogs();
+      showToast(id ? 'Media entry updated' : 'Media entry added', 'success');
+    }
+  });
+}
 
 window.deleteCurrentModalMedia = async function () {
   const id = document.getElementById('media-id').value;
   if (!id) return;
 
-  const existingItem = allMediaLogs.find(m => m.id === id);
+  const existingItem = allMediaLogs.find(m => String(m.id) === String(id));
 
   const confirm = await Swal.fire({
     text: 'Remove this entry from your library?',
@@ -1996,21 +2137,21 @@ window.deleteCurrentModalMedia = async function () {
   if (confirm.isConfirmed) {
     const { error } = await supabaseClient.from('media_logs').delete().eq('id', id);
     if (error) {
-      Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
+      showToast(error.message, 'error');
     } else {
       await cleanupPendingUploads([]);
-      if (existingItem?.cover_url) {
+      if (existingItem && existingItem.cover_url) {
         await deleteOldStorageFile(existingItem.cover_url);
       }
       document.getElementById('media-modal').classList.remove('active');
       await fetchMediaLogs();
-      showToast('Entry removed', 'info');
+      showToast('Entry deleted', 'info');
     }
   }
 };
 
 // ==========================================
-// 7. PERSONAL NOTES / POSTS (CREATE, READ, EDIT, DELETE)
+// 7. PERSONAL NOTES / POSTS + AUTOMATIC LINK PREVIEW CARD
 // ==========================================
 function formatPostDateTime(createdIso, updatedIso) {
   if (!createdIso) return '';
@@ -2034,33 +2175,39 @@ function formatPostDateTime(createdIso, updatedIso) {
 
 function escapeHtml(text) {
   const div = document.createElement('div');
-  div.textContent = text;
+  div.textContent = text == null ? '' : String(text);
   return div.innerHTML;
 }
 
-function formatNoteContentWithLinks(rawText) {
-  const urlRegex = /(https?:\/\/[^\s<]+)/g;
-  const escaped = escapeHtml(rawText);
-  return escaped.replace(urlRegex, (url) => {
+function extractFirstUrl(text) {
+  const match = (text || '').match(/https?:\/\/[^\s<>"']+/i);
+  return match ? match[0] : null;
+}
+
+function formatTextWithLinks(rawText) {
+  const escaped = escapeHtml(rawText || '');
+  return escaped.replace(/(https?:\/\/[^\s<>"']+)/gi, (url) => {
     return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="inline-note-link">${url}</a>`;
   });
 }
 
-function extractFirstUrlCard(rawText) {
-  const match = (rawText || '').match(/https?:\/\/[^\s<]+/);
-  if (!match) return '';
-  const url = match[0];
+function buildLinkPreviewCard(url) {
+  if (!url) return '';
   try {
-    const u = new URL(url);
-    const domain = u.hostname.replace(/^www\./, '');
+    const parsed = new URL(url);
+    const domain = parsed.hostname.replace(/^www\./, '');
+    const iconName = detectSocialIcon(url);
+    const pathClean = decodeURIComponent(parsed.pathname).replace(/^\/|\/$/g, '').replace(/[-_]/g, ' ');
+    const displayTitle = pathClean ? `${domain} — ${pathClean}` : url;
+
     return `
       <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="link-preview-card">
         <div class="link-preview-icon">
-          <ion-icon name="${detectSocialIcon(url)}"></ion-icon>
+          <ion-icon name="${iconName}"></ion-icon>
         </div>
         <div class="link-preview-info">
           <span class="link-preview-domain">${escapeHtml(domain)}</span>
-          <span class="link-preview-title">${escapeHtml(url)}</span>
+          <span class="link-preview-title">${escapeHtml(displayTitle)}</span>
         </div>
         <ion-icon name="open-outline" style="color: var(--light-gray-70); font-size: 16px; flex-shrink: 0;"></ion-icon>
       </a>
@@ -2078,7 +2225,7 @@ async function fetchBlogPosts() {
 
   if (error) {
     const listEl = document.getElementById('blog-feed-list');
-    if (listEl) listEl.innerHTML = `<p class="empty-state">Failed to load posts: ${error.message}</p>`;
+    if (listEl) listEl.innerHTML = `<p class="empty-state">Failed to load posts: ${escapeHtml(error.message)}</p>`;
     return;
   }
 
@@ -2099,16 +2246,18 @@ function renderBlogPosts() {
   const authorName = escapeHtml(currentProfile.name || '');
 
   listEl.innerHTML = allBlogPosts.map(post => {
+    const safePostId = escapeHtml(String(post.id));
     const postImg = normalizeImageUrl(post.image_url);
     const timeLabel = formatPostDateTime(post.created_at, post.updated_at);
-    const linkCardHtml = !postImg ? extractFirstUrlCard(post.content) : '';
+    const detectedUrl = extractFirstUrl(post.content);
+    const linkPreviewHtml = detectedUrl ? buildLinkPreviewCard(detectedUrl) : '';
 
     const adminControls = isAdminLoggedIn ? `
       <div class="blog-post-actions">
-        <button type="button" class="blog-icon-btn" onclick="openEditPostModal('${post.id}')" title="Edit Post">
+        <button type="button" class="blog-icon-btn" onclick="openEditPostModal('${safePostId}')" title="Edit Post">
           <ion-icon name="create-outline"></ion-icon>
         </button>
-        <button type="button" class="blog-icon-btn delete" onclick="deleteBlogPost('${post.id}')" title="Delete Post">
+        <button type="button" class="blog-icon-btn delete" onclick="deleteBlogPost('${safePostId}')" title="Delete Post">
           <ion-icon name="trash-outline"></ion-icon>
         </button>
       </div>
@@ -2132,8 +2281,8 @@ function renderBlogPosts() {
           </div>
           ${adminControls}
         </div>
-        <div class="blog-post-text">${formatNoteContentWithLinks(post.content)}</div>
-        ${linkCardHtml}
+        <div class="blog-post-text">${formatTextWithLinks(post.content)}</div>
+        ${linkPreviewHtml}
         ${imageBlock}
       </article>
     `;
@@ -2150,7 +2299,7 @@ window.openPostModal = function () {
 };
 
 window.openEditPostModal = function (id) {
-  const post = allBlogPosts.find(p => p.id === id);
+  const post = allBlogPosts.find(p => String(p.id) === String(id));
   if (!post) return;
 
   pendingUploadedUrls = [];
@@ -2173,7 +2322,8 @@ window.clearPostImageInput = function () {
 };
 
 window.handlePostImageUpload = async function (event) {
-  const file = event.target.files?.[0];
+  const file = event.target.files ? event.target.files[0] : null;
+  event.target.value = '';
   if (!file) return;
 
   setElText('post-upload-status', 'Uploading photo...');
@@ -2181,54 +2331,57 @@ window.handlePostImageUpload = async function (event) {
     const publicUrl = await uploadImageToSupabase(file, 'posts');
     document.getElementById('post-image').value = publicUrl;
     setElText('post-upload-status', 'Photo uploaded!');
+    showToast('Photo uploaded', 'success');
   } catch (err) {
     setElText('post-upload-status', `Upload failed: ${err.message}`);
-  } finally {
-    event.target.value = '';
+    showToast(err.message, 'error');
   }
 };
 
-document.getElementById('post-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
+const postForm = document.getElementById('post-form');
+if (postForm) {
+  postForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
 
-  const id = document.getElementById('post-id').value;
-  const existingPost = id ? allBlogPosts.find(p => p.id === id) : null;
-  const oldImage = existingPost ? existingPost.image_url : null;
-  const newImage = normalizeImageUrl(document.getElementById('post-image').value) || null;
-  const contentVal = document.getElementById('post-content').value.trim();
+    const id = document.getElementById('post-id').value;
+    const existingPost = id ? allBlogPosts.find(p => String(p.id) === String(id)) : null;
+    const oldImage = existingPost ? existingPost.image_url : null;
+    const newImage = normalizeImageUrl(document.getElementById('post-image').value) || null;
+    const contentVal = document.getElementById('post-content').value.trim();
 
-  if (!contentVal) return;
+    if (!contentVal) return;
 
-  const nowIso = new Date().toISOString();
-  const payload = {
-    content: contentVal,
-    image_url: newImage,
-    updated_at: nowIso
-  };
+    const nowIso = new Date().toISOString();
+    const payload = {
+      content: contentVal,
+      image_url: newImage,
+      updated_at: nowIso
+    };
 
-  let error;
-  if (id) {
-    ({ error } = await supabaseClient.from('blog_posts').update(payload).eq('id', id));
-  } else {
-    payload.created_at = nowIso;
-    ({ error } = await supabaseClient.from('blog_posts').insert([payload]));
-  }
-
-  if (error) {
-    Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
-  } else {
-    await cleanupPendingUploads([newImage]);
-    if (oldImage && oldImage !== newImage) {
-      await deleteOldStorageFile(oldImage);
+    let error;
+    if (id) {
+      ({ error } = await supabaseClient.from('blog_posts').update(payload).eq('id', id));
+    } else {
+      payload.created_at = nowIso;
+      ({ error } = await supabaseClient.from('blog_posts').insert([payload]));
     }
-    document.getElementById('post-modal').classList.remove('active');
-    await fetchBlogPosts();
-    showToast(id ? 'Post updated' : 'Post published', 'success');
-  }
-});
+
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      await cleanupPendingUploads([newImage]);
+      if (oldImage && oldImage !== newImage) {
+        await deleteOldStorageFile(oldImage);
+      }
+      document.getElementById('post-modal').classList.remove('active');
+      await fetchBlogPosts();
+      showToast(id ? 'Post updated' : 'Post published', 'success');
+    }
+  });
+}
 
 window.deleteBlogPost = async function (id) {
-  const existingPost = allBlogPosts.find(p => p.id === id);
+  const existingPost = allBlogPosts.find(p => String(p.id) === String(id));
 
   const confirm = await Swal.fire({
     text: 'Delete this post permanently?',
@@ -2244,9 +2397,9 @@ window.deleteBlogPost = async function (id) {
   if (confirm.isConfirmed) {
     const { error } = await supabaseClient.from('blog_posts').delete().eq('id', id);
     if (error) {
-      Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
+      showToast(error.message, 'error');
     } else {
-      if (existingPost?.image_url) {
+      if (existingPost && existingPost.image_url) {
         await deleteOldStorageFile(existingPost.image_url);
       }
       await fetchBlogPosts();
