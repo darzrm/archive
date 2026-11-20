@@ -37,7 +37,7 @@
       <div class="sticky-mini-tabs">
         <button type="button" class="mini-tab-btn active" data-view="blog" onclick="switchMainView('blog')">Notes</button>
         <button type="button" class="mini-tab-btn" id="mini-tab-library" data-view="library" onclick="switchMainView('library')">Library</button>
-        <button type="button" class="mini-tab-btn" id="mini-tab-ai" data-view="ai-chat" onclick="switchMainView('ai-chat')">AI Chat</button>
+        <button type="button" class="mini-tab-btn" id="mini-tab-ai" data-view="ai" onclick="switchMainView('ai')" style="display: none;">AI Assistant</button>
       </div>
     </div>
   </header>
@@ -88,9 +88,9 @@
             <span>Library</span>
             <ion-icon name="lock-closed" id="library-private-lock" style="display: none; font-size: 11px; opacity: 0.75;"></ion-icon>
           </button>
-          <button type="button" class="main-view-btn" id="main-tab-ai" data-view="ai-chat" onclick="switchMainView('ai-chat')">
+          <button type="button" class="main-view-btn" id="main-tab-ai" data-view="ai" onclick="switchMainView('ai')" style="display: none;">
             <ion-icon name="sparkles-outline"></ion-icon>
-            <span>AI Chat</span>
+            <span>AI Assistant</span>
           </button>
 
           <!-- Context-aware Admin Action Buttons -->
@@ -439,38 +439,107 @@
     </div>
 
     <!-- ========================================== -->
-    <!-- VIEW 3: AI CHAT (GROQ API)                 -->
+    <!-- VIEW 3: ADMIN AI WORKSPACE (GROQ)          -->
     <!-- ========================================== -->
-    <div id="view-ai-chat" class="view-section" style="display: none;">
-      <section class="ai-chat-card">
-        <div class="ai-chat-header">
-          <div class="ai-chat-title-wrap">
-            <ion-icon name="sparkles-outline"></ion-icon>
-            <div>
-              <h3>AI Assistant</h3>
-              <p>Asisten AI berbahasa Indonesia (Didukung oleh Groq)</p>
+    <div id="view-ai" class="view-section" style="display: none;">
+      <div class="ai-workspace-grid">
+
+        <!-- Main Chat Column -->
+        <section class="ai-chat-card">
+          <div class="ai-chat-header">
+            <div class="ai-header-title">
+              <div class="ai-avatar-badge">
+                <ion-icon name="sparkles"></ion-icon>
+              </div>
+              <div>
+                <h3>Archive AI Assistant</h3>
+                <span>Groq • Connected to Library & Notes</span>
+              </div>
+            </div>
+
+            <div class="ai-header-actions">
+              <button type="button" class="blog-icon-btn" onclick="toggleAiSettings()" title="Groq API Settings">
+                <ion-icon name="key-outline"></ion-icon>
+              </button>
+              <button type="button" class="blog-icon-btn delete" onclick="clearAiChatHistory()" title="Clear Chat History">
+                <ion-icon name="trash-outline"></ion-icon>
+              </button>
             </div>
           </div>
-          <button type="button" class="toolbar-btn" onclick="clearAiChatHistory()" title="Bersihkan Percakapan">
-            <ion-icon name="trash-outline"></ion-icon>
-            <span>Reset</span>
-          </button>
-        </div>
 
-        <div class="ai-chat-messages" id="ai-chat-messages">
-          <div class="ai-message assistant">
-            <div class="ai-bubble">Halo! Ada yang bisa saya bantu hari ini? Silakan tanyakan apa saja dalam bahasa Indonesia.</div>
+          <!-- Collapsible Groq API Key Panel -->
+          <div class="ai-settings-panel" id="ai-settings-panel" style="display: none;">
+            <label class="form-label" style="margin-bottom: 4px;">Groq API Key (Stored locally in browser)</label>
+            <div class="ai-settings-row">
+              <input type="password" id="groq-api-key-input" class="form-input" placeholder="gsk_...">
+              <button type="button" class="form-btn primary-submit" style="flex: 0 0 auto;" onclick="saveGroqApiKey()">Save Key</button>
+            </div>
+            <p class="ai-settings-hint">Get a free API key at console.groq.com. Uses Llama 3.3 70B Versatile.</p>
           </div>
-        </div>
 
-        <div class="ai-chat-input-area">
-          <textarea id="ai-chat-input" class="form-input" rows="1" placeholder="Ketik pesan Anda di sini... (Tekan Enter untuk kirim)" onkeydown="handleAiKeydown(event)"></textarea>
-          <button type="button" class="add-media-btn" id="ai-send-btn" onclick="sendAiMessage()">
-            <ion-icon name="send-outline"></ion-icon>
-            <span>Kirim</span>
-          </button>
-        </div>
-      </section>
+          <!-- Messages Feed -->
+          <div class="ai-messages-list" id="ai-messages-list">
+            <div class="ai-empty-welcome">
+              <ion-icon name="sparkles-outline"></ion-icon>
+              <h4>Hello, Admin</h4>
+              <p>I have live access to your Media Library and Personal Notes. Ask me anything for daily tasks, recommendations, or database insights.</p>
+            </div>
+          </div>
+
+          <!-- Composer Form -->
+          <form id="ai-composer-form" class="ai-composer-form" onsubmit="handleAiFormSubmit(event)">
+            <textarea id="ai-prompt-input" class="ai-composer-input" rows="1" placeholder="Ask anything or query your archive..." onkeydown="handleAiInputKeydown(event)"></textarea>
+            <button type="submit" id="btn-send-ai" class="ai-send-btn" title="Send message">
+              <ion-icon name="arrow-up-outline"></ion-icon>
+            </button>
+          </form>
+        </section>
+
+        <!-- Right Context & Quick Prompts Sidebar -->
+        <aside class="ai-sidebar-card">
+          <div class="ai-sidebar-section">
+            <div class="ai-sidebar-heading">
+              <ion-icon name="server-outline"></ion-icon>
+              <span>Live Database Context</span>
+            </div>
+            <div class="ai-context-pills">
+              <div class="ai-ctx-pill">
+                <span class="ai-ctx-dot"></span>
+                <span id="ai-ctx-library-count">0 Library entries</span>
+              </div>
+              <div class="ai-ctx-pill">
+                <span class="ai-ctx-dot"></span>
+                <span id="ai-ctx-notes-count">0 Personal notes</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="ai-sidebar-section">
+            <div class="ai-sidebar-heading">
+              <ion-icon name="flash-outline"></ion-icon>
+              <span>Quick Prompts</span>
+            </div>
+            <div class="ai-quick-list">
+              <button type="button" class="ai-quick-btn" onclick="triggerQuickPrompt('Analyze my media library tastes and summarize my top-rated genres and titles.')">
+                Analyze my library tastes
+              </button>
+              <button type="button" class="ai-quick-btn" onclick="triggerQuickPrompt('What am I currently watching, reading, or playing in my ongoing list?')">
+                Check my ongoing list
+              </button>
+              <button type="button" class="ai-quick-btn" onclick="triggerQuickPrompt('Recommend 5 new titles based on my highest-rated entries in the library.')">
+                Recommend based on ratings
+              </button>
+              <button type="button" class="ai-quick-btn" onclick="triggerQuickPrompt('Summarize the main themes and recent thoughts from my personal notes.')">
+                Summarize my notes
+              </button>
+              <button type="button" class="ai-quick-btn" onclick="triggerQuickPrompt('Help me plan a productive daily routine for today.')">
+                Plan my daily routine
+              </button>
+            </div>
+          </div>
+        </aside>
+
+      </div>
     </div>
 
     <!-- MINIMALIST COPYRIGHT FOOTER -->
@@ -726,7 +795,7 @@
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 
   <!-- Main JS -->
-  <script src="./assets/js/script.js?v=55"></script>
+  <script src="./assets/js/script.js?v=53"></script>
 </body>
 
 </html>
