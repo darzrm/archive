@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=101">
+  <link rel="stylesheet" href="./assets/css/style.css?v=200">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -34,15 +34,17 @@
         <img id="sticky-avatar-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="">
         <span id="sticky-name-text"></span>
       </div>
-      <div class="sticky-mini-right">
-        <span id="sticky-active-view-badge" class="mini-view-badge">Notes</span>
+
+      <div class="sticky-mini-nav">
+        <button type="button" class="mini-nav-btn active" data-view="blog" onclick="switchMainView('blog')">Notes</button>
+        <button type="button" class="mini-nav-btn" id="mini-tab-library" data-view="library" onclick="switchMainView('library')">Library</button>
       </div>
     </div>
   </header>
 
   <main class="main-container">
 
-    <!-- PROFILE HEADER CARD -->
+    <!-- PROFILE HEADER CARD + INTEGRATED NAVIGATION -->
     <section class="profile-header-card" id="profile-header-card">
       <div class="profile-banner-wrap" id="profile-banner-wrap" style="display: none;">
         <img id="profile-banner-img" src="" alt="Profile Banner">
@@ -61,11 +63,11 @@
           </div>
 
           <div class="header-actions">
-            <button type="button" id="btn-edit-profile" class="admin-badge-btn" style="display: none;" onclick="openProfileModal()">
+            <button type="button" id="btn-edit-profile" class="header-pill-btn" style="display: none;" onclick="openProfileModal()">
               <ion-icon name="settings-outline"></ion-icon>
               <span>Settings</span>
             </button>
-            <button type="button" id="btn-admin-auth" class="admin-badge-btn" onclick="handleAdminAuthClick()">
+            <button type="button" id="btn-admin-auth" class="header-pill-btn" onclick="handleAdminAuthClick()">
               <ion-icon name="lock-closed-outline" id="admin-lock-icon"></ion-icon>
               <span id="admin-btn-text">Admin</span>
             </button>
@@ -75,6 +77,30 @@
         <!-- Dynamic Social Links Bar -->
         <div class="profile-socials-bar" id="profile-socials-bar" style="display: none;"></div>
       </div>
+
+      <!-- INTEGRATED MAIN NAVIGATION BAR -->
+      <nav class="primary-nav-bar" aria-label="Primary Navigation">
+        <div class="segmented-nav-tabs">
+          <button type="button" class="nav-segment-btn active" data-view="blog" onclick="switchMainView('blog')">
+            <ion-icon name="chatbubble-ellipses-outline" class="nav-icon-outline"></ion-icon>
+            <ion-icon name="chatbubble-ellipses" class="nav-icon-filled"></ion-icon>
+            <span>Notes</span>
+          </button>
+
+          <button type="button" class="nav-segment-btn" id="bottom-tab-library" data-view="library" onclick="switchMainView('library')">
+            <ion-icon name="albums-outline" class="nav-icon-outline"></ion-icon>
+            <ion-icon name="albums" class="nav-icon-filled"></ion-icon>
+            <span>Library</span>
+            <ion-icon name="lock-closed" id="library-private-lock" class="nav-lock-tag" style="display: none;" title="Private (Admin Only)"></ion-icon>
+          </button>
+        </div>
+
+        <!-- Admin Context Primary Action Button -->
+        <button type="button" id="btn-center-action" class="primary-create-btn" style="display: none;" onclick="handleCenterActionClick()">
+          <ion-icon name="add-outline" id="center-action-icon"></ion-icon>
+          <span id="center-action-label">New Post</span>
+        </button>
+      </nav>
     </section>
 
     <!-- ========================================== -->
@@ -354,19 +380,19 @@
               </div>
               <div class="page-option-list">
                 <button type="button" class="page-option-item active" data-limit="8" onclick="selectItemsPerPage('8')">
-                  <span>8 Pages</span>
+                  <span>8 Items</span>
                   <ion-icon name="checkmark-outline"></ion-icon>
                 </button>
                 <button type="button" class="page-option-item" data-limit="16" onclick="selectItemsPerPage('16')">
-                  <span>16 Pages</span>
+                  <span>16 Items</span>
                   <ion-icon name="checkmark-outline"></ion-icon>
                 </button>
                 <button type="button" class="page-option-item" data-limit="32" onclick="selectItemsPerPage('32')">
-                  <span>32 Pages</span>
+                  <span>32 Items</span>
                   <ion-icon name="checkmark-outline"></ion-icon>
                 </button>
                 <button type="button" class="page-option-item" data-limit="64" onclick="selectItemsPerPage('64')">
-                  <span>64 Pages</span>
+                  <span>64 Items</span>
                   <ion-icon name="checkmark-outline"></ion-icon>
                 </button>
                 <button type="button" class="page-option-item" data-limit="all" onclick="selectItemsPerPage('all')">
@@ -409,33 +435,6 @@
     </footer>
 
   </main>
-
-  <!-- FLOATING BOTTOM NAVIGATION DOCK -->
-  <nav class="bottom-nav-dock" id="bottom-nav-dock" aria-label="Primary Navigation">
-    <div class="bottom-nav-pill">
-      <button type="button" class="bottom-nav-item active" data-view="blog" onclick="switchMainView('blog')">
-        <span class="bottom-nav-icon-wrap">
-          <ion-icon name="chatbubble-ellipses-outline" class="nav-icon-outline"></ion-icon>
-          <ion-icon name="chatbubble-ellipses" class="nav-icon-filled"></ion-icon>
-        </span>
-        <span>Notes</span>
-      </button>
-
-      <!-- Center Context Action Button (Visible when Admin is logged in) -->
-      <button type="button" id="btn-center-action" class="bottom-nav-fab" style="display: none;" onclick="handleCenterActionClick()" title="New Post" aria-label="New Post">
-        <ion-icon name="create-outline" id="center-action-icon"></ion-icon>
-      </button>
-
-      <button type="button" class="bottom-nav-item" id="bottom-tab-library" data-view="library" onclick="switchMainView('library')">
-        <span class="bottom-nav-icon-wrap">
-          <ion-icon name="albums-outline" class="nav-icon-outline"></ion-icon>
-          <ion-icon name="albums" class="nav-icon-filled"></ion-icon>
-          <ion-icon name="lock-closed" id="library-private-lock" class="nav-lock-badge" style="display: none;"></ion-icon>
-        </span>
-        <span>Library</span>
-      </button>
-    </div>
-  </nav>
 
   <!-- FLOATING BACK TO TOP BUTTON -->
   <button type="button" id="btn-back-to-top" class="back-to-top-btn" onclick="scrollToTopSmooth()" title="Back to top" aria-label="Back to top">
@@ -696,6 +695,41 @@
   <!-- Ionicons -->
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
+
+  <!-- Sync Helper for Integrated Navigation -->
+  <script>
+    (function () {
+      const originalSwitch = window.switchMainView;
+      function syncNavExtras(view) {
+        document.querySelectorAll('.nav-segment-btn, .mini-nav-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.view === view);
+        });
+        const actionLabel = document.getElementById('center-action-label');
+        if (actionLabel) {
+          actionLabel.textContent = view === 'library' ? 'Add Media' : 'New Post';
+        }
+      }
+
+      window.addEventListener('DOMContentLoaded', () => {
+        const prevSwitch = window.switchMainView;
+        if (typeof prevSwitch === 'function') {
+          window.switchMainView = function (view) {
+            prevSwitch(view);
+            syncNavExtras(view);
+          };
+        }
+
+        const libTab = document.getElementById('bottom-tab-library');
+        const miniLibTab = document.getElementById('mini-tab-library');
+        if (libTab && miniLibTab) {
+          const observer = new MutationObserver(() => {
+            miniLibTab.style.display = libTab.style.display;
+          });
+          observer.observe(libTab, { attributes: true, attributeFilter: ['style'] });
+        }
+      });
+    })();
+  </script>
 
   <!-- Main JS -->
   <script src="./assets/js/script.js?v=53"></script>
