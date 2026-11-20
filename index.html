@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=54">
+  <link rel="stylesheet" href="./assets/css/style.css?v=55">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -34,9 +34,8 @@
         <img id="sticky-avatar-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="">
         <span id="sticky-name-text"></span>
       </div>
-      <div class="sticky-mini-tabs">
-        <button type="button" class="mini-tab-btn active" data-view="blog" onclick="switchMainView('blog')">Notes</button>
-        <button type="button" class="mini-tab-btn" id="mini-tab-library" data-view="library" onclick="switchMainView('library')">Library</button>
+      <div class="sticky-mini-right">
+        <span id="sticky-active-view-badge" class="mini-view-badge">Notes</span>
       </div>
     </div>
   </header>
@@ -63,8 +62,8 @@
 
           <div class="header-actions">
             <button type="button" id="btn-edit-profile" class="admin-badge-btn" style="display: none;" onclick="openProfileModal()">
-              <ion-icon name="person-circle-outline"></ion-icon>
-              <span>Edit Profile</span>
+              <ion-icon name="settings-outline"></ion-icon>
+              <span>Settings</span>
             </button>
             <button type="button" id="btn-admin-auth" class="admin-badge-btn" onclick="handleAdminAuthClick()">
               <ion-icon name="lock-closed-outline" id="admin-lock-icon"></ion-icon>
@@ -75,35 +74,6 @@
 
         <!-- Dynamic Social Links Bar -->
         <div class="profile-socials-bar" id="profile-socials-bar" style="display: none;"></div>
-
-        <!-- Main View Switcher Tabs -->
-        <nav class="main-view-tabs">
-          <button type="button" class="main-view-btn active" data-view="blog" onclick="switchMainView('blog')">
-            <ion-icon name="chatbubble-ellipses-outline"></ion-icon>
-            <span>Notes</span>
-          </button>
-          <button type="button" class="main-view-btn" id="main-tab-library" data-view="library" onclick="switchMainView('library')">
-            <ion-icon name="albums-outline"></ion-icon>
-            <span>Library</span>
-            <ion-icon name="lock-closed" id="library-private-lock" style="display: none; font-size: 11px; opacity: 0.75;"></ion-icon>
-          </button>
-
-          <!-- Context-aware Admin Action Buttons -->
-          <div class="tab-bar-actions">
-            <button type="button" id="btn-toggle-library-privacy" class="add-media-btn secondary-action-btn" style="display: none;" onclick="toggleLibraryPrivacy()" title="Toggle Library Visibility">
-              <ion-icon name="eye-outline" id="library-privacy-icon"></ion-icon>
-              <span id="library-privacy-text">Public</span>
-            </button>
-            <button type="button" id="btn-add-media" class="add-media-btn" style="display: none;" onclick="openMediaModal()">
-              <ion-icon name="add-outline"></ion-icon>
-              <span>Add Media</span>
-            </button>
-            <button type="button" id="btn-add-post" class="add-media-btn" style="display: none;" onclick="openPostModal()">
-              <ion-icon name="create-outline"></ion-icon>
-              <span>New Post</span>
-            </button>
-          </div>
-        </nav>
       </div>
     </section>
 
@@ -440,6 +410,31 @@
 
   </main>
 
+  <!-- FLOATING BOTTOM NAVIGATION DOCK -->
+  <nav class="bottom-nav-dock" id="bottom-nav-dock" aria-label="Primary Navigation">
+    <div class="bottom-nav-pill">
+      <button type="button" class="bottom-nav-item active" data-view="blog" onclick="switchMainView('blog')">
+        <ion-icon name="chatbubble-ellipses-outline" class="nav-icon-outline"></ion-icon>
+        <ion-icon name="chatbubble-ellipses" class="nav-icon-filled"></ion-icon>
+        <span>Notes</span>
+      </button>
+
+      <!-- Center Context Action Button (Visible when Admin is logged in) -->
+      <button type="button" id="btn-center-action" class="bottom-nav-fab" style="display: none;" onclick="handleCenterActionClick()" title="New Post" aria-label="New Post">
+        <ion-icon name="create-outline" id="center-action-icon"></ion-icon>
+      </button>
+
+      <button type="button" class="bottom-nav-item" id="bottom-tab-library" data-view="library" onclick="switchMainView('library')">
+        <div class="bottom-nav-icon-wrap">
+          <ion-icon name="albums-outline" class="nav-icon-outline"></ion-icon>
+          <ion-icon name="albums" class="nav-icon-filled"></ion-icon>
+          <ion-icon name="lock-closed" id="library-private-lock" class="nav-lock-badge" style="display: none;"></ion-icon>
+        </div>
+        <span>Library</span>
+      </button>
+    </div>
+  </nav>
+
   <!-- FLOATING BACK TO TOP BUTTON -->
   <button type="button" id="btn-back-to-top" class="back-to-top-btn" onclick="scrollToTopSmooth()" title="Back to top" aria-label="Back to top">
     <ion-icon name="arrow-up-outline"></ion-icon>
@@ -594,12 +589,12 @@
   </div>
 
   <!-- ========================================== -->
-  <!-- MODAL 3: EDIT PROFILE                      -->
+  <!-- MODAL 3: SETTINGS (PROFILE & PRIVACY)      -->
   <!-- ========================================== -->
   <div class="modal-overlay" id="profile-modal">
     <div class="modal-box">
       <div class="modal-header">
-        <h3>Edit Profile</h3>
+        <h3>Settings</h3>
         <button type="button" class="close-modal-btn" onclick="closeProfileModal()">&times;</button>
       </div>
 
@@ -643,6 +638,21 @@
           <span class="upload-status-text" id="banner-upload-status"></span>
         </div>
 
+        <!-- Library Visibility Setting -->
+        <div class="settings-card-row">
+          <div class="settings-card-info">
+            <div class="settings-card-title">
+              <ion-icon name="eye-off-outline"></ion-icon>
+              <span>Private Library</span>
+            </div>
+            <p class="settings-card-desc">Hide Library tab from public visitors (visible only when logged in as Admin).</p>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="edit-library-private">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
         <div class="form-group">
           <div class="social-editor-header">
             <label style="margin: 0;">Social Links</label>
@@ -653,7 +663,7 @@
           <div id="social-links-editor" class="social-links-editor"></div>
         </div>
 
-        <button type="submit" class="form-btn primary-submit">Save Profile</button>
+        <button type="submit" class="form-btn primary-submit">Save Settings</button>
       </form>
     </div>
   </div>
@@ -686,7 +696,7 @@
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 
   <!-- Main JS -->
-  <script src="./assets/js/script.js?v=52"></script>
+  <script src="./assets/js/script.js?v=53"></script>
 </body>
 
 </html>
