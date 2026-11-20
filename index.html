@@ -1,754 +1,595 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Archive — Personal Notes, Library & News</title>
+  <title>Personal Archive</title>
+
+  <!-- Favicon -->
+  <link id="favicon-link" rel="shortcut icon" href="./assets/images/my-avatar.png" type="image/x-icon">
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="./assets/css/style.css">
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-  <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=55">
+  <!-- Supabase JS & SweetAlert2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
+
 <body>
 
-  <!-- Toast Notification Container -->
-  <div class="toast-container" id="toast-container"></div>
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
 
   <!-- Sticky Mini Header -->
-  <header class="sticky-mini-header" id="sticky-mini-header">
+  <header id="sticky-mini-header" class="sticky-mini-header">
     <div class="sticky-mini-inner">
-      <div class="sticky-mini-profile" id="sticky-scroll-top">
-        <img src="./assets/images/my-avatar.png" alt="Avatar" id="mini-avatar">
-        <span id="mini-name">Personal Archive</span>
+      <div class="sticky-user-info" onclick="scrollToTopSmooth()" style="cursor: pointer;">
+        <img id="sticky-avatar-img" src="./assets/images/my-avatar.png" alt="Avatar" class="sticky-avatar">
+        <span id="sticky-name-text" class="sticky-name">Archive</span>
       </div>
-      <div class="sticky-mini-tabs">
-        <button class="mini-tab-btn active" data-mini-view="notes">Notes</button>
-        <button class="mini-tab-btn" data-mini-view="library">Library</button>
-        <button class="mini-tab-btn" data-mini-view="news">News</button>
-      </div>
+      <nav class="sticky-mini-nav">
+        <button type="button" class="mini-tab-btn active" data-view="blog" onclick="switchMainView('blog')">Notes</button>
+        <button type="button" id="mini-tab-library" class="mini-tab-btn" data-view="library" onclick="switchMainView('library')">Library</button>
+        <button type="button" class="mini-tab-btn" data-view="news" onclick="switchMainView('news')">News</button>
+      </nav>
     </div>
   </header>
 
-  <!-- Floating Back To Top Button -->
-  <button class="back-to-top-btn" id="back-to-top-btn" title="Back to Top" aria-label="Back to Top">
-    <ion-icon name="arrow-up-outline"></ion-icon>
-  </button>
-
+  <!-- Main Container -->
   <main class="main-container">
 
     <!-- PROFILE HEADER CARD -->
-    <section class="profile-header-card" id="profile-header-card">
-      <div class="profile-banner-wrap" id="profile-banner-wrap" style="display: none;">
-        <img src="" alt="Profile Banner" id="display-banner">
+    <section id="profile-header-card" class="profile-header-card">
+      <div id="profile-banner-wrap" class="profile-banner-wrap" style="display: none;">
+        <img id="profile-banner-img" src="" alt="Banner">
       </div>
 
-      <div class="profile-content-area">
-        <div class="profile-top-bar">
-          <div class="profile-left">
-            <figure class="avatar-box">
-              <img src="./assets/images/my-avatar.png" alt="Avatar" id="display-avatar">
-            </figure>
-            <div>
-              <h1 class="profile-name" id="display-name">Personal Archive</h1>
-              <p class="profile-bio" id="display-bio">Notes, movies, shows, comics, novels, games & music log.</p>
+      <div class="profile-header-content">
+        <div class="profile-top-row">
+          <div class="profile-identity">
+            <img id="profile-avatar-img" src="./assets/images/my-avatar.png" alt="Avatar" class="profile-avatar">
+            <div class="profile-text-group">
+              <h1 id="profile-name-text" class="profile-name">Loading...</h1>
+              <p id="profile-bio-text" class="profile-bio"></p>
             </div>
           </div>
 
-          <div class="header-actions">
-            <button class="admin-badge-btn" id="edit-profile-btn" style="display: none;">
-              <ion-icon name="person-circle-outline"></ion-icon>
+          <div class="profile-admin-controls">
+            <button type="button" id="btn-edit-profile" class="admin-action-btn" style="display: none;" onclick="openProfileModal()">
+              <ion-icon name="person-outline"></ion-icon>
               <span>Edit Profile</span>
             </button>
-            <button class="admin-badge-btn" id="admin-toggle-btn">
-              <ion-icon name="lock-closed-outline"></ion-icon>
-              <span>Admin</span>
+            <button type="button" id="btn-admin-auth" class="admin-action-btn" onclick="handleAdminAuthClick()">
+              <ion-icon id="admin-lock-icon" name="lock-closed-outline"></ion-icon>
+              <span id="admin-btn-text">Admin</span>
             </button>
           </div>
         </div>
 
-        <!-- Social Links Bar -->
-        <div class="profile-socials-bar" id="profile-socials-bar" style="display: none;"></div>
-
-        <!-- Primary View Switcher (Notes vs Library vs News) -->
-        <div class="main-view-tabs">
-          <button class="main-view-btn active" data-view="notes">
-            <ion-icon name="document-text-outline"></ion-icon>
-            <span>Notes</span>
-          </button>
-          <button class="main-view-btn" data-view="library">
-            <ion-icon name="albums-outline"></ion-icon>
-            <span>Library</span>
-          </button>
-          <button class="main-view-btn" data-view="news">
-            <ion-icon name="newspaper-outline"></ion-icon>
-            <span>News</span>
-          </button>
-
-          <div class="tab-bar-actions">
-            <button class="add-media-btn" id="new-note-btn" style="display: none;">
-              <ion-icon name="create-outline"></ion-icon>
-              <span>New Note</span>
-            </button>
-            <button class="add-media-btn secondary-action-btn" id="export-library-btn" style="display: none;" title="Export Library JSON">
-              <ion-icon name="download-outline"></ion-icon>
-              <span>Export</span>
-            </button>
-            <button class="add-media-btn" id="open-add-modal-btn" style="display: none;">
-              <ion-icon name="add-outline"></ion-icon>
-              <span>Add Entry</span>
-            </button>
-            <button class="add-media-btn secondary-action-btn" id="manage-rss-btn" style="display: none;">
-              <ion-icon name="settings-outline"></ion-icon>
-              <span>Sources</span>
-            </button>
-          </div>
-        </div>
+        <!-- Social Chips -->
+        <div id="profile-socials-bar" class="profile-socials-bar" style="display: none;"></div>
       </div>
     </section>
 
-    <!-- VIEW 1: PERSONAL NOTES / MICRO-BLOG -->
-    <section id="notes-view" class="view-section active-view">
-      <div class="blog-feed-container" id="blog-feed-container">
-        <div class="empty-state">Loading notes...</div>
+    <!-- PRIMARY NAVIGATION TABS -->
+    <nav class="main-view-nav">
+      <div class="main-view-tabs">
+        <button type="button" class="main-view-btn active" data-view="blog" onclick="switchMainView('blog')">
+          <ion-icon name="document-text-outline"></ion-icon>
+          <span>Notes</span>
+        </button>
+        <button type="button" id="main-tab-library" class="main-view-btn" data-view="library" onclick="switchMainView('library')">
+          <ion-icon name="albums-outline"></ion-icon>
+          <span>Library</span>
+          <ion-icon id="library-private-lock" name="lock-closed" style="display: none; font-size: 12px; opacity: 0.75;"></ion-icon>
+        </button>
+        <button type="button" class="main-view-btn" data-view="news" onclick="switchMainView('news')">
+          <ion-icon name="newspaper-outline"></ion-icon>
+          <span>News</span>
+        </button>
+      </div>
+
+      <div class="main-view-actions">
+        <button type="button" id="btn-add-post" class="primary-add-btn" style="display: none;" onclick="openPostModal()">
+          <ion-icon name="add-outline"></ion-icon>
+          <span>New Post</span>
+        </button>
+        <button type="button" id="btn-toggle-library-privacy" class="admin-action-btn" style="display: none;" onclick="toggleLibraryPrivacy()">
+          <ion-icon id="library-privacy-icon" name="eye-outline"></ion-icon>
+          <span id="library-privacy-text">Public</span>
+        </button>
+        <button type="button" id="btn-add-media" class="primary-add-btn" style="display: none;" onclick="openMediaModal()">
+          <ion-icon name="add-outline"></ion-icon>
+          <span>Add Media</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- ==========================================
+         VIEW 1: NOTES / PERSONAL BLOG
+    =========================================== -->
+    <section id="view-blog" class="view-section active-view">
+      <div id="blog-feed-list" class="blog-feed-list">
+        <p class="empty-state">Loading posts...</p>
       </div>
     </section>
 
-    <!-- VIEW 2: MEDIA LIBRARY -->
-    <section id="library-view" class="view-section" style="display: none;">
+    <!-- ==========================================
+         VIEW 2: MEDIA LIBRARY
+    =========================================== -->
+    <section id="view-library" class="view-section" style="display: none;">
 
-      <!-- Collapsible Modern Bento Statistics Overview -->
-      <div class="stats-accordion-wrap">
-        <div class="stats-accordion-header" id="stats-toggle-bar">
-          <div class="stats-summary-left">
-            <ion-icon name="stats-chart-outline"></ion-icon>
-            <span>Library Statistics</span>
-            <span class="entries-pill" id="stats-quick-pill">0 Entries</span>
+      <!-- Stats Toggle Header -->
+      <div class="stats-header-bar">
+        <span id="total-entries-label" class="stats-summary-pill">0 Entries</span>
+        <button type="button" id="btn-toggle-stats" class="stats-toggle-btn" onclick="toggleLibraryStats()">
+          <span id="stats-toggle-text">Show Stats</span>
+          <ion-icon id="stats-chevron-icon" name="chevron-down-outline"></ion-icon>
+        </button>
+      </div>
+
+      <!-- Collapsible Bento Stats Panel -->
+      <div id="collapsible-stats-panel" class="collapsible-stats-panel" style="display: none;">
+        <!-- Categories Breakdown -->
+        <div class="bento-stats-grid">
+          <div class="bento-stat-card">
+            <span class="bento-label">TV Shows</span>
+            <strong id="stat-cat-tv" class="bento-value">0</strong>
+            <span id="stat-cat-tv-sub" class="bento-sub">0 Completed</span>
           </div>
-          <button type="button" class="stats-toggle-btn" id="stats-toggle-btn">
-            <span id="stats-toggle-label">Show Details</span>
-            <ion-icon name="chevron-down-outline" id="stats-toggle-icon"></ion-icon>
-          </button>
+          <div class="bento-stat-card">
+            <span class="bento-label">Movies</span>
+            <strong id="stat-cat-movie" class="bento-value">0</strong>
+            <span id="stat-cat-movie-sub" class="bento-sub">0 Completed</span>
+          </div>
+          <div class="bento-stat-card">
+            <span class="bento-label">Comics</span>
+            <strong id="stat-cat-comic" class="bento-value">0</strong>
+            <span id="stat-cat-comic-sub" class="bento-sub">0 Completed</span>
+          </div>
+          <div class="bento-stat-card">
+            <span class="bento-label">Novels</span>
+            <strong id="stat-cat-novel" class="bento-value">0</strong>
+            <span id="stat-cat-novel-sub" class="bento-sub">0 Completed</span>
+          </div>
+          <div class="bento-stat-card">
+            <span class="bento-label">Games</span>
+            <strong id="stat-cat-game" class="bento-value">0</strong>
+            <span id="stat-cat-game-sub" class="bento-sub">0 Completed</span>
+          </div>
+          <div class="bento-stat-card">
+            <span class="bento-label">Music</span>
+            <strong id="stat-cat-music" class="bento-value">0</strong>
+            <span id="stat-cat-music-sub" class="bento-sub">0 Completed</span>
+          </div>
         </div>
 
-        <div class="collapsible-stats-panel" id="collapsible-stats-panel" style="display: none;">
+        <!-- Units Breakdown -->
+        <div class="bento-units-bar">
+          <div class="unit-chip"><span id="stat-unit-eps">0</span> Eps</div>
+          <div class="unit-chip"><span id="stat-unit-ch">0</span> Ch</div>
+          <div class="unit-chip"><span id="stat-unit-pages">0</span> Pages</div>
+          <div class="unit-chip"><span id="stat-unit-vol">0</span> Vol</div>
+          <div class="unit-chip"><span id="stat-unit-movie">0</span> Movies</div>
+          <div class="unit-chip"><span id="stat-unit-track">0</span> Tracks</div>
+          <div class="unit-chip"><span id="stat-unit-item">0</span> Items</div>
+        </div>
 
-          <!-- Section 1: Category Breakdown -->
-          <div class="stats-section-block">
-            <div class="stats-group-heading">
-              <ion-icon name="layers-outline"></ion-icon>
-              <span>Categories Breakdown</span>
-            </div>
-            <div class="stats-bento-grid">
-              <div class="stat-bento-card">
-                <div class="stat-bento-top">
-                  <span class="stat-label">TV Shows</span>
-                  <ion-icon name="tv-outline"></ion-icon>
-                </div>
-                <span class="stat-value" id="stat-tv-count">0</span>
-                <span class="stat-sub" id="stat-tv-eps">0 eps</span>
-              </div>
-              <div class="stat-bento-card">
-                <div class="stat-bento-top">
-                  <span class="stat-label">Movies</span>
-                  <ion-icon name="film-outline"></ion-icon>
-                </div>
-                <span class="stat-value" id="stat-movie-count">0</span>
-                <span class="stat-sub" id="stat-movie-sub">0 watched</span>
-              </div>
-              <div class="stat-bento-card">
-                <div class="stat-bento-top">
-                  <span class="stat-label">Comics</span>
-                  <ion-icon name="book-outline"></ion-icon>
-                </div>
-                <span class="stat-value" id="stat-comic-count">0</span>
-                <span class="stat-sub" id="stat-comic-ch">0 ch</span>
-              </div>
-              <div class="stat-bento-card">
-                <div class="stat-bento-top">
-                  <span class="stat-label">Novels</span>
-                  <ion-icon name="reader-outline"></ion-icon>
-                </div>
-                <span class="stat-value" id="stat-novel-count">0</span>
-                <span class="stat-sub" id="stat-novel-ch">0 ch</span>
-              </div>
-              <div class="stat-bento-card">
-                <div class="stat-bento-top">
-                  <span class="stat-label">Games</span>
-                  <ion-icon name="game-controller-outline"></ion-icon>
-                </div>
-                <span class="stat-value" id="stat-game-count">0</span>
-                <span class="stat-sub" id="stat-game-sub">0 completed</span>
-              </div>
-              <div class="stat-bento-card">
-                <div class="stat-bento-top">
-                  <span class="stat-label">Music</span>
-                  <ion-icon name="musical-notes-outline"></ion-icon>
-                </div>
-                <span class="stat-value" id="stat-music-count">0</span>
-                <span class="stat-sub" id="stat-music-tracks">0 tracks</span>
-              </div>
-            </div>
+        <!-- Overall Summary -->
+        <div class="bento-bottom-row">
+          <div class="bento-stat-card highlight">
+            <span class="bento-label">Completed Titles</span>
+            <strong id="stat-completed-total" class="bento-value">0</strong>
+            <span id="stat-completion-rate" class="bento-sub">0% Rate</span>
           </div>
-
-          <!-- Section 2: Total Units & Counts -->
-          <div class="stats-section-block">
-            <div class="stats-group-heading">
-              <ion-icon name="pulse-outline"></ion-icon>
-              <span>Total Units & Counts</span>
-            </div>
-            <div class="stats-units-grid">
-              <div class="stat-unit-pill-card">
-                <span class="unit-val" id="unit-total-entries">0</span>
-                <span class="unit-lbl">Total Entries</span>
-              </div>
-              <div class="stat-unit-pill-card">
-                <span class="unit-val" id="unit-total-eps">0</span>
-                <span class="unit-lbl">Episodes</span>
-              </div>
-              <div class="stat-unit-pill-card">
-                <span class="unit-val" id="unit-total-movies">0</span>
-                <span class="unit-lbl">Movies</span>
-              </div>
-              <div class="stat-unit-pill-card">
-                <span class="unit-val" id="unit-total-ch">0</span>
-                <span class="unit-lbl">Chapters</span>
-              </div>
-              <div class="stat-unit-pill-card">
-                <span class="unit-val" id="unit-total-vol">0</span>
-                <span class="unit-lbl">Volumes</span>
-              </div>
-              <div class="stat-unit-pill-card">
-                <span class="unit-val" id="unit-total-games">0</span>
-                <span class="unit-lbl">Games</span>
-              </div>
-              <div class="stat-unit-pill-card">
-                <span class="unit-val" id="unit-total-tracks">0</span>
-                <span class="unit-lbl">Tracks</span>
-              </div>
-            </div>
+          <div class="bento-stat-card highlight">
+            <span class="bento-label">Mean Rating</span>
+            <strong id="stat-avg-rating" class="bento-value">0.0</strong>
+            <span id="stat-rated-count" class="bento-sub">0 Rated</span>
           </div>
-
-          <!-- Section 3: Overall Summary Highlights -->
-          <div class="stats-bottom-highlights">
-            <div class="stat-highlight-card">
-              <div class="highlight-icon-box">
-                <ion-icon name="checkmark-done-circle-outline"></ion-icon>
-              </div>
-              <div class="highlight-info">
-                <span class="stat-label">Total Completed</span>
-                <div class="highlight-value-row">
-                  <span class="highlight-value" id="stat-completed-count">0</span>
-                  <span class="highlight-badge" id="stat-completion-rate">0% rate</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="stat-highlight-card">
-              <div class="highlight-icon-box">
-                <ion-icon name="star-outline"></ion-icon>
-              </div>
-              <div class="highlight-info">
-                <span class="stat-label">Mean Rating</span>
-                <div class="highlight-value-row">
-                  <span class="highlight-value" id="stat-avg-rating">0.0</span>
-                  <span class="highlight-badge" id="stat-rated-sub">0 rated entries</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
         </div>
       </div>
 
-      <!-- Category Tabs (Justified / Rata Kanan-Kiri) -->
-      <div class="category-tabs-wrap">
-        <ul class="category-tabs" id="category-tabs">
-          <li><button class="cat-tab active" data-category="all">All</button></li>
-          <li><button class="cat-tab" data-category="tv">TV Shows</button></li>
-          <li><button class="cat-tab" data-category="movie">Movies</button></li>
-          <li><button class="cat-tab" data-category="comic">Comics</button></li>
-          <li><button class="cat-tab" data-category="novel">Novels</button></li>
-          <li><button class="cat-tab" data-category="game">Games</button></li>
-          <li><button class="cat-tab" data-category="music">Music</button></li>
-        </ul>
+      <!-- Category Tabs -->
+      <div class="cat-tabs">
+        <button type="button" class="cat-tab active" data-category="all">All</button>
+        <button type="button" class="cat-tab" data-category="tv_show">TV Show</button>
+        <button type="button" class="cat-tab" data-category="movie">Movie</button>
+        <button type="button" class="cat-tab" data-category="comic">Comic</button>
+        <button type="button" class="cat-tab" data-category="novel">Novel</button>
+        <button type="button" class="cat-tab" data-category="game">Game</button>
+        <button type="button" class="cat-tab" data-category="music">Music</button>
       </div>
 
-      <!-- Search, Filter Popover, Sort Popover, Page Limit Popover & View Mode -->
+      <!-- Library Toolbar -->
       <div class="library-toolbar">
-        <div class="search-box">
+        <div class="search-box-wrap">
           <ion-icon name="search-outline"></ion-icon>
-          <input type="text" id="library-search" placeholder="Search title or notes...">
+          <input type="text" id="search-library" class="search-input" placeholder="Search title or season...">
         </div>
 
-        <div class="toolbar-controls-group">
+        <div class="toolbar-right-group">
           <!-- Filter Popover -->
-          <div class="popover-wrapper">
-            <button type="button" class="toolbar-btn" id="filter-popover-btn">
-              <ion-icon name="funnel-outline"></ion-icon>
+          <div id="filter-popover-wrap" class="popover-wrapper">
+            <button type="button" id="btn-filter-toggle" class="toolbar-btn" onclick="toggleToolbarPopover('filter')">
+              <ion-icon name="options-outline"></ion-icon>
               <span>Filter</span>
-              <span class="active-indicator-dot" id="filter-active-dot" style="display: none;"></span>
+              <span id="filter-active-dot" class="active-dot" style="display: none;"></span>
             </button>
-            <div class="toolbar-popover-menu" id="filter-popover-menu">
-              <div class="popover-header">
-                <span>Filter Library</span>
-                <button type="button" class="popover-reset-btn" id="reset-filters-btn">Reset</button>
-              </div>
-              <div class="popover-field">
-                <label>Status</label>
-                <select id="status-filter" class="form-input">
+            <div id="filter-popover-menu" class="toolbar-popover-menu">
+              <div class="popover-group">
+                <label class="popover-label">Status</label>
+                <select id="filter-status" class="form-input">
                   <option value="all">All Status</option>
-                  <option value="ongoing">Ongoing</option>
                   <option value="completed">Completed</option>
+                  <option value="ongoing">Ongoing</option>
                   <option value="planned">Planned</option>
                   <option value="dropped">Dropped</option>
                 </select>
               </div>
-              <div class="popover-field">
-                <label>Rating Range (0 - 10)</label>
-                <div class="range-input-pair">
-                  <input type="number" id="rating-min-filter" class="form-input" step="0.5" min="0" max="10" placeholder="Min">
+              <div class="popover-group">
+                <label class="popover-label">Rating Range (0 - 10)</label>
+                <div class="popover-range-row">
+                  <input type="number" id="filter-rating-min" class="form-input" step="0.1" min="0" max="10" placeholder="Min">
                   <span>–</span>
-                  <input type="number" id="rating-max-filter" class="form-input" step="0.5" min="0" max="10" placeholder="Max">
+                  <input type="number" id="filter-rating-max" class="form-input" step="0.1" min="0" max="10" placeholder="Max">
                 </div>
-              </div>
-              <div class="popover-field">
-                <label class="checkbox-inline-label">
-                  <input type="checkbox" id="rewatched-only-filter">
-                  <span>Rewatched / Reread only</span>
+                <label class="checkbox-inline" style="margin-top: 6px;">
+                  <input type="checkbox" id="filter-unrated-only">
+                  <span>Unrated only</span>
                 </label>
               </div>
+              <div class="popover-group">
+                <label class="popover-label">Total Count Range</label>
+                <div class="popover-range-row">
+                  <input type="number" id="filter-units-min" class="form-input" min="0" placeholder="Min">
+                  <span>–</span>
+                  <input type="number" id="filter-units-max" class="form-input" min="0" placeholder="Max">
+                </div>
+              </div>
+              <button type="button" class="form-btn" style="width: 100%; margin-top: 6px;" onclick="resetLibraryFilters()">Reset Filters</button>
             </div>
           </div>
 
           <!-- Sort Popover -->
-          <div class="popover-wrapper">
-            <button type="button" class="toolbar-btn" id="sort-popover-btn">
+          <div id="sort-popover-wrap" class="popover-wrapper">
+            <button type="button" id="btn-sort-toggle" class="toolbar-btn" onclick="toggleToolbarPopover('sort')">
               <ion-icon name="swap-vertical-outline"></ion-icon>
-              <span>Sort</span>
+              <span id="sort-btn-label">Rating (Best)</span>
             </button>
-            <div class="toolbar-popover-menu" id="sort-popover-menu">
-              <div class="popover-header">
-                <span>Sort By</span>
-              </div>
-              <div class="popover-field">
-                <label>Field</label>
-                <select id="sort-field-select" class="form-input">
-                  <option value="updated">Last Updated</option>
-                  <option value="title">Title (A-Z)</option>
+            <div id="sort-popover-menu" class="toolbar-popover-menu">
+              <div class="popover-group">
+                <label class="popover-label">Sort By</label>
+                <select id="sort-library-field" class="form-input" onchange="onSortOptionChange()">
                   <option value="rating">Rating</option>
-                  <option value="status">Status</option>
-                  <option value="progress">Progress</option>
+                  <option value="updated">Last Updated</option>
+                  <option value="units">Total Count</option>
+                  <option value="title">Title</option>
                 </select>
               </div>
-              <div class="popover-field">
-                <label>Direction</label>
-                <div class="sort-dir-group">
-                  <button type="button" class="sort-dir-btn active" data-dir="desc">Descending</button>
-                  <button type="button" class="sort-dir-btn" data-dir="asc">Ascending</button>
-                </div>
+              <div class="sort-dir-row">
+                <button type="button" id="btn-sort-desc" class="sort-dir-btn active" onclick="setSortDirection('desc')">Best</button>
+                <button type="button" id="btn-sort-asc" class="sort-dir-btn" onclick="setSortDirection('asc')">Worst</button>
               </div>
             </div>
           </div>
 
-          <!-- Per Page Popover -->
-          <div class="popover-wrapper">
-            <button type="button" class="toolbar-btn" id="page-popover-btn" title="Items per page">
-              <ion-icon name="layers-outline"></ion-icon>
-              <span id="page-limit-label">24 / page</span>
-            </button>
-            <div class="toolbar-popover-menu compact-popover-menu" id="page-popover-menu">
-              <div class="popover-header">
-                <span>Items Per Page</span>
-              </div>
-              <div class="page-option-list" id="page-option-list">
-                <button type="button" class="page-option-item" data-limit="12">
-                  <span>12 items</span>
-                  <ion-icon name="checkmark-outline"></ion-icon>
-                </button>
-                <button type="button" class="page-option-item active" data-limit="24">
-                  <span>24 items</span>
-                  <ion-icon name="checkmark-outline"></ion-icon>
-                </button>
-                <button type="button" class="page-option-item" data-limit="48">
-                  <span>48 items</span>
-                  <ion-icon name="checkmark-outline"></ion-icon>
-                </button>
-                <button type="button" class="page-option-item" data-limit="all">
-                  <span>Show All</span>
-                  <ion-icon name="checkmark-outline"></ion-icon>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Random Pick Button -->
-          <button type="button" class="toolbar-btn icon-only-btn" id="random-pick-btn" title="Pick Random Entry">
-            <ion-icon name="shuffle-outline"></ion-icon>
-          </button>
-
-          <!-- View Mode Toggle (Grid vs List) -->
-          <div class="view-mode-toggle">
-            <button type="button" class="view-mode-btn active" id="view-grid-btn" title="Grid View">
+          <!-- Items Per Page Popover -->
+          <div id="page-popover-wrap" class="popover-wrapper">
+            <button type="button" id="btn-pages-toggle" class="toolbar-btn" onclick="toggleToolbarPopover('pages')" title="Items per page">
               <ion-icon name="grid-outline"></ion-icon>
+              <span>Page</span>
             </button>
-            <button type="button" class="view-mode-btn" id="view-list-btn" title="Compact List View">
+            <div id="pages-popover-menu" class="toolbar-popover-menu" style="min-width: 130px;">
+              <button type="button" class="page-option-item active" data-limit="8" onclick="selectItemsPerPage('8')">8 per page</button>
+              <button type="button" class="page-option-item" data-limit="16" onclick="selectItemsPerPage('16')">16 per page</button>
+              <button type="button" class="page-option-item" data-limit="32" onclick="selectItemsPerPage('32')">32 per page</button>
+              <button type="button" class="page-option-item" data-limit="all" onclick="selectItemsPerPage('all')">Show All</button>
+            </div>
+          </div>
+
+          <!-- Grid / List Switcher -->
+          <div class="view-mode-toggle">
+            <button type="button" id="btn-view-grid" class="view-toggle-btn active" onclick="setLibraryViewMode('grid')" title="Grid View">
+              <ion-icon name="apps-outline"></ion-icon>
+            </button>
+            <button type="button" id="btn-view-list" class="view-toggle-btn" onclick="setLibraryViewMode('list')" title="List View">
               <ion-icon name="list-outline"></ion-icon>
             </button>
           </div>
         </div>
       </div>
 
-      <!-- Library Cards Grid -->
-      <div class="media-grid" id="media-grid">
-        <div class="empty-state">Loading library entries...</div>
+      <!-- Media Cards Grid -->
+      <div id="media-grid" class="media-grid">
+        <p class="empty-state">Loading library...</p>
       </div>
 
-      <!-- Pagination / Load More -->
-      <div class="load-more-wrap" id="load-more-wrap" style="display: none;">
-        <button type="button" class="load-more-btn" id="load-more-btn">
+      <!-- Load More Button -->
+      <div id="load-more-wrap" class="load-more-wrap" style="display: none;">
+        <button type="button" class="load-more-btn" onclick="loadMoreMedia()">
+          <span id="load-more-text">Load More</span>
           <ion-icon name="chevron-down-outline"></ion-icon>
-          <span id="load-more-label">Load More</span>
         </button>
       </div>
     </section>
 
-    <!-- VIEW 3: AUTO WEB NEWS FEED -->
-    <section id="news-view" class="view-section" style="display: none;">
-      <!-- Topic Filter Tabs (Justified) -->
-      <div class="category-tabs-wrap">
-        <ul class="category-tabs" id="news-topic-tabs">
-          <li><button class="cat-tab active" data-topic="all">All News</button></li>
-          <li><button class="cat-tab" data-topic="indonesia">Indonesia</button></li>
-          <li><button class="cat-tab" data-topic="tech">Tech</button></li>
-          <li><button class="cat-tab" data-topic="gaming">Gaming & Pop</button></li>
-        </ul>
-      </div>
-
-      <!-- News Search & Refresh Bar -->
-      <div class="library-toolbar">
-        <div class="search-box">
-          <ion-icon name="search-outline"></ion-icon>
-          <input type="text" id="news-search-input" placeholder="Search headlines or source...">
+    <!-- ==========================================
+         VIEW 3: AUTO WEB NEWS FEED
+    =========================================== -->
+    <section id="view-news" class="view-section" style="display: none;">
+      <div class="library-toolbar" style="margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+        <div class="cat-tabs" id="news-topic-tabs" style="margin-bottom: 0;">
+          <button type="button" class="cat-tab active" data-topic="all">All</button>
+          <button type="button" class="cat-tab" data-topic="indonesia">Indonesia</button>
+          <button type="button" class="cat-tab" data-topic="tech">Tech</button>
+          <button type="button" class="cat-tab" data-topic="gaming">Gaming</button>
         </div>
-        <div class="toolbar-controls-group">
-          <button type="button" class="toolbar-btn" id="refresh-news-btn" title="Refresh Feed">
+        <div style="display: flex; gap: 8px; margin-left: auto;">
+          <input type="text" id="news-search-input" class="form-input" placeholder="Search news..." style="max-width: 180px; height: 36px; font-size: 12px;">
+          <button type="button" class="toolbar-btn" onclick="fetchAllNews(true)" title="Refresh News">
             <ion-icon name="refresh-outline"></ion-icon>
-            <span>Refresh</span>
           </button>
         </div>
       </div>
 
-      <!-- News Cards Grid -->
-      <div class="news-grid" id="news-grid">
-        <div class="empty-state">Fetching latest headlines...</div>
+      <div id="news-feed-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px;">
+        <p class="empty-state" style="grid-column: 1 / -1;">Open News tab to load headlines...</p>
       </div>
     </section>
 
-    <!-- MINIMALIST FOOTER -->
+    <!-- Footer -->
     <footer class="site-footer">
-      <p id="footer-text">© 2026 Personal Archive — All rights reserved.</p>
+      <span id="footer-brand-name">ARCHIVE</span>
     </footer>
-
   </main>
 
-  <!-- MODAL 1: MEDIA DETAIL PREVIEW -->
-  <div class="modal-overlay" id="detail-modal">
-    <div class="modal-box">
+  <!-- Back To Top Button -->
+  <button type="button" id="btn-back-to-top" class="back-to-top-btn" onclick="scrollToTopSmooth()" title="Back to Top">
+    <ion-icon name="arrow-up-outline"></ion-icon>
+  </button>
+
+  <!-- ==========================================
+       MODAL 1: ADMIN LOGIN
+  =========================================== -->
+  <div id="login-modal" class="modal-overlay">
+    <div class="modal-box" style="max-width: 380px;">
       <div class="modal-header">
-        <h3 id="detail-modal-title">Entry Details</h3>
-        <button class="close-modal-btn" data-close="detail-modal">&times;</button>
+        <h3>Admin Access</h3>
+        <button type="button" class="close-modal-btn" onclick="closeLoginModal()">
+          <ion-icon name="close-outline"></ion-icon>
+        </button>
       </div>
-      <div class="detail-modal-body" id="detail-modal-body"></div>
+      <form id="admin-login-form" class="modal-form">
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="login-email" class="form-input" required placeholder="admin@email.com">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="login-password" class="form-input" required placeholder="••••••••">
+        </div>
+        <button type="submit" class="form-btn primary-submit" style="width: 100%;">Sign In</button>
+      </form>
     </div>
   </div>
 
-  <!-- MODAL 2: ADD / EDIT MEDIA ENTRY -->
-  <div class="modal-overlay" id="media-modal">
+  <!-- ==========================================
+       MODAL 2: EDIT PROFILE
+  =========================================== -->
+  <div id="profile-modal" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 id="media-modal-title">Add New Entry</h3>
-        <button class="close-modal-btn" data-close="media-modal">&times;</button>
+        <h3>Edit Profile</h3>
+        <button type="button" class="close-modal-btn" onclick="closeProfileModal()">
+          <ion-icon name="close-outline"></ion-icon>
+        </button>
+      </div>
+      <form id="profile-form" class="modal-form">
+        <div class="form-group">
+          <label>Display Name</label>
+          <input type="text" id="edit-profile-name" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Bio</label>
+          <textarea id="edit-profile-bio" class="form-input" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Avatar URL or Upload</label>
+          <div class="upload-input-row">
+            <input type="text" id="edit-profile-avatar" class="form-input" placeholder="https://...">
+            <label class="upload-file-btn">
+              <ion-icon name="cloud-upload-outline"></ion-icon>
+              <span>Upload</span>
+              <input type="file" accept="image/*" hidden onchange="handleProfileImageUpload(event)">
+            </label>
+          </div>
+          <small id="profile-upload-status" class="upload-status-text"></small>
+        </div>
+        <div class="form-group">
+          <label>Banner URL or Upload</label>
+          <div class="upload-input-row">
+            <input type="text" id="edit-profile-banner" class="form-input" placeholder="https://...">
+            <label class="upload-file-btn">
+              <ion-icon name="image-outline"></ion-icon>
+              <span>Upload</span>
+              <input type="file" accept="image/*" hidden onchange="handleBannerImageUpload(event)">
+            </label>
+            <button type="button" class="social-remove-btn" onclick="clearBannerInput()" title="Remove Banner">
+              <ion-icon name="trash-outline"></ion-icon>
+            </button>
+          </div>
+          <small id="banner-upload-status" class="upload-status-text"></small>
+        </div>
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label>Social Links</label>
+            <button type="button" class="mini-add-btn" onclick="addSocialLinkRow()">+ Add Link</button>
+          </div>
+          <div id="social-links-editor" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;"></div>
+        </div>
+        <button type="submit" class="form-btn primary-submit" style="width: 100%;">Save Profile</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL 3: ADD / EDIT MEDIA
+  =========================================== -->
+  <div id="media-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="media-modal-title">Add Media</h3>
+        <button type="button" class="close-modal-btn" onclick="closeMediaModal()">
+          <ion-icon name="close-outline"></ion-icon>
+        </button>
       </div>
 
-      <div class="api-search-section">
-        <label class="form-label">Auto-Fill Search (Based on Primary Category)</label>
-        <div class="api-search-bar">
+      <!-- Auto-Fill Search Bar -->
+      <div class="api-autofill-box">
+        <label class="popover-label">Auto-Fill Metadata</label>
+        <div class="api-search-row">
+          <select id="api-search-cat" class="form-input" style="max-width: 115px;">
+            <option value="tv_show">TV Show</option>
+            <option value="movie">Movie</option>
+            <option value="comic">Comic</option>
+            <option value="novel">Novel</option>
+            <option value="game">Game</option>
+            <option value="music">Music</option>
+          </select>
           <input type="text" id="api-search-input" class="form-input" placeholder="Search title...">
-          <button type="button" id="api-search-btn" class="form-btn">Search</button>
+          <button type="button" class="form-btn" onclick="searchExternalAPI()">Search</button>
         </div>
-        <div class="api-results-list" id="api-results-list"></div>
+        <div id="api-search-results" class="api-search-results" style="display: none;"></div>
       </div>
 
       <form id="media-form" class="modal-form">
-        <input type="hidden" id="entry-id">
+        <input type="hidden" id="media-id">
 
         <div class="form-group">
-          <label>Title</label>
-          <input type="text" id="entry-title" class="form-input" required placeholder="e.g. Solo Leveling">
+          <label>Title *</label>
+          <input type="text" id="media-title" class="form-input" required placeholder="Media title">
         </div>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label>Primary Category</label>
-            <select id="entry-category" class="form-input">
-              <option value="tv">TV Show</option>
-              <option value="movie">Movie</option>
-              <option value="comic">Comic</option>
-              <option value="novel">Novel</option>
-              <option value="game">Game</option>
-              <option value="music">Music</option>
-            </select>
+        <div class="form-group">
+          <label>Cover Image URL or Upload</label>
+          <div class="upload-input-row">
+            <input type="text" id="media-cover" class="form-input" placeholder="https://...">
+            <label class="upload-file-btn">
+              <ion-icon name="cloud-upload-outline"></ion-icon>
+              <span>Upload</span>
+              <input type="file" accept="image/*" hidden onchange="handleMediaCoverUpload(event)">
+            </label>
           </div>
-          <div class="form-group">
-            <label>Primary Status</label>
-            <select id="entry-status" class="form-input">
-              <option value="ongoing">Ongoing</option>
-              <option value="completed">Completed</option>
-              <option value="planned">Planned</option>
-              <option value="dropped">Dropped</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label id="progress-label">Episodes Watched</label>
-            <div class="progress-input-row">
-              <input type="number" id="entry-progress" class="form-input" min="0" value="0">
-              <button type="button" class="step-plus-btn" id="step-progress-btn" title="Increment Progress">+1</button>
-            </div>
-          </div>
-          <div class="form-group">
-            <label id="total-label">Total Episodes (0 = Ongoing)</label>
-            <input type="number" id="entry-total" class="form-input" min="0" value="0">
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label id="volumes-label">Volumes Read (Optional)</label>
-            <input type="number" id="entry-volumes" class="form-input" min="0" value="0">
-          </div>
-          <div class="form-group">
-            <label id="repeat-label">Rewatch / Reread Count</label>
-            <input type="number" id="entry-repeat" class="form-input" min="0" value="0">
-          </div>
+          <small id="cover-upload-status" class="upload-status-text"></small>
         </div>
 
         <div class="form-row">
           <div class="form-group">
             <label>Rating (0 - 10)</label>
-            <input type="number" id="entry-rating" class="form-input" step="0.1" min="0" max="10" value="0">
+            <input type="number" id="media-rating" class="form-input" step="0.1" min="0" max="10" placeholder="e.g. 8.5">
           </div>
           <div class="form-group">
-            <label>Start Date</label>
-            <input type="date" id="entry-start-date" class="form-input">
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label>Finish Date</label>
-            <input type="date" id="entry-finish-date" class="form-input">
-          </div>
-          <div class="form-group">
-            <label>Cover Image URL / Upload</label>
-            <div class="upload-input-row">
-              <input type="text" id="entry-image" class="form-input" placeholder="https://...">
-              <label class="file-upload-btn" title="Upload Cover">
-                <ion-icon name="cloud-upload-outline"></ion-icon>
-                <input type="file" id="entry-image-file" accept="image/*" hidden>
-              </label>
+            <label>Repeat / Rewatch</label>
+            <div class="progress-input-row">
+              <input type="number" id="media-repeat" class="form-input" min="0" value="0">
+              <button type="button" class="step-plus-btn" onclick="stepModalRepeat()">+1</button>
             </div>
           </div>
         </div>
 
+        <!-- Primary Category Tracks -->
         <div class="form-group">
-          <div class="social-editor-header">
-            <label>Cross-Category Progress (e.g. Also read Comic / Novel)</label>
-            <button type="button" class="add-social-btn" id="add-track-btn">
-              <ion-icon name="add-outline"></ion-icon> Add Category
-            </button>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label>Category & Progress Tracks</label>
+            <button type="button" class="mini-add-btn" onclick="addMediaTrackRow()">+ Add Category</button>
           </div>
-          <div class="tracks-editor-list" id="tracks-editor-list"></div>
+          <div id="media-tracks-editor" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;"></div>
         </div>
 
-        <div class="form-group" id="seasons-editor-group">
-          <div class="social-editor-header">
-            <label id="seasons-group-label">Additional Seasons / Entries</label>
-            <button type="button" class="add-social-btn" id="add-season-btn">
-              <ion-icon name="add-outline"></ion-icon> Add Entry
-            </button>
-          </div>
-          <div class="seasons-editor-list" id="seasons-editor-list"></div>
-        </div>
-
+        <!-- Additional Seasons / Parts -->
         <div class="form-group">
-          <label>Personal Review / Notes</label>
-          <textarea id="entry-notes" class="form-input" rows="3" placeholder="Write your thoughts..."></textarea>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label>Additional Seasons / Parts (Optional)</label>
+            <button type="button" class="mini-add-btn" onclick="addSeasonItemRow()">+ Add Season/Part</button>
+          </div>
+          <div id="media-seasons-editor" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;"></div>
         </div>
 
         <div class="modal-submit-row">
-          <button type="button" id="delete-entry-btn" class="form-btn danger-btn" style="display: none;">Delete</button>
-          <button type="submit" class="form-btn primary-submit">Save Entry</button>
+          <button type="button" id="btn-modal-delete" class="form-btn danger-btn" style="display: none;" onclick="deleteCurrentModalMedia()">Delete</button>
+          <button type="submit" class="form-btn primary-submit" style="flex: 1;">Save Entry</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- MODAL 3: EDIT PROFILE, BANNER & SOCIAL LINKS -->
-  <div class="modal-overlay" id="profile-modal">
+  <!-- ==========================================
+       MODAL 4: MEDIA DETAIL PREVIEW
+  =========================================== -->
+  <div id="media-detail-modal" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
-        <h3>Edit Profile</h3>
-        <button class="close-modal-btn" data-close="profile-modal">&times;</button>
+        <h3 id="detail-modal-title">Media Detail</h3>
+        <button type="button" class="close-modal-btn" onclick="closeMediaDetailModal()">
+          <ion-icon name="close-outline"></ion-icon>
+        </button>
       </div>
-      <form id="profile-form" class="modal-form">
+      <div id="media-detail-body" class="modal-form"></div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL 5: NEW / EDIT BLOG POST
+  =========================================== -->
+  <div id="post-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="post-modal-title">New Post</h3>
+        <button type="button" class="close-modal-btn" onclick="closePostModal()">
+          <ion-icon name="close-outline"></ion-icon>
+        </button>
+      </div>
+      <form id="post-form" class="modal-form">
+        <input type="hidden" id="post-id">
         <div class="form-group">
-          <label>Display Name</label>
-          <input type="text" id="profile-name-input" class="form-input" required>
+          <label>Note Content *</label>
+          <textarea id="post-content" class="form-input" rows="4" required placeholder="Write something..."></textarea>
         </div>
         <div class="form-group">
-          <label>Bio</label>
-          <input type="text" id="profile-bio-input" class="form-input">
-        </div>
-        <div class="form-group">
-          <label>Avatar Image (Upload or URL)</label>
+          <label>Attach Photo URL or Upload (Optional)</label>
           <div class="upload-input-row">
-            <input type="text" id="profile-avatar-input" class="form-input" placeholder="./assets/images/my-avatar.png">
-            <label class="file-upload-btn" title="Upload Avatar">
-              <ion-icon name="cloud-upload-outline"></ion-icon>
-              <span>Upload</span>
-              <input type="file" id="profile-avatar-file" accept="image/*" hidden>
-            </label>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Profile Banner (Upload or URL)</label>
-          <div class="upload-input-row">
-            <input type="text" id="profile-banner-input" class="form-input" placeholder="Leave empty to hide banner">
-            <label class="file-upload-btn" title="Upload Banner">
+            <input type="text" id="post-image" class="form-input" placeholder="https://...">
+            <label class="upload-file-btn">
               <ion-icon name="image-outline"></ion-icon>
               <span>Upload</span>
-              <input type="file" id="profile-banner-file" accept="image/*" hidden>
+              <input type="file" accept="image/*" hidden onchange="handlePostImageUpload(event)">
             </label>
-          </div>
-          <span class="upload-status-text" id="profile-upload-status"></span>
-        </div>
-
-        <div class="form-group">
-          <div class="social-editor-header">
-            <label>Social Links</label>
-            <button type="button" class="add-social-btn" id="add-social-row-btn">
-              <ion-icon name="add-outline"></ion-icon> Add Link
+            <button type="button" class="social-remove-btn" onclick="clearPostImageInput()" title="Remove Photo">
+              <ion-icon name="trash-outline"></ion-icon>
             </button>
           </div>
-          <div class="social-links-editor" id="social-links-editor"></div>
+          <small id="post-upload-status" class="upload-status-text"></small>
         </div>
-
-        <button type="submit" class="form-btn primary-submit">Save Profile</button>
+        <button type="submit" class="form-btn primary-submit" style="width: 100%;">Publish</button>
       </form>
     </div>
   </div>
-
-  <!-- MODAL 4: ADD / EDIT NOTE POST -->
-  <div class="modal-overlay" id="note-modal">
-    <div class="modal-box">
-      <div class="modal-header">
-        <h3 id="note-modal-title">New Note</h3>
-        <button class="close-modal-btn" data-close="note-modal">&times;</button>
-      </div>
-      <form id="note-form" class="modal-form">
-        <input type="hidden" id="note-id">
-        <div class="form-group">
-          <label>Content</label>
-          <textarea id="note-content-input" class="form-input" rows="5" placeholder="What's on your mind? Paste links anytime..."></textarea>
-        </div>
-        <div class="form-group">
-          <label>Attach Photo (Optional - Upload or URL)</label>
-          <div class="upload-input-row">
-            <input type="text" id="note-image-input" class="form-input" placeholder="https://...">
-            <label class="file-upload-btn" title="Upload Photo">
-              <ion-icon name="image-outline"></ion-icon>
-              <span>Upload</span>
-              <input type="file" id="note-image-file" accept="image/*" hidden>
-            </label>
-          </div>
-          <span class="upload-status-text" id="note-upload-status"></span>
-        </div>
-        <button type="submit" class="form-btn primary-submit">Post Note</button>
-      </form>
-    </div>
-  </div>
-
-  <!-- MODAL 5: MANAGE RSS NEWS SOURCES (ADMIN) -->
-  <div class="modal-overlay" id="rss-modal">
-    <div class="modal-box">
-      <div class="modal-header">
-        <h3>News RSS Sources</h3>
-        <button class="close-modal-btn" data-close="rss-modal">&times;</button>
-      </div>
-      <div class="modal-form">
-        <div class="form-group">
-          <label>Add New RSS Feed URL</label>
-          <div class="form-row">
-            <input type="text" id="rss-name-input" class="form-input" placeholder="Source Name (e.g. Kompas)">
-            <select id="rss-topic-input" class="form-input">
-              <option value="indonesia">Indonesia</option>
-              <option value="tech">Tech</option>
-              <option value="gaming">Gaming & Pop</option>
-            </select>
-          </div>
-          <div class="api-search-bar" style="margin-top: 6px;">
-            <input type="url" id="rss-url-input" class="form-input" placeholder="https://example.com/rss">
-            <button type="button" id="add-rss-btn" class="form-btn">Add</button>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <div class="social-editor-header">
-            <label>Active Feeds</label>
-            <button type="button" class="popover-reset-btn" id="reset-rss-btn">Reset Default</button>
-          </div>
-          <div class="social-links-editor" id="rss-sources-list"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL 6: ADMIN LOGIN -->
-  <div class="modal-overlay" id="login-modal">
-    <div class="modal-box" style="max-width: 380px;">
-      <div class="modal-header">
-        <h3>Admin Login</h3>
-        <button class="close-modal-btn" data-close="login-modal">&times;</button>
-      </div>
-      <form id="login-form" class="modal-form">
-        <div class="form-group">
-          <label>Admin Email</label>
-          <input type="email" id="admin-email" class="form-input" required placeholder="you@email.com">
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="admin-password" class="form-input" required placeholder="••••••••">
-        </div>
-        <button type="submit" class="form-btn primary-submit">Sign In</button>
-      </form>
-    </div>
-  </div>
-
-  <!-- Supabase JS SDK -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- Ionicons -->
-  <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
-  <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
+  <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+  <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
 
-  <!-- App Script -->
-  <script src="./assets/js/script.js?v=55"></script>
+  <!-- Main App Script -->
+  <script src="./assets/js/script.js"></script>
 </body>
+
 </html>
