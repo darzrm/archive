@@ -1731,6 +1731,12 @@ body {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
+}
+
+.ai-settings-row .form-input {
+  flex: 1;
+  min-width: 140px;
 }
 
 .ai-settings-hint {
