@@ -110,44 +110,54 @@ function setupScrollListeners() {
   }, { passive: true });
 }
 
+function closeAllToolbarPopovers() {
+  const pairs = [
+    ['filter-popover-menu', 'btn-filter-toggle'],
+    ['sort-popover-menu', 'btn-sort-toggle'],
+    ['pages-popover-menu', 'btn-pages-toggle']
+  ];
+  pairs.forEach(([menuId, btnId]) => {
+    const m = document.getElementById(menuId);
+    const b = document.getElementById(btnId);
+    if (m) m.classList.remove('open');
+    if (b) b.classList.remove('active');
+  });
+}
+
 function setupOutsidePopoverCloser() {
   document.addEventListener('click', (e) => {
     const filterWrap = document.getElementById('filter-popover-wrap');
     const sortWrap = document.getElementById('sort-popover-wrap');
+    const pagesWrap = document.getElementById('pages-popover-wrap');
 
-    if (filterWrap && !filterWrap.contains(e.target)) {
-      const fm = document.getElementById('filter-popover-menu');
-      const fb = document.getElementById('btn-filter-toggle');
-      if (fm) fm.classList.remove('open');
-      if (fb) fb.classList.remove('active');
-    }
-    if (sortWrap && !sortWrap.contains(e.target)) {
-      const sm = document.getElementById('sort-popover-menu');
-      const sb = document.getElementById('btn-sort-toggle');
-      if (sm) sm.classList.remove('open');
-      if (sb) sb.classList.remove('active');
+    const insideFilter = filterWrap && filterWrap.contains(e.target);
+    const insideSort = sortWrap && sortWrap.contains(e.target);
+    const insidePages = pagesWrap && pagesWrap.contains(e.target);
+
+    if (!insideFilter && !insideSort && !insidePages) {
+      closeAllToolbarPopovers();
     }
   });
 }
 
 window.toggleToolbarPopover = function (type) {
-  const filterMenu = document.getElementById('filter-popover-menu');
-  const sortMenu = document.getElementById('sort-popover-menu');
-  const filterBtn = document.getElementById('btn-filter-toggle');
-  const sortBtn = document.getElementById('btn-sort-toggle');
+  const map = {
+    filter: ['filter-popover-menu', 'btn-filter-toggle'],
+    sort: ['sort-popover-menu', 'btn-sort-toggle'],
+    pages: ['pages-popover-menu', 'btn-pages-toggle']
+  };
+  const target = map[type];
+  if (!target) return;
 
-  if (type === 'filter') {
-    const willOpen = filterMenu ? !filterMenu.classList.contains('open') : false;
-    if (sortMenu) sortMenu.classList.remove('open');
-    if (sortBtn) sortBtn.classList.remove('active');
-    if (filterMenu) filterMenu.classList.toggle('open', willOpen);
-    if (filterBtn) filterBtn.classList.toggle('active', willOpen);
-  } else {
-    const willOpen = sortMenu ? !sortMenu.classList.contains('open') : false;
-    if (filterMenu) filterMenu.classList.remove('open');
-    if (filterBtn) filterBtn.classList.remove('active');
-    if (sortMenu) sortMenu.classList.toggle('open', willOpen);
-    if (sortBtn) sortBtn.classList.toggle('active', willOpen);
+  const menuEl = document.getElementById(target[0]);
+  const btnEl = document.getElementById(target[1]);
+  const willOpen = menuEl ? !menuEl.classList.contains('open') : false;
+
+  closeAllToolbarPopovers();
+
+  if (willOpen) {
+    if (menuEl) menuEl.classList.add('open');
+    if (btnEl) btnEl.classList.add('active');
   }
 };
 
@@ -247,9 +257,7 @@ window.setLibraryViewMode = function (mode) {
   renderMediaGrid();
 };
 
-window.onPerPageChange = function () {
-  const selectEl = document.getElementById('items-per-page-select');
-  const val = selectEl ? selectEl.value : '8';
+window.selectItemsPerPage = function (val) {
   if (val === 'all') {
     itemsPerPage = Infinity;
     visibleMediaLimit = Infinity;
@@ -257,6 +265,12 @@ window.onPerPageChange = function () {
     itemsPerPage = parseInt(val, 10) || 8;
     visibleMediaLimit = itemsPerPage;
   }
+
+  document.querySelectorAll('#pages-popover-menu .page-option-item').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.limit === String(val));
+  });
+
+  closeAllToolbarPopovers();
   renderMediaGrid();
 };
 
@@ -276,7 +290,7 @@ window.toggleLibraryStats = function () {
   const textEl = document.getElementById('stats-toggle-text');
   const iconEl = document.getElementById('stats-chevron-icon');
 
-  if (panel) panel.style.display = isStatsExpanded ? 'block' : 'none';
+  if (panel) panel.style.display = isStatsExpanded ? 'flex' : 'none';
   if (toggleBtn) toggleBtn.classList.toggle('active', isStatsExpanded);
   if (textEl) textEl.textContent = isStatsExpanded ? 'Hide Stats' : 'Show Stats';
   if (iconEl) iconEl.setAttribute('name', isStatsExpanded ? 'chevron-up-outline' : 'chevron-down-outline');
@@ -725,7 +739,7 @@ if (profileForm) {
 }
 
 // ==========================================
-// 3. MULTI-CATEGORY, MULTI-TRACK & SMART STATUS HELPERS
+// 3. MULTI-CATEGORY, ADDITIONAL ENTRIES & SMART STATUS HELPERS
 // ==========================================
 const CATEGORY_LABELS = {
   tv_show: 'TV Show',
@@ -786,28 +800,46 @@ function getItemTracks(item) {
   }];
 }
 
+function getItemSeasons(item) {
+  if (!Array.isArray(item.seasons)) return [];
+  const fallbackCat = getLegacyCategory(item);
+  return item.seasons.map(s => {
+    const unit = s.unit_label || 'eps';
+    const inferredCat = s.category || (unit === 'movie' ? 'movie' : (unit === 'ch' ? 'comic' : (unit === 'vol' || unit === 'pages' ? 'novel' : (unit === 'track' ? 'music' : fallbackCat))));
+    return {
+      name: s.name || '',
+      category: inferredCat,
+      status: (s.status || 'planned').toLowerCase().trim(),
+      progress: Number(s.progress) || 0,
+      total_units: (s.total_units !== null && s.total_units !== undefined && s.total_units !== '') ? Number(s.total_units) : null,
+      unit_label: unit
+    };
+  });
+}
+
+// Gabungkan Primary Tracks + Additional Entries (OVA, Season, Sequel) untuk Library & Stats
+function getAllItemUnits(item) {
+  return [...getItemTracks(item), ...getItemSeasons(item)];
+}
+
 function getItemCategories(item) {
-  const tracks = getItemTracks(item);
-  const cats = new Set(tracks.map(t => t.category));
+  const allUnits = getAllItemUnits(item);
+  const cats = new Set(allUnits.map(t => t.category));
   if (Array.isArray(item.categories)) {
     item.categories.forEach(c => { if (c) cats.add(c); });
   }
   return Array.from(cats);
 }
 
-function getItemSeasons(item) {
-  return Array.isArray(item.seasons) ? item.seasons : [];
-}
-
 function getItemTotalUnitsValue(item) {
-  const tracks = getItemTracks(item);
-  const sumTotal = tracks.reduce((sum, t) => sum + (Number(t.total_units) || 0), 0);
+  const allUnits = getAllItemUnits(item);
+  const sumTotal = allUnits.reduce((sum, t) => sum + (Number(t.total_units) || 0), 0);
   if (sumTotal > 0) return sumTotal;
-  return tracks.reduce((sum, t) => sum + (Number(t.progress) || 0), 0);
+  return allUnits.reduce((sum, t) => sum + (Number(t.progress) || 0), 0);
 }
 
-function computeSyncedStatus(tracks) {
-  const statuses = tracks.map(t => (t.status || 'planned').toLowerCase().trim());
+function computeSyncedStatus(unitsList) {
+  const statuses = unitsList.map(t => (t.status || 'planned').toLowerCase().trim());
 
   if (statuses.includes('ongoing')) {
     return { key: 'ongoing', label: 'Ongoing' };
@@ -821,11 +853,11 @@ function computeSyncedStatus(tracks) {
   return { key: 'planned', label: 'Planned' };
 }
 
-function computeCombinedProgress(tracks, syncedStatusKey) {
-  const totalProgress = tracks.reduce((sum, t) => sum + (Number(t.progress) || 0), 0);
-  const allHaveTotal = tracks.every(t => t.total_units !== null && Number(t.total_units) > 0);
+function computeCombinedProgress(unitsList, syncedStatusKey) {
+  const totalProgress = unitsList.reduce((sum, t) => sum + (Number(t.progress) || 0), 0);
+  const allHaveTotal = unitsList.every(t => t.total_units !== null && Number(t.total_units) > 0);
   const totalUnits = allHaveTotal
-    ? tracks.reduce((sum, t) => sum + Number(t.total_units), 0)
+    ? unitsList.reduce((sum, t) => sum + Number(t.total_units), 0)
     : null;
 
   const text = totalUnits !== null ? `${totalProgress}/${totalUnits}` : `${totalProgress}/?`;
@@ -874,38 +906,44 @@ async function fetchMediaLogs() {
 }
 
 function updateStatsUI() {
-  let tvEps = 0, tvCount = 0;
-  let movieTotal = 0, movieDone = 0;
-  let comicCh = 0, comicCount = 0;
-  let novelTotal = 0, novelDone = 0;
-  let gameTotal = 0, gameDone = 0;
-  let musicTotal = 0, musicTracks = 0;
+  const catStats = {
+    tv_show: { total: 0, done: 0 },
+    movie: { total: 0, done: 0 },
+    comic: { total: 0, done: 0 },
+    novel: { total: 0, done: 0 },
+    game: { total: 0, done: 0 },
+    music: { total: 0, done: 0 }
+  };
+
+  const unitCounts = {
+    eps: 0,
+    ch: 0,
+    pages: 0,
+    vol: 0,
+    movie: 0,
+    track: 0,
+    item: 0
+  };
+
   let totalCompleted = 0;
 
   allMediaLogs.forEach(item => {
-    const tracks = getItemTracks(item);
-    const synced = computeSyncedStatus(tracks);
+    const allUnits = getAllItemUnits(item);
+    const synced = computeSyncedStatus(allUnits);
     if (synced.key === 'completed') totalCompleted += 1;
 
-    tracks.forEach(t => {
-      if (t.category === 'tv_show') {
-        tvCount += 1;
-        tvEps += (Number(t.progress) || 0);
-      } else if (t.category === 'movie') {
-        movieTotal += 1;
-        if (t.status === 'completed') movieDone += 1;
-      } else if (t.category === 'comic') {
-        comicCount += 1;
-        comicCh += (Number(t.progress) || 0);
-      } else if (t.category === 'novel') {
-        novelTotal += 1;
-        if (t.status === 'completed') novelDone += 1;
-      } else if (t.category === 'game') {
-        gameTotal += 1;
-        if (t.status === 'completed') gameDone += 1;
-      } else if (t.category === 'music') {
-        musicTotal += 1;
-        musicTracks += (Number(t.progress) || 0);
+    allUnits.forEach(u => {
+      if (catStats[u.category]) {
+        catStats[u.category].total += 1;
+        if (u.status === 'completed') catStats[u.category].done += 1;
+      }
+
+      const unitKey = u.unit_label || DEFAULT_UNITS_BY_CAT[u.category] || 'item';
+      const progNum = Number(u.progress) || 0;
+      if (unitCounts[unitKey] !== undefined) {
+        unitCounts[unitKey] += progNum;
+      } else {
+        unitCounts.item += progNum;
       }
     });
   });
@@ -913,31 +951,42 @@ function updateStatsUI() {
   const totalEntries = allMediaLogs.length;
   const completionRate = totalEntries > 0 ? Math.round((totalCompleted / totalEntries) * 100) : 0;
 
-  const ratedItems = allMediaLogs.filter(i => i.rating !== null && i.rating !== undefined);
+  const ratedItems = allMediaLogs.filter(i => i.rating !== null && i.rating !== undefined && i.rating !== '');
   const avgRating = ratedItems.length
     ? (ratedItems.reduce((sum, i) => sum + Number(i.rating), 0) / ratedItems.length).toFixed(2)
     : '0.0';
 
   setElText('total-entries-label', `${totalEntries} Entries`);
 
-  setElText('stat-tv-eps', tvEps.toLocaleString('en-US'));
-  setElText('stat-tv-count', `${tvCount} Show`);
+  // Group 1: Categories
+  setElText('stat-cat-tv', catStats.tv_show.total.toLocaleString('en-US'));
+  setElText('stat-cat-tv-sub', `${catStats.tv_show.done} Completed`);
 
-  setElText('stat-movies-total', movieTotal.toLocaleString('en-US'));
-  setElText('stat-movies-done', `${movieDone} Completed`);
+  setElText('stat-cat-movie', catStats.movie.total.toLocaleString('en-US'));
+  setElText('stat-cat-movie-sub', `${catStats.movie.done} Completed`);
 
-  setElText('stat-comic-ch', comicCh.toLocaleString('en-US'));
-  setElText('stat-comic-count', `${comicCount} Comic`);
+  setElText('stat-cat-comic', catStats.comic.total.toLocaleString('en-US'));
+  setElText('stat-cat-comic-sub', `${catStats.comic.done} Completed`);
 
-  setElText('stat-novel-total', novelTotal.toLocaleString('en-US'));
-  setElText('stat-novel-done', `${novelDone} Completed`);
+  setElText('stat-cat-novel', catStats.novel.total.toLocaleString('en-US'));
+  setElText('stat-cat-novel-sub', `${catStats.novel.done} Completed`);
 
-  setElText('stat-game-total', gameTotal.toLocaleString('en-US'));
-  setElText('stat-game-done', `${gameDone} Completed`);
+  setElText('stat-cat-game', catStats.game.total.toLocaleString('en-US'));
+  setElText('stat-cat-game-sub', `${catStats.game.done} Completed`);
 
-  setElText('stat-music-total', musicTotal.toLocaleString('en-US'));
-  setElText('stat-music-tracks', `${musicTracks.toLocaleString('en-US')} Track`);
+  setElText('stat-cat-music', catStats.music.total.toLocaleString('en-US'));
+  setElText('stat-cat-music-sub', `${catStats.music.done} Completed`);
 
+  // Group 2: Total Counts by Unit
+  setElText('stat-unit-eps', unitCounts.eps.toLocaleString('en-US'));
+  setElText('stat-unit-ch', unitCounts.ch.toLocaleString('en-US'));
+  setElText('stat-unit-pages', unitCounts.pages.toLocaleString('en-US'));
+  setElText('stat-unit-vol', unitCounts.vol.toLocaleString('en-US'));
+  setElText('stat-unit-movie', unitCounts.movie.toLocaleString('en-US'));
+  setElText('stat-unit-track', unitCounts.track.toLocaleString('en-US'));
+  setElText('stat-unit-item', unitCounts.item.toLocaleString('en-US'));
+
+  // Group 3 (Bottom): Total Completed & Mean Rating
   setElText('stat-completed-total', totalCompleted.toLocaleString('en-US'));
   setElText('stat-completion-rate', `${completionRate}% Rate`);
 
@@ -1127,12 +1176,12 @@ function renderMediaGrid() {
 
   let filtered = allMediaLogs.filter(item => {
     const cats = getItemCategories(item);
-    const tracks = getItemTracks(item);
+    const allUnits = getAllItemUnits(item);
     const seasons = getItemSeasons(item);
-    const synced = computeSyncedStatus(tracks);
+    const synced = computeSyncedStatus(allUnits);
 
     const matchCat = currentCategory === 'all' || cats.includes(currentCategory);
-    const matchStatus = statusFilter === 'all' || synced.key === statusFilter || tracks.some(t => t.status === statusFilter);
+    const matchStatus = statusFilter === 'all' || synced.key === statusFilter || allUnits.some(t => t.status === statusFilter);
     const matchRange = matchesCustomFilters(item);
     const matchTitle = (item.title || '').toLowerCase().includes(query);
     const matchSeason = seasons.some(s => (s.name || '').toLowerCase().includes(query));
@@ -1193,11 +1242,11 @@ function renderMediaGrid() {
       const safeId = escapeHtml(String(item.id));
       const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/120x180/1e1e1f/888888?text=?';
       const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
-      const tracks = getItemTracks(item);
+      const allUnits = getAllItemUnits(item);
       const cats = getItemCategories(item);
       const seasons = getItemSeasons(item);
-      const synced = computeSyncedStatus(tracks);
-      const combined = computeCombinedProgress(tracks, synced.key);
+      const synced = computeSyncedStatus(allUnits);
+      const combined = computeCombinedProgress(allUnits, synced.key);
       const repeatCount = Number(item.repeat_count) || 0;
       const statusDateText = formatStatusDate(item.updated_at || item.created_at);
 
@@ -1242,11 +1291,11 @@ function renderMediaGrid() {
     const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
     const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
     const repeatCount = Number(item.repeat_count) || 0;
-    const tracks = getItemTracks(item);
+    const allUnits = getAllItemUnits(item);
     const cats = getItemCategories(item);
     const seasons = getItemSeasons(item);
-    const synced = computeSyncedStatus(tracks);
-    const combined = computeCombinedProgress(tracks, synced.key);
+    const synced = computeSyncedStatus(allUnits);
+    const combined = computeCombinedProgress(allUnits, synced.key);
 
     const catBadgesHtml = cats.map(c => `<span class="badge-cat">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('');
     const extraBarClass = combined.isPlannedEmpty ? 'planned-empty' : '';
@@ -1311,9 +1360,10 @@ window.openMediaDetailModal = function (id) {
   const safeId = escapeHtml(String(item.id));
   const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
   const tracks = getItemTracks(item);
-  const cats = getItemCategories(item);
   const seasons = getItemSeasons(item);
-  const synced = computeSyncedStatus(tracks);
+  const allUnits = [...tracks, ...seasons];
+  const cats = getItemCategories(item);
+  const synced = computeSyncedStatus(allUnits);
   const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : 'Unrated';
   const repeatCount = Number(item.repeat_count) || 0;
 
@@ -1340,6 +1390,7 @@ window.openMediaDetailModal = function (id) {
       <div class="detail-list">
         ${seasons.map(s => {
           const sStatus = (s.status || 'planned').toLowerCase().trim();
+          const sCatLabel = CATEGORY_LABELS[s.category] || s.category || 'TV Show';
           const sUnit = UNIT_SHORT_LABELS[s.unit_label] || s.unit_label || 'Eps';
           const sProg = (s.total_units && Number(s.total_units) > 0)
             ? `${s.progress || 0}/${s.total_units} ${sUnit}`
@@ -1351,7 +1402,7 @@ window.openMediaDetailModal = function (id) {
             <div class="detail-row-item">
               <div style="min-width: 0;">
                 <div style="font-weight: 600; color: var(--white-1);">${escapeHtml(s.name || 'Part')}</div>
-                <div style="font-size: 11px; color: var(--light-gray-70);">${sProg}${sRating}</div>
+                <div style="font-size: 11px; color: var(--light-gray-70);">${escapeHtml(sCatLabel)} · ${sProg}${sRating}</div>
               </div>
               <span class="status-pill ${sStatus}">${sStatus}</span>
             </div>
@@ -1441,7 +1492,7 @@ window.addMediaTrackRow = function (track = null) {
         <option value="dropped" ${status === 'dropped' ? 'selected' : ''}>Dropped</option>
       </select>
       <div class="progress-input-row">
-        <input type="number" class="form-input track-progress-input" min="0" value="${progress}" placeholder="Prog">
+        <input type="number" class="form-input track-progress-input" min="0" value="${progress}" placeholder="Count">
         <button type="button" class="step-plus-btn" onclick="stepTrackProgress(this)" title="+1">+1</button>
       </div>
       <input type="number" class="form-input track-total-input" min="0" value="${total !== null ? total : ''}" placeholder="Total" oninput="onTrackStatusOrTotalChange(this)">
@@ -1513,16 +1564,26 @@ window.addSeasonItemRow = function (season = null) {
   const container = document.getElementById('media-seasons-editor');
   if (!container) return;
 
+  const firstTrackCat = document.querySelector('#media-tracks-editor .track-cat-select')?.value || 'tv_show';
   const name = (season && season.name) ? season.name : '';
+  const cat = (season && season.category) ? season.category : firstTrackCat;
   const status = (season && season.status) ? season.status : 'completed';
   const progress = (season && season.progress !== undefined) ? season.progress : 0;
   const total = (season && season.total_units !== undefined && season.total_units !== null) ? season.total_units : '';
-  const unit = (season && season.unit_label) ? season.unit_label : 'eps';
+  const unit = (season && season.unit_label) ? season.unit_label : (DEFAULT_UNITS_BY_CAT[cat] || 'eps');
 
   const card = document.createElement('div');
   card.className = 'season-edit-card';
   card.innerHTML = `
     <div class="season-edit-top">
+      <select class="form-input season-cat-select" style="max-width: 118px;" onchange="onSeasonCategoryChange(this)">
+        <option value="tv_show" ${cat === 'tv_show' ? 'selected' : ''}>TV Show</option>
+        <option value="movie" ${cat === 'movie' ? 'selected' : ''}>Movie</option>
+        <option value="comic" ${cat === 'comic' ? 'selected' : ''}>Comic</option>
+        <option value="novel" ${cat === 'novel' ? 'selected' : ''}>Novel</option>
+        <option value="game" ${cat === 'game' ? 'selected' : ''}>Game</option>
+        <option value="music" ${cat === 'music' ? 'selected' : ''}>Music</option>
+      </select>
       <input type="text" class="form-input season-name-input" placeholder="e.g. OVA / Season 2 / Special" value="${escapeHtml(name)}">
       <button type="button" class="social-remove-btn" onclick="this.closest('.season-edit-card').remove()" title="Remove Entry">
         <ion-icon name="trash-outline"></ion-icon>
@@ -1535,12 +1596,15 @@ window.addSeasonItemRow = function (season = null) {
         <option value="planned" ${status === 'planned' ? 'selected' : ''}>Planned</option>
         <option value="dropped" ${status === 'dropped' ? 'selected' : ''}>Dropped</option>
       </select>
-      <input type="number" class="form-input season-progress-input" min="0" value="${progress}" placeholder="Count">
+      <div class="progress-input-row">
+        <input type="number" class="form-input season-progress-input" min="0" value="${progress}" placeholder="Count">
+        <button type="button" class="step-plus-btn" onclick="stepSeasonProgress(this)" title="+1">+1</button>
+      </div>
       <input type="number" class="form-input season-total-input" min="0" value="${total}" placeholder="Total" oninput="onSeasonStatusOrTotalChange(this)">
       <select class="form-input season-unit-select">
         <option value="eps" ${unit === 'eps' ? 'selected' : ''}>Episode</option>
-        <option value="ch" ${unit === 'ch' ? 'selected' : ''}>Chapter</option>
         <option value="movie" ${unit === 'movie' ? 'selected' : ''}>Movie</option>
+        <option value="ch" ${unit === 'ch' ? 'selected' : ''}>Chapter</option>
         <option value="vol" ${unit === 'vol' ? 'selected' : ''}>Volume</option>
         <option value="pages" ${unit === 'pages' ? 'selected' : ''}>Pages</option>
         <option value="track" ${unit === 'track' ? 'selected' : ''}>Track</option>
@@ -1549,6 +1613,14 @@ window.addSeasonItemRow = function (season = null) {
     </div>
   `;
   container.appendChild(card);
+};
+
+window.onSeasonCategoryChange = function (selectEl) {
+  const card = selectEl.closest('.season-edit-card');
+  const unitSelect = card ? card.querySelector('.season-unit-select') : null;
+  if (unitSelect && DEFAULT_UNITS_BY_CAT[selectEl.value]) {
+    unitSelect.value = DEFAULT_UNITS_BY_CAT[selectEl.value];
+  }
 };
 
 window.onSeasonStatusOrTotalChange = function (el) {
@@ -1563,6 +1635,23 @@ window.onSeasonStatusOrTotalChange = function (el) {
 
   if (status === 'completed' && totalVal > 0 && progInput) {
     progInput.value = totalVal;
+  }
+};
+
+window.stepSeasonProgress = function (btn) {
+  const card = btn.closest('.season-edit-card');
+  if (!card) return;
+  const progInput = card.querySelector('.season-progress-input');
+  const totalEl = card.querySelector('.season-total-input');
+  const statusSelect = card.querySelector('.season-status-select');
+
+  if (!progInput) return;
+  const totalVal = totalEl ? parseInt(totalEl.value, 10) : NaN;
+  const nextVal = (parseInt(progInput.value, 10) || 0) + 1;
+  progInput.value = nextVal;
+
+  if (totalVal > 0 && nextVal >= totalVal && statusSelect) {
+    statusSelect.value = 'completed';
   }
 };
 
@@ -2092,6 +2181,7 @@ if (mediaForm) {
     seasonCards.forEach(card => {
       const name = card.querySelector('.season-name-input').value.trim();
       if (!name) return;
+      const cat = card.querySelector('.season-cat-select')?.value || tracks[0].category;
       const status = card.querySelector('.season-status-select').value;
       const totalRaw = card.querySelector('.season-total-input').value;
       const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
@@ -2104,6 +2194,7 @@ if (mediaForm) {
 
       seasons.push({
         name,
+        category: cat,
         status,
         progress: progressVal,
         total_units: totalUnits,
@@ -2112,9 +2203,10 @@ if (mediaForm) {
       });
     });
 
-    const categories = Array.from(new Set(tracks.map(t => t.category)));
+    const allCombinedUnits = [...tracks, ...seasons];
+    const categories = Array.from(new Set(allCombinedUnits.map(t => t.category)));
     const primaryTrack = tracks[0];
-    const syncedStatus = computeSyncedStatus(tracks);
+    const syncedStatus = computeSyncedStatus(allCombinedUnits);
     const repeatVal = Math.max(0, parseInt(document.getElementById('media-repeat').value, 10) || 0);
 
     const payload = {
