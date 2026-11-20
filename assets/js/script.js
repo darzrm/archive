@@ -155,9 +155,27 @@ window.toggleToolbarPopover = function (type) {
 
   closeAllToolbarPopovers();
 
-  if (willOpen) {
-    if (menuEl) menuEl.classList.add('open');
-    if (btnEl) btnEl.classList.add('active');
+  if (willOpen && menuEl && btnEl) {
+    // Reset alignment ke arah kanan (left: 0) terlebih dahulu
+    menuEl.classList.remove('align-right');
+    menuEl.style.left = '';
+    menuEl.style.right = '';
+    menuEl.classList.add('open');
+    btnEl.classList.add('active');
+
+    // Pastikan menu tidak pernah terpotong kanan/kiri viewport layar
+    const rect = menuEl.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    if (rect.right > viewportWidth - 14) {
+      const overflowRight = rect.right - (viewportWidth - 14);
+      const btnRect = btnEl.getBoundingClientRect();
+      // Jika digeser ke kiri masih aman dari tepi kiri layar, geser secukupnya
+      if (btnRect.left - overflowRight >= 14) {
+        menuEl.style.left = `-${overflowRight}px`;
+      } else {
+        menuEl.style.left = `-${Math.max(0, btnRect.left - 14)}px`;
+      }
+    }
   }
 };
 
@@ -817,7 +835,6 @@ function getItemSeasons(item) {
   });
 }
 
-// Gabungkan Primary Tracks + Additional Entries (OVA, Season, Sequel) untuk Library & Stats
 function getAllItemUnits(item) {
   return [...getItemTracks(item), ...getItemSeasons(item)];
 }
