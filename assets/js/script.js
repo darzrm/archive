@@ -745,6 +745,16 @@ const DEFAULT_UNITS_BY_CAT = {
   music: 'track'
 };
 
+const UNIT_SHORT_LABELS = {
+  eps: 'Eps',
+  ch: 'Ch',
+  movie: 'Movie',
+  vol: 'Vol',
+  pages: 'Pages',
+  track: 'Track',
+  item: 'Item'
+};
+
 function getLegacyCategory(item) {
   const rawCat = (item.category || '').toLowerCase().trim();
   if (rawCat === 'series' || rawCat === 'tv_show') return 'tv_show';
@@ -1083,7 +1093,6 @@ function matchesCustomFilters(item) {
   const hasRating = item.rating !== null && item.rating !== undefined && item.rating !== '';
   const rVal = hasRating ? Number(item.rating) : null;
 
-  // Rating Range Filter
   if (unratedOnly) {
     if (hasRating) return false;
   } else if (rMinRaw !== '' || rMaxRaw !== '') {
@@ -1092,7 +1101,6 @@ function matchesCustomFilters(item) {
     if (rMaxRaw !== '' && rVal > parseFloat(rMaxRaw)) return false;
   }
 
-  // Total Count (Eps/Ch) Range Filter
   if (uMinRaw !== '' || uMaxRaw !== '') {
     const totalUnits = getItemTotalUnitsValue(item);
     if (uMinRaw !== '' && totalUnits < parseInt(uMinRaw, 10)) return false;
@@ -1133,7 +1141,6 @@ function renderMediaGrid() {
     return matchCat && matchStatus && matchRange && matchQuery;
   });
 
-  // Sortir berdasarkan pilihan dan arah
   filtered.sort((a, b) => {
     if (currentSortField === 'rating') {
       const aHas = a.rating !== null && a.rating !== undefined && a.rating !== '';
@@ -1314,7 +1321,8 @@ window.openMediaDetailModal = function (id) {
 
   const tracksHtml = tracks.map(t => {
     const hasTotal = t.total_units !== null && t.total_units > 0;
-    const progStr = hasTotal ? `${t.progress} / ${t.total_units} ${t.unit_label}` : `${t.progress} / ? ${t.unit_label}`;
+    const unitShort = UNIT_SHORT_LABELS[t.unit_label] || t.unit_label || '';
+    const progStr = hasTotal ? `${t.progress} / ${t.total_units} ${unitShort}` : `${t.progress} / ? ${unitShort}`;
     return `
       <div class="detail-row-item">
         <div>
@@ -1332,8 +1340,13 @@ window.openMediaDetailModal = function (id) {
       <div class="detail-list">
         ${seasons.map(s => {
           const sStatus = (s.status || 'planned').toLowerCase().trim();
-          const sProg = (s.total_units && Number(s.total_units) > 0) ? `${s.progress || 0}/${s.total_units}` : `${s.progress || 0}/?`;
-          const sRating = s.rating ? ` · ★ ${Number(s.rating).toFixed(1)}` : '';
+          const sUnit = UNIT_SHORT_LABELS[s.unit_label] || s.unit_label || 'Eps';
+          const sProg = (s.total_units && Number(s.total_units) > 0)
+            ? `${s.progress || 0}/${s.total_units} ${sUnit}`
+            : `${s.progress || 0}/? ${sUnit}`;
+          const sRating = (item.rating !== null && item.rating !== undefined)
+            ? ` · ★ ${Number(item.rating).toFixed(1)}`
+            : '';
           return `
             <div class="detail-row-item">
               <div style="min-width: 0;">
@@ -1503,31 +1516,54 @@ window.addSeasonItemRow = function (season = null) {
   const name = (season && season.name) ? season.name : '';
   const status = (season && season.status) ? season.status : 'completed';
   const progress = (season && season.progress !== undefined) ? season.progress : 0;
-  const total = (season && season.total_units !== undefined) ? season.total_units : '';
-  const rating = (season && season.rating !== undefined) ? season.rating : '';
+  const total = (season && season.total_units !== undefined && season.total_units !== null) ? season.total_units : '';
+  const unit = (season && season.unit_label) ? season.unit_label : 'eps';
 
   const card = document.createElement('div');
   card.className = 'season-edit-card';
   card.innerHTML = `
     <div class="season-edit-top">
-      <input type="text" class="form-input season-name-input" placeholder="e.g. Season 2 / OVA / Movie Sequel" value="${escapeHtml(name)}">
-      <button type="button" class="social-remove-btn" onclick="this.closest('.season-edit-card').remove()" title="Remove Part">
+      <input type="text" class="form-input season-name-input" placeholder="e.g. OVA / Season 2 / Special" value="${escapeHtml(name)}">
+      <button type="button" class="social-remove-btn" onclick="this.closest('.season-edit-card').remove()" title="Remove Entry">
         <ion-icon name="trash-outline"></ion-icon>
       </button>
     </div>
     <div class="season-edit-grid">
-      <select class="form-input season-status-select">
+      <select class="form-input season-status-select" onchange="onSeasonStatusOrTotalChange(this)">
         <option value="completed" ${status === 'completed' ? 'selected' : ''}>Completed</option>
         <option value="ongoing" ${status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
         <option value="planned" ${status === 'planned' ? 'selected' : ''}>Planned</option>
         <option value="dropped" ${status === 'dropped' ? 'selected' : ''}>Dropped</option>
       </select>
-      <input type="number" class="form-input season-progress-input" min="0" value="${progress}" placeholder="Prog">
-      <input type="number" class="form-input season-total-input" min="0" value="${total !== null ? total : ''}" placeholder="Total">
-      <input type="number" class="form-input season-rating-input" step="0.1" min="1.0" max="10.0" value="${rating !== null ? rating : ''}" placeholder="Score">
+      <input type="number" class="form-input season-progress-input" min="0" value="${progress}" placeholder="Count">
+      <input type="number" class="form-input season-total-input" min="0" value="${total}" placeholder="Total" oninput="onSeasonStatusOrTotalChange(this)">
+      <select class="form-input season-unit-select">
+        <option value="eps" ${unit === 'eps' ? 'selected' : ''}>Episode</option>
+        <option value="ch" ${unit === 'ch' ? 'selected' : ''}>Chapter</option>
+        <option value="movie" ${unit === 'movie' ? 'selected' : ''}>Movie</option>
+        <option value="vol" ${unit === 'vol' ? 'selected' : ''}>Volume</option>
+        <option value="pages" ${unit === 'pages' ? 'selected' : ''}>Pages</option>
+        <option value="track" ${unit === 'track' ? 'selected' : ''}>Track</option>
+        <option value="item" ${unit === 'item' ? 'selected' : ''}>Item</option>
+      </select>
     </div>
   `;
   container.appendChild(card);
+};
+
+window.onSeasonStatusOrTotalChange = function (el) {
+  const card = el.closest('.season-edit-card');
+  if (!card) return;
+  const statusEl = card.querySelector('.season-status-select');
+  const totalEl = card.querySelector('.season-total-input');
+  const progInput = card.querySelector('.season-progress-input');
+
+  const status = statusEl ? statusEl.value : '';
+  const totalVal = totalEl ? parseInt(totalEl.value, 10) : NaN;
+
+  if (status === 'completed' && totalVal > 0 && progInput) {
+    progInput.value = totalVal;
+  }
 };
 
 window.openMediaModal = function () {
@@ -2048,6 +2084,9 @@ if (mediaForm) {
       return;
     }
 
+    const ratingRaw = document.getElementById('media-rating').value;
+    const inheritedRating = ratingRaw !== '' ? parseFloat(ratingRaw) : null;
+
     const seasonCards = document.querySelectorAll('#media-seasons-editor .season-edit-card');
     const seasons = [];
     seasonCards.forEach(card => {
@@ -2057,7 +2096,7 @@ if (mediaForm) {
       const totalRaw = card.querySelector('.season-total-input').value;
       const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
       let progressVal = parseInt(card.querySelector('.season-progress-input').value, 10) || 0;
-      const ratingRaw = card.querySelector('.season-rating-input').value;
+      const unitLabel = card.querySelector('.season-unit-select')?.value || 'eps';
 
       if (status === 'completed' && totalUnits && totalUnits > 0) {
         progressVal = totalUnits;
@@ -2068,15 +2107,14 @@ if (mediaForm) {
         status,
         progress: progressVal,
         total_units: totalUnits,
-        rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null
+        unit_label: unitLabel,
+        rating: inheritedRating
       });
     });
 
     const categories = Array.from(new Set(tracks.map(t => t.category)));
     const primaryTrack = tracks[0];
     const syncedStatus = computeSyncedStatus(tracks);
-
-    const ratingRaw = document.getElementById('media-rating').value;
     const repeatVal = Math.max(0, parseInt(document.getElementById('media-repeat').value, 10) || 0);
 
     const payload = {
@@ -2091,7 +2129,7 @@ if (mediaForm) {
       progress: primaryTrack.progress,
       total_units: primaryTrack.total_units,
       unit_label: primaryTrack.unit_label,
-      rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null,
+      rating: inheritedRating,
       repeat_count: repeatVal,
       updated_at: new Date().toISOString()
     };
