@@ -32,6 +32,32 @@
   box-sizing: border-box;
 }
 
+/* ===================================
+   CUSTOM MINIMALIST SCROLLBAR
+=================================== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(0, 0%, 26%) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(0, 0%, 24%);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(0, 0%, 38%);
+}
+
 html {
   font-family: var(--ff-poppins);
   scroll-behavior: smooth;
@@ -65,7 +91,69 @@ button {
 }
 
 /* ===================================
-   ANIMATIONS (SMOOTH TAB & CARD FADE)
+   MINIMALIST TOAST NOTIFICATIONS
+=================================== */
+.toast-container {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 15px;
+  border-radius: 11px;
+  background: rgba(26, 26, 28, 0.94);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--white-1);
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  animation: toastSlideIn 0.24s ease forwards;
+}
+
+.toast-item.hide {
+  animation: toastSlideOut 0.22s ease forwards;
+}
+
+.toast-item ion-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.toast-item.success ion-icon {
+  color: var(--status-completed);
+}
+
+.toast-item.error ion-icon {
+  color: var(--danger);
+}
+
+.toast-item.info ion-icon {
+  color: var(--white-1);
+}
+
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateY(-10px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toastSlideOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-8px) scale(0.97); }
+}
+
+/* ===================================
+   ANIMATIONS
 =================================== */
 @keyframes tabFadeSlide {
   from {
@@ -364,7 +452,6 @@ button {
   min-height: 20px;
 }
 
-/* Social Links Bar */
 .profile-socials {
   display: flex;
   flex-wrap: wrap;
@@ -427,6 +514,7 @@ button {
   align-items: center;
   justify-content: center;
   font-size: 15px;
+  flex-shrink: 0;
 }
 
 .social-remove-btn:hover {
@@ -769,6 +857,7 @@ button {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  cursor: pointer;
   transition: var(--transition-1);
   animation: tabFadeSlide 0.25s ease forwards;
 }
@@ -807,6 +896,13 @@ button {
   align-items: flex-start;
   gap: 4px;
   z-index: 2;
+  max-width: calc(100% - 44px);
+}
+
+.badge-cat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
 }
 
 .badge-cat {
@@ -817,7 +913,7 @@ button {
   font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
-  padding: 3px 7px;
+  padding: 3px 6px;
   border-radius: 6px;
   letter-spacing: 0.4px;
 }
@@ -836,11 +932,12 @@ button {
   gap: 3px;
 }
 
+/* Monochrome Rewatch / Reread Badge (same style as other badges) */
 .badge-repeat {
   background: rgba(18, 18, 18, 0.88);
   backdrop-filter: blur(6px);
-  border: 1px solid rgba(116, 192, 252, 0.35);
-  color: #74c0fc;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--white-1);
   font-size: 10px;
   font-weight: 600;
   padding: 3px 7px;
@@ -848,6 +945,21 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+}
+
+.badge-seasons {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(18, 18, 18, 0.88);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--light-gray);
+  font-size: 9px;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 6px;
+  z-index: 2;
 }
 
 .cover-edit-btn {
@@ -865,7 +977,7 @@ button {
   align-items: center;
   justify-content: center;
   font-size: 14px;
-  z-index: 2;
+  z-index: 3;
   transition: var(--transition-1);
 }
 
@@ -906,7 +1018,15 @@ button {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.multi-progress-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
 }
 
 .status-pill,
@@ -954,6 +1074,11 @@ button {
   border-color: rgba(255, 135, 135, 0.35);
 }
 
+.status-pill.mixed {
+  color: var(--white-1);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
 .progress-track {
   width: 100%;
   height: 4px;
@@ -988,6 +1113,10 @@ button {
 
 .progress-fill.dropped {
   background: var(--status-dropped);
+}
+
+.progress-fill.mixed {
+  background: linear-gradient(90deg, var(--status-completed), var(--status-ongoing));
 }
 
 .media-footer-row {
@@ -1028,6 +1157,7 @@ button {
   background: var(--onyx);
   border: 1px solid var(--jet);
   border-radius: 12px;
+  cursor: pointer;
   transition: var(--transition-1);
   animation: tabFadeSlide 0.22s ease forwards;
 }
@@ -1081,7 +1211,7 @@ button {
 }
 
 .list-repeat-tag {
-  color: #74c0fc;
+  color: var(--light-gray);
   font-weight: 600;
 }
 
@@ -1126,7 +1256,147 @@ button {
 }
 
 /* ===================================
-   LOAD MORE BUTTON
+   TRACKS & SEASONS EDITOR INSIDE MODAL
+=================================== */
+.tracks-editor-list,
+.seasons-editor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.track-edit-card,
+.season-edit-card {
+  background: var(--eerie-black-1);
+  border: 1px solid var(--jet);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.track-edit-top,
+.season-edit-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.track-edit-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1.1fr 0.9fr 0.9fr;
+  gap: 6px;
+}
+
+.season-edit-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.9fr 0.9fr 0.8fr;
+  gap: 6px;
+}
+
+@media (max-width: 540px) {
+  .track-edit-grid,
+  .season-edit-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.track-edit-card .form-input,
+.season-edit-card .form-input {
+  padding: 7px 9px;
+  font-size: 12px;
+}
+
+/* ===================================
+   MEDIA DETAIL VIEW MODAL
+=================================== */
+.media-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detail-hero {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.detail-poster {
+  width: 96px;
+  aspect-ratio: 2 / 3;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid var(--jet);
+  flex-shrink: 0;
+}
+
+.detail-meta-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--light-gray-70);
+  margin-bottom: 6px;
+}
+
+.detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.detail-row-item {
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  border-radius: 10px;
+  padding: 9px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+/* ===================================
+   IMAGE CROPPER MODAL
+=================================== */
+.cropper-stage-wrap {
+  width: 100%;
+  max-height: 360px;
+  background: #111;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--jet);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cropper-stage-wrap img {
+  max-width: 100%;
+  max-height: 360px;
+  display: block;
+}
+
+.cropper-aspect-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+/* ===================================
+   LOAD MORE & BACK TO TOP
 =================================== */
 .load-more-wrap {
   display: flex;
@@ -1154,9 +1424,6 @@ button {
   transform: translateY(-1px);
 }
 
-/* ===================================
-   BACK TO TOP FLOATING BUTTON
-=================================== */
 .back-to-top-btn {
   position: fixed;
   bottom: 22px;
@@ -1231,7 +1498,7 @@ button {
 }
 
 .custom-modal-box.modal-lg {
-  max-width: 560px;
+  max-width: 580px;
 }
 
 .modal-header {
@@ -1284,11 +1551,11 @@ button {
 }
 
 .step-plus-btn {
-  padding: 0 12px;
+  padding: 0 10px;
   background: var(--onyx);
   border: 1px solid var(--jet);
   border-radius: 10px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--white-1);
   flex-shrink: 0;
@@ -1305,18 +1572,6 @@ button {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-}
-
-.form-row-3 {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 10px;
-}
-
-@media (max-width: 520px) {
-  .form-row-3 {
-    grid-template-columns: 1fr;
-  }
 }
 
 .api-search-row {
@@ -1606,6 +1861,68 @@ button {
   color: var(--light-gray);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.blog-post-text a.inline-note-link {
+  color: var(--white-1);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Automatic Link Preview Card in Notes */
+.link-preview-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 13px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  border-radius: 12px;
+  transition: var(--transition-1);
+}
+
+.link-preview-card:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-1px);
+}
+
+.link-preview-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--eerie-black-1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  color: var(--white-1);
+  flex-shrink: 0;
+}
+
+.link-preview-info {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.link-preview-domain {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--light-gray-70);
+}
+
+.link-preview-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--white-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .blog-post-image-wrap {
