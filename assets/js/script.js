@@ -26,11 +26,6 @@ let isStatsExpanded = false;
 let isAdminLoggedIn = false;
 let isProfileLoaded = false;
 
-// Cropper State
-let cropperInstance = null;
-let cropResolveCallback = null;
-let cropRejectCallback = null;
-
 let currentProfile = {
   name: '',
   bio: '',
@@ -248,108 +243,53 @@ document.getElementById('admin-login-form').addEventListener('submit', async (e)
 });
 
 // ==========================================
-// 2B. INTERACTIVE IMAGE CROPPER & STORAGE UPLOAD
+// 2B. IMAGE COMPRESSION & STORAGE UPLOAD/CLEANUP
 // ==========================================
-function openImageCropperModal(file, defaultAspectRatio = NaN, title = 'Crop Image') {
+function compressImageFile(file, maxWidth = 800, quality = 0.82) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const modal = document.getElementById('cropper-modal');
-      const img = document.getElementById('cropper-target-img');
-      setElText('cropper-modal-title', title);
-
-      if (cropperInstance) {
-        cropperInstance.destroy();
-        cropperInstance = null;
-      }
-
-      cropResolveCallback = resolve;
-      cropRejectCallback = reject;
-
+    reader.onload = (event) => {
+      const img = new Image();
       img.onload = () => {
-        cropperInstance = new Cropper(img, {
-          aspectRatio: defaultAspectRatio,
-          viewMode: 1,
-          dragMode: 'move',
-          autoCropArea: 0.9,
-          responsive: true,
-          background: false
-        });
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Image compression failed'));
+          },
+          'image/webp',
+          quality
+        );
       };
-
-      img.src = e.target.result;
-      modal.classList.add('active');
-
-      // Highlight matching aspect button
-      document.querySelectorAll('#cropper-aspect-bar .cat-tab').forEach((btn, idx) => {
-        btn.classList.remove('active');
-        if (Number.isNaN(defaultAspectRatio) && idx === 0) btn.classList.add('active');
-        if (defaultAspectRatio === 1 && idx === 1) btn.classList.add('active');
-        if (Math.abs(defaultAspectRatio - 2 / 3) < 0.01 && idx === 2) btn.classList.add('active');
-        if (Math.abs(defaultAspectRatio - 16 / 9) < 0.01 && idx === 3) btn.classList.add('active');
-        if (defaultAspectRatio === 3 && idx === 4) btn.classList.add('active');
-      });
+      img.onerror = () => reject(new Error('Invalid image file'));
+      img.src = event.target.result;
     };
-    reader.onerror = () => reject(new Error('Failed to read image file'));
+    reader.onerror = () => reject(new Error('Failed to read file'));
     reader.readAsDataURL(file);
   });
 }
 
-window.setCropAspectRatio = function (ratio, btnEl) {
-  if (!cropperInstance) return;
-  cropperInstance.setAspectRatio(ratio);
-  document.querySelectorAll('#cropper-aspect-bar .cat-tab').forEach(b => b.classList.remove('active'));
-  if (btnEl) btnEl.classList.add('active');
-};
-
-window.cancelImageCrop = function () {
-  document.getElementById('cropper-modal').classList.remove('active');
-  if (cropperInstance) {
-    cropperInstance.destroy();
-    cropperInstance = null;
-  }
-  if (cropRejectCallback) {
-    cropRejectCallback(new Error('Crop cancelled'));
-    cropRejectCallback = null;
-    cropResolveCallback = null;
-  }
-};
-
-window.confirmImageCrop = function () {
-  if (!cropperInstance) return;
-
-  const canvas = cropperInstance.getCroppedCanvas({
-    maxWidth: 1200,
-    maxHeight: 1200,
-    imageSmoothingQuality: 'high'
-  });
-
-  canvas.toBlob(
-    (blob) => {
-      document.getElementById('cropper-modal').classList.remove('active');
-      if (cropperInstance) {
-        cropperInstance.destroy();
-        cropperInstance = null;
-      }
-      if (blob && cropResolveCallback) {
-        cropResolveCallback(blob);
-      } else if (cropRejectCallback) {
-        cropRejectCallback(new Error('Crop failed'));
-      }
-      cropResolveCallback = null;
-      cropRejectCallback = null;
-    },
-    'image/webp',
-    0.84
-  );
-};
-
-async function uploadCroppedBlobToSupabase(blob, folder = 'covers') {
+async function uploadImageToSupabase(file, folder = 'covers') {
+  const maxWidth = folder === 'avatars' ? 400 : (folder === 'banners' ? 1200 : (folder === 'posts' ? 900 : 600));
+  const compressedBlob = await compressImageFile(file, maxWidth, 0.82);
   const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.webp`;
 
   const { error } = await supabaseClient.storage
     .from(STORAGE_BUCKET)
-    .upload(fileName, blob, {
+    .upload(fileName, compressedBlob, {
       contentType: 'image/webp',
       upsert: false
     });
@@ -554,18 +494,15 @@ window.handleBannerImageUpload = async function (event) {
   event.target.value = '';
   if (!file) return;
 
+  setElText('banner-upload-status', 'Uploading banner...');
   try {
-    const croppedBlob = await openImageCropperModal(file, 3, 'Crop Cover Banner');
-    setElText('banner-upload-status', 'Uploading banner...');
-    const publicUrl = await uploadCroppedBlobToSupabase(croppedBlob, 'banners');
+    const publicUrl = await uploadImageToSupabase(file, 'banners');
     document.getElementById('edit-profile-banner').value = publicUrl;
-    setElText('banner-upload-status', 'Banner cropped & uploaded!');
-    showToast('Banner ready to save', 'success');
+    setElText('banner-upload-status', 'Banner uploaded! Click Save Profile.');
+    showToast('Banner uploaded', 'success');
   } catch (err) {
-    if (err.message !== 'Crop cancelled') {
-      setElText('banner-upload-status', `Upload failed: ${err.message}`);
-      showToast(err.message, 'error');
-    }
+    setElText('banner-upload-status', `Upload failed: ${err.message}`);
+    showToast(err.message, 'error');
   }
 };
 
@@ -574,18 +511,15 @@ window.handleProfileImageUpload = async function (event) {
   event.target.value = '';
   if (!file) return;
 
+  setElText('profile-upload-status', 'Uploading avatar...');
   try {
-    const croppedBlob = await openImageCropperModal(file, 1, 'Crop Profile Avatar');
-    setElText('profile-upload-status', 'Uploading avatar...');
-    const publicUrl = await uploadCroppedBlobToSupabase(croppedBlob, 'avatars');
+    const publicUrl = await uploadImageToSupabase(file, 'avatars');
     document.getElementById('edit-profile-avatar').value = publicUrl;
-    setElText('profile-upload-status', 'Avatar cropped & uploaded!');
-    showToast('Avatar ready to save', 'success');
+    setElText('profile-upload-status', 'Avatar uploaded! Click Save Profile.');
+    showToast('Avatar uploaded', 'success');
   } catch (err) {
-    if (err.message !== 'Crop cancelled') {
-      setElText('profile-upload-status', `Upload failed: ${err.message}`);
-      showToast(err.message, 'error');
-    }
+    setElText('profile-upload-status', `Upload failed: ${err.message}`);
+    showToast(err.message, 'error');
   }
 };
 
@@ -922,6 +856,7 @@ function renderMediaGrid() {
   // COMPACT LIST VIEW RENDER
   if (libraryViewMode === 'list') {
     grid.innerHTML = displayedItems.map(item => {
+      const safeId = escapeHtml(String(item.id));
       const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/120x180/1e1e1f/888888?text=?';
       const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
       const tracks = getItemTracks(item);
@@ -943,13 +878,13 @@ function renderMediaGrid() {
       const repeatHtml = repeatCount > 0 ? `<span class="list-repeat-tag">• ↻ ${repeatCount}x</span>` : '';
 
       const editBtnHtml = isAdminLoggedIn ? `
-        <button type="button" class="list-edit-btn" onclick="event.stopPropagation(); openEditModal('${item.id}')" title="Edit Entry">
+        <button type="button" class="list-edit-btn" onclick="event.stopPropagation(); openEditModal('${safeId}')" title="Edit Entry">
           <ion-icon name="create-outline"></ion-icon>
         </button>
       ` : '';
 
       return `
-        <div class="media-list-row" onclick="openMediaDetailModal('${item.id}')">
+        <div class="media-list-row" onclick="openMediaDetailModal('${safeId}')">
           <img class="list-thumb" src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/120x180/1e1e1f/888888?text=?'">
           <div class="list-main-info">
             <div class="list-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
@@ -975,6 +910,7 @@ function renderMediaGrid() {
 
   // GRID VIEW RENDER
   grid.innerHTML = displayedItems.map(item => {
+    const safeId = escapeHtml(String(item.id));
     const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
     const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
     const repeatCount = Number(item.repeat_count) || 0;
@@ -992,7 +928,6 @@ function renderMediaGrid() {
       return `<span class="progress-pill ${t.status}">${txt}${unitShort}</span>`;
     }).join('');
 
-    // Calculate average progress bar percentage across tracks
     const trackPercents = tracks.map(t => {
       const hasTotal = t.total_units !== null && t.total_units > 0;
       if (t.status === 'completed') return 100;
@@ -1015,13 +950,13 @@ function renderMediaGrid() {
       : '';
 
     const coverEditHtml = isAdminLoggedIn ? `
-      <button type="button" class="cover-edit-btn" onclick="event.stopPropagation(); openEditModal('${item.id}')" title="Edit Entry">
+      <button type="button" class="cover-edit-btn" onclick="event.stopPropagation(); openEditModal('${safeId}')" title="Edit Entry">
         <ion-icon name="create-outline"></ion-icon>
       </button>
     ` : '';
 
     return `
-      <div class="media-card" onclick="openMediaDetailModal('${item.id}')">
+      <div class="media-card" onclick="openMediaDetailModal('${safeId}')">
         <div class="media-cover-wrap">
           <img src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=No+Cover'">
           <div class="cover-left-badges">
@@ -1059,9 +994,10 @@ function renderMediaGrid() {
 // 4B. MEDIA DETAIL MODAL (VIEW TRACKS & ALL-IN-ONE SEASONS/OVA)
 // ==========================================
 window.openMediaDetailModal = function (id) {
-  const item = allMediaLogs.find(m => m.id === id);
+  const item = allMediaLogs.find(m => String(m.id) === String(id));
   if (!item) return;
 
+  const safeId = escapeHtml(String(item.id));
   const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
   const tracks = getItemTracks(item);
   const cats = getItemCategories(item);
@@ -1110,7 +1046,7 @@ window.openMediaDetailModal = function (id) {
 
   const editActionHtml = isAdminLoggedIn ? `
     <div class="modal-submit-row">
-      <button type="button" class="form-btn primary-submit" onclick="closeMediaDetailModal(); openEditModal('${item.id}');">
+      <button type="button" class="form-btn primary-submit" onclick="closeMediaDetailModal(); openEditModal('${safeId}');">
         <ion-icon name="create-outline"></ion-icon>
         <span>Edit Entry</span>
       </button>
@@ -1152,7 +1088,7 @@ window.closeMediaDetailModal = function () {
 };
 
 // ==========================================
-// 5. ADD / EDIT MODAL (MULTI-TRACK, SEASONS/OVA, CROP & MULTI-API)
+// 5. ADD / EDIT MODAL (MULTI-TRACK, SEASONS/OVA & MULTI-API)
 // ==========================================
 window.addMediaTrackRow = function (track = null) {
   const container = document.getElementById('media-tracks-editor');
@@ -1306,15 +1242,18 @@ window.openMediaModal = function () {
 };
 
 window.openEditModal = function (id) {
-  const item = allMediaLogs.find(m => m.id === id);
-  if (!item) return;
+  const item = allMediaLogs.find(m => String(m.id) === String(id));
+  if (!item) {
+    showToast('Media entry not found', 'error');
+    return;
+  }
 
   pendingUploadedUrls = [];
   document.getElementById('media-modal-title').textContent = 'Edit Media';
   document.getElementById('media-id').value = item.id;
   document.getElementById('btn-modal-delete').style.display = 'inline-flex';
 
-  document.getElementById('media-title').value = item.title;
+  document.getElementById('media-title').value = item.title || '';
   document.getElementById('media-cover').value = item.cover_url || '';
   document.getElementById('media-rating').value = (item.rating !== null && item.rating !== undefined) ? item.rating : '';
   document.getElementById('media-repeat').value = Number(item.repeat_count) || 0;
@@ -1326,7 +1265,8 @@ window.openEditModal = function (id) {
     tracksEditor.innerHTML = '';
     const tracks = getItemTracks(item);
     tracks.forEach(t => addMediaTrackRow(t));
-    document.getElementById('api-search-cat').value = tracks[0]?.category || 'tv_show';
+    const apiCatSelect = document.getElementById('api-search-cat');
+    if (apiCatSelect) apiCatSelect.value = tracks[0]?.category || 'tv_show';
   }
 
   const seasonsEditor = document.getElementById('media-seasons-editor');
@@ -1348,18 +1288,15 @@ window.handleMediaCoverUpload = async function (event) {
   event.target.value = '';
   if (!file) return;
 
+  setElText('cover-upload-status', 'Uploading cover...');
   try {
-    const croppedBlob = await openImageCropperModal(file, 2 / 3, 'Crop Media Cover (2:3)');
-    setElText('cover-upload-status', 'Uploading cover...');
-    const publicUrl = await uploadCroppedBlobToSupabase(croppedBlob, 'covers');
+    const publicUrl = await uploadImageToSupabase(file, 'covers');
     document.getElementById('media-cover').value = publicUrl;
-    setElText('cover-upload-status', 'Cover cropped & uploaded!');
+    setElText('cover-upload-status', 'Cover uploaded successfully!');
     showToast('Cover uploaded', 'success');
   } catch (err) {
-    if (err.message !== 'Crop cancelled') {
-      setElText('cover-upload-status', `Upload failed: ${err.message}`);
-      showToast(err.message, 'error');
-    }
+    setElText('cover-upload-status', `Upload failed: ${err.message}`);
+    showToast(err.message, 'error');
   }
 };
 
@@ -1718,7 +1655,6 @@ window.applyApiResult = async function (idx) {
     document.getElementById('media-cover').value = item.cover;
   }
 
-  // Find matching track row or update first track
   const trackCards = Array.from(document.querySelectorAll('#media-tracks-editor .track-edit-card'));
   let targetCard = trackCards.find(c => c.querySelector('.track-cat-select')?.value === searchedCat) || trackCards[0];
 
@@ -1761,11 +1697,10 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const id = document.getElementById('media-id').value;
-  const existingItem = id ? allMediaLogs.find(m => m.id === id) : null;
+  const existingItem = id ? allMediaLogs.find(m => String(m.id) === String(id)) : null;
   const oldCover = existingItem ? existingItem.cover_url : null;
   const newCover = normalizeImageUrl(document.getElementById('media-cover').value) || null;
 
-  // Collect Multi-Tracks
   const trackCards = document.querySelectorAll('#media-tracks-editor .track-edit-card');
   const tracks = [];
   trackCards.forEach(card => {
@@ -1789,7 +1724,11 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
     });
   });
 
-  // Collect Seasons / Sequels / OVA
+  if (tracks.length === 0) {
+    showToast('Please add at least 1 category track', 'error');
+    return;
+  }
+
   const seasonCards = document.querySelectorAll('#media-seasons-editor .season-edit-card');
   const seasons = [];
   seasonCards.forEach(card => {
@@ -1862,7 +1801,7 @@ window.deleteCurrentModalMedia = async function () {
   const id = document.getElementById('media-id').value;
   if (!id) return;
 
-  const existingItem = allMediaLogs.find(m => m.id === id);
+  const existingItem = allMediaLogs.find(m => String(m.id) === String(id));
 
   const confirm = await Swal.fire({
     text: 'Remove this entry from your library?',
@@ -1987,6 +1926,7 @@ function renderBlogPosts() {
   const authorName = escapeHtml(currentProfile.name || '');
 
   listEl.innerHTML = allBlogPosts.map(post => {
+    const safePostId = escapeHtml(String(post.id));
     const postImg = normalizeImageUrl(post.image_url);
     const timeLabel = formatPostDateTime(post.created_at, post.updated_at);
     const detectedUrl = extractFirstUrl(post.content);
@@ -1994,10 +1934,10 @@ function renderBlogPosts() {
 
     const adminControls = isAdminLoggedIn ? `
       <div class="blog-post-actions">
-        <button type="button" class="blog-icon-btn" onclick="openEditPostModal('${post.id}')" title="Edit Post">
+        <button type="button" class="blog-icon-btn" onclick="openEditPostModal('${safePostId}')" title="Edit Post">
           <ion-icon name="create-outline"></ion-icon>
         </button>
-        <button type="button" class="blog-icon-btn delete" onclick="deleteBlogPost('${post.id}')" title="Delete Post">
+        <button type="button" class="blog-icon-btn delete" onclick="deleteBlogPost('${safePostId}')" title="Delete Post">
           <ion-icon name="trash-outline"></ion-icon>
         </button>
       </div>
@@ -2039,7 +1979,7 @@ window.openPostModal = function () {
 };
 
 window.openEditPostModal = function (id) {
-  const post = allBlogPosts.find(p => p.id === id);
+  const post = allBlogPosts.find(p => String(p.id) === String(id));
   if (!post) return;
 
   pendingUploadedUrls = [];
@@ -2066,18 +2006,15 @@ window.handlePostImageUpload = async function (event) {
   event.target.value = '';
   if (!file) return;
 
+  setElText('post-upload-status', 'Uploading photo...');
   try {
-    const croppedBlob = await openImageCropperModal(file, NaN, 'Crop Post Photo');
-    setElText('post-upload-status', 'Uploading photo...');
-    const publicUrl = await uploadCroppedBlobToSupabase(croppedBlob, 'posts');
+    const publicUrl = await uploadImageToSupabase(file, 'posts');
     document.getElementById('post-image').value = publicUrl;
-    setElText('post-upload-status', 'Photo cropped & uploaded!');
+    setElText('post-upload-status', 'Photo uploaded!');
     showToast('Photo uploaded', 'success');
   } catch (err) {
-    if (err.message !== 'Crop cancelled') {
-      setElText('post-upload-status', `Upload failed: ${err.message}`);
-      showToast(err.message, 'error');
-    }
+    setElText('post-upload-status', `Upload failed: ${err.message}`);
+    showToast(err.message, 'error');
   }
 };
 
@@ -2085,7 +2022,7 @@ document.getElementById('post-form').addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const id = document.getElementById('post-id').value;
-  const existingPost = id ? allBlogPosts.find(p => p.id === id) : null;
+  const existingPost = id ? allBlogPosts.find(p => String(p.id) === String(id)) : null;
   const oldImage = existingPost ? existingPost.image_url : null;
   const newImage = normalizeImageUrl(document.getElementById('post-image').value) || null;
   const contentVal = document.getElementById('post-content').value.trim();
@@ -2121,7 +2058,7 @@ document.getElementById('post-form').addEventListener('submit', async (e) => {
 });
 
 window.deleteBlogPost = async function (id) {
-  const existingPost = allBlogPosts.find(p => p.id === id);
+  const existingPost = allBlogPosts.find(p => String(p.id) === String(id));
 
   const confirm = await Swal.fire({
     text: 'Delete this post permanently?',
