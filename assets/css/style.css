@@ -1377,7 +1377,7 @@ body {
 }
 
 /*-----------------------------------*\
-  #COMPACT LIST VIEW MODE (STRICT TABULAR ALIGNMENT)
+  #COMPACT LIST VIEW MODE (ULTRA-MINIMALIST)
 \*-----------------------------------*/
 
 .media-grid.list-view {
@@ -1387,15 +1387,14 @@ body {
 }
 
 .media-list-row {
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
   gap: 10px;
-  height: 54px;
+  height: 52px;
   background: var(--eerie-black-2);
   border: 1px solid var(--jet);
   border-radius: 11px;
-  padding: 5px 10px;
+  padding: 5px 12px;
   cursor: pointer;
   overflow: hidden;
   transition: border-color 0.2s ease, background 0.2s ease;
@@ -1407,14 +1406,16 @@ body {
 }
 
 .list-thumb {
-  width: 30px;
-  height: 42px;
+  width: 28px;
+  height: 40px;
   border-radius: 5px;
   object-fit: cover;
   background: var(--onyx);
+  flex-shrink: 0;
 }
 
 .list-main-info {
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -1448,7 +1449,7 @@ body {
   text-transform: uppercase;
   font-size: 9px;
   font-weight: 600;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.35px;
   color: var(--light-gray-70);
 }
 
@@ -1458,54 +1459,19 @@ body {
   font-size: 9px;
 }
 
-/* Fixed-width aligned columns on the right */
+/* Hide status, progress bar, and count if rendered anywhere inside list row */
+.media-list-row .status-pill,
+.media-list-row .progress-track,
+.media-list-row .progress-pill {
+  display: none !important;
+}
+
 .list-right-meta {
-  display: grid;
-  grid-auto-flow: column;
+  display: flex;
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
-}
-
-.list-col-status {
-  width: 74px;
-  display: flex;
-  justify-content: center;
-}
-
-.media-list-row .status-pill {
-  width: 100%;
-  text-align: center;
-  padding: 2px 6px;
-  font-size: 9px;
-  font-weight: 600;
-  border-radius: 5px;
-  line-height: 1.2;
-  letter-spacing: 0.2px;
-}
-
-.list-col-count {
-  width: 76px;
-  text-align: right;
-  font-size: 10.5px;
-  font-weight: 500;
-  color: var(--light-gray);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.list-col-bar {
-  width: 68px;
-  display: flex;
-  align-items: center;
-}
-
-.list-progress-track {
-  width: 100%;
-  height: 3.5px;
-  background: rgba(255, 255, 255, 0.1);
+  margin-left: auto;
 }
 
 .list-rating-pill {
@@ -1515,6 +1481,7 @@ body {
   font-weight: 600;
   color: var(--white-1);
   font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
 
 .list-edit-btn {
@@ -1528,6 +1495,7 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 12px;
+  flex-shrink: 0;
   transition: var(--transition-1);
 }
 
@@ -2336,34 +2304,20 @@ textarea.form-input {
     display: none;
   }
   .media-list-row {
-    height: 50px;
-    padding: 5px 8px;
+    height: 48px;
+    padding: 5px 10px;
     gap: 8px;
   }
   .list-thumb {
     width: 26px;
-    height: 38px;
+    height: 36px;
   }
   .list-right-meta {
-    gap: 6px;
-  }
-  .list-col-status {
-    width: 60px;
-  }
-  .media-list-row .status-pill {
-    font-size: 8px;
-    padding: 2px 4px;
-  }
-  .list-col-count {
-    width: 56px;
-    font-size: 9.5px;
-  }
-  .list-col-bar {
-    display: none;
+    gap: 8px;
   }
   .list-rating-pill {
-    width: 28px;
-    font-size: 10px;
+    width: 30px;
+    font-size: 10.5px;
   }
   .back-to-top-btn {
     right: 14px;
