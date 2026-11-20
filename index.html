@@ -7,8 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Archive</title>
   <link id="favicon-link" rel="shortcut icon" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" type="image/x-icon">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
-  <link rel="stylesheet" href="./assets/css/style.css?v=39">
+  <link rel="stylesheet" href="./assets/css/style.css?v=40">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -48,10 +47,10 @@
       </div>
 
       <div class="profile-top-actions">
-        <button id="btn-edit-profile" class="icon-pill-btn" style="display: none;" onclick="openProfileModal()" title="Edit Profile">
+        <button type="button" id="btn-edit-profile" class="icon-pill-btn" style="display: none;" onclick="openProfileModal()" title="Edit Profile">
           <ion-icon name="create-outline"></ion-icon>
         </button>
-        <button id="btn-admin-toggle" class="pill-btn" onclick="handleAdminAuthClick()" title="Admin Access">
+        <button type="button" id="btn-admin-toggle" class="pill-btn" onclick="handleAdminAuthClick()" title="Admin Access">
           <ion-icon id="admin-lock-icon" name="lock-closed-outline"></ion-icon>
           <span id="admin-btn-text">Admin</span>
         </button>
@@ -90,12 +89,12 @@
           </button>
         </div>
 
-        <button id="btn-add-post" class="minimal-add-btn" style="display: none;" onclick="openPostModal()">
+        <button type="button" id="btn-add-post" class="minimal-add-btn" style="display: none;" onclick="openPostModal()">
           <ion-icon name="create-outline"></ion-icon>
           <span>New Post</span>
         </button>
 
-        <button id="btn-add-media" class="minimal-add-btn" style="display: none;" onclick="openMediaModal()">
+        <button type="button" id="btn-add-media" class="minimal-add-btn" style="display: none;" onclick="openMediaModal()">
           <ion-icon name="add-outline"></ion-icon>
           <span>Add Media</span>
         </button>
@@ -224,13 +223,13 @@
 
         <div class="library-top-bar">
           <div class="category-tabs" id="category-tabs">
-            <button class="cat-tab active" data-category="all">All</button>
-            <button class="cat-tab" data-category="tv_show">TV Show</button>
-            <button class="cat-tab" data-category="movie">Movie</button>
-            <button class="cat-tab" data-category="comic">Comic</button>
-            <button class="cat-tab" data-category="novel">Novel</button>
-            <button class="cat-tab" data-category="game">Game</button>
-            <button class="cat-tab" data-category="music">Music</button>
+            <button type="button" class="cat-tab active" data-category="all">All</button>
+            <button type="button" class="cat-tab" data-category="tv_show">TV Show</button>
+            <button type="button" class="cat-tab" data-category="movie">Movie</button>
+            <button type="button" class="cat-tab" data-category="comic">Comic</button>
+            <button type="button" class="cat-tab" data-category="novel">Novel</button>
+            <button type="button" class="cat-tab" data-category="game">Game</button>
+            <button type="button" class="cat-tab" data-category="music">Music</button>
           </div>
         </div>
 
@@ -309,7 +308,7 @@
     <div class="custom-modal-box">
       <div class="modal-header">
         <h3 class="h3">Admin Login</h3>
-        <button class="modal-close" onclick="closeLoginModal()">
+        <button type="button" class="modal-close" onclick="closeLoginModal()">
           <ion-icon name="close-outline"></ion-icon>
         </button>
       </div>
@@ -332,18 +331,18 @@
     <div class="custom-modal-box modal-lg">
       <div class="modal-header">
         <h3 class="h3">Edit Profile</h3>
-        <button class="modal-close" onclick="closeProfileModal()">
+        <button type="button" class="modal-close" onclick="closeProfileModal()">
           <ion-icon name="close-outline"></ion-icon>
         </button>
       </div>
 
       <form id="profile-form" class="modal-form">
         <div class="form-group">
-          <label>Cover Banner (Optional — URL or Upload & Crop)</label>
+          <label>Cover Banner (Optional — URL or Upload)</label>
           <div class="api-search-row">
             <input type="text" id="edit-profile-banner" class="form-input" placeholder="https://... (leave empty for no banner)">
             <label for="banner-file-input" class="pill-btn primary-btn" style="cursor: pointer; white-space: nowrap;">
-              <ion-icon name="crop-outline"></ion-icon>
+              <ion-icon name="cloud-upload-outline"></ion-icon>
               <span>Upload</span>
             </label>
             <input type="file" id="banner-file-input" accept="image/*" style="display: none;" onchange="handleBannerImageUpload(event)">
@@ -355,11 +354,11 @@
         </div>
 
         <div class="form-group">
-          <label>Profile Avatar (URL or Upload & Crop)</label>
+          <label>Profile Avatar</label>
           <div class="api-search-row">
             <input type="text" id="edit-profile-avatar" class="form-input" placeholder="Image URL or upload file...">
             <label for="profile-file-input" class="pill-btn primary-btn" style="cursor: pointer; white-space: nowrap;">
-              <ion-icon name="crop-outline"></ion-icon>
+              <ion-icon name="cloud-upload-outline"></ion-icon>
               <span>Upload</span>
             </label>
             <input type="file" id="profile-file-input" accept="image/*" style="display: none;" onchange="handleProfileImageUpload(event)">
@@ -399,14 +398,14 @@
   </div>
 
   <!-- ==========================================
-       MODAL: ADD / EDIT MEDIA (MULTI-CATEGORY, MULTI-TRACK & ALL-IN-ONE SEASONS/OVA)
+       MODAL: ADD / EDIT MEDIA
   =========================================== -->
   <div id="media-modal" class="custom-modal">
     <div class="custom-modal-backdrop" onclick="closeMediaModal()"></div>
     <div class="custom-modal-box modal-lg">
       <div class="modal-header">
         <h3 class="h3" id="media-modal-title">Add Media</h3>
-        <button class="modal-close" onclick="closeMediaModal()">
+        <button type="button" class="modal-close" onclick="closeMediaModal()">
           <ion-icon name="close-outline"></ion-icon>
         </button>
       </div>
@@ -441,11 +440,11 @@
         </div>
 
         <div class="form-group">
-          <label>Cover Image (URL or Upload & Crop)</label>
+          <label>Cover Image (URL or Upload File)</label>
           <div class="api-search-row">
             <input type="url" id="media-cover" class="form-input" placeholder="https://...">
             <label for="media-cover-file" class="pill-btn primary-btn" style="cursor: pointer; white-space: nowrap;">
-              <ion-icon name="crop-outline"></ion-icon>
+              <ion-icon name="cloud-upload-outline"></ion-icon>
               <span>Upload</span>
             </label>
             <input type="file" id="media-cover-file" accept="image/*" style="display: none;" onchange="handleMediaCoverUpload(event)">
@@ -508,14 +507,14 @@
   </div>
 
   <!-- ==========================================
-       MODAL: MEDIA DETAIL VIEW (CLICK CARD TO VIEW TRACKS & SEASONS/OVA)
+       MODAL: MEDIA DETAIL VIEW
   =========================================== -->
   <div id="media-detail-modal" class="custom-modal">
     <div class="custom-modal-backdrop" onclick="closeMediaDetailModal()"></div>
     <div class="custom-modal-box modal-lg">
       <div class="modal-header">
         <h3 class="h3" id="detail-modal-title">Media Details</h3>
-        <button class="modal-close" onclick="closeMediaDetailModal()">
+        <button type="button" class="modal-close" onclick="closeMediaDetailModal()">
           <ion-icon name="close-outline"></ion-icon>
         </button>
       </div>
@@ -531,7 +530,7 @@
     <div class="custom-modal-box">
       <div class="modal-header">
         <h3 class="h3" id="post-modal-title">New Post</h3>
-        <button class="modal-close" onclick="closePostModal()">
+        <button type="button" class="modal-close" onclick="closePostModal()">
           <ion-icon name="close-outline"></ion-icon>
         </button>
       </div>
@@ -545,11 +544,11 @@
         </div>
 
         <div class="form-group">
-          <label>Photo (Optional — URL or Upload & Crop)</label>
+          <label>Photo (Optional — URL or Upload)</label>
           <div class="api-search-row">
             <input type="text" id="post-image" class="form-input" placeholder="https://... (leave empty for text only)">
             <label for="post-image-file" class="pill-btn primary-btn" style="cursor: pointer; white-space: nowrap;">
-              <ion-icon name="crop-outline"></ion-icon>
+              <ion-icon name="cloud-upload-outline"></ion-icon>
               <span>Upload</span>
             </label>
             <input type="file" id="post-image-file" accept="image/*" style="display: none;" onchange="handlePostImageUpload(event)">
@@ -570,42 +569,9 @@
     </div>
   </div>
 
-  <!-- ==========================================
-       MODAL: IMAGE CROPPER
-  =========================================== -->
-  <div id="cropper-modal" class="custom-modal" style="z-index: 120;">
-    <div class="custom-modal-backdrop" onclick="cancelImageCrop()"></div>
-    <div class="custom-modal-box modal-lg">
-      <div class="modal-header">
-        <h3 class="h3" id="cropper-modal-title">Crop Image</h3>
-        <button class="modal-close" onclick="cancelImageCrop()">
-          <ion-icon name="close-outline"></ion-icon>
-        </button>
-      </div>
-      <div class="cropper-stage-wrap">
-        <img id="cropper-target-img" src="" alt="Crop preview">
-      </div>
-      <div class="cropper-aspect-bar" id="cropper-aspect-bar">
-        <button type="button" class="cat-tab active" onclick="setCropAspectRatio(NaN, this)">Free</button>
-        <button type="button" class="cat-tab" onclick="setCropAspectRatio(1, this)">1:1</button>
-        <button type="button" class="cat-tab" onclick="setCropAspectRatio(2/3, this)">2:3</button>
-        <button type="button" class="cat-tab" onclick="setCropAspectRatio(16/9, this)">16:9</button>
-        <button type="button" class="cat-tab" onclick="setCropAspectRatio(3, this)">3:1</button>
-      </div>
-      <div class="modal-submit-row">
-        <button type="button" class="form-btn danger-submit" onclick="cancelImageCrop()">Cancel</button>
-        <button type="button" class="form-btn primary-submit" onclick="confirmImageCrop()">
-          <ion-icon name="checkmark-outline"></ion-icon>
-          <span>Crop & Upload</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./assets/js/script.js?v=39"></script>
+  <script src="./assets/js/script.js?v=40"></script>
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 </body>
