@@ -7,13 +7,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Archive</title>
   <link id="favicon-link" rel="shortcut icon" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" type="image/x-icon">
-  <link rel="stylesheet" href="./assets/css/style.css?v=38">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
+  <link rel="stylesheet" href="./assets/css/style.css?v=39">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 
 <body>
+
+  <!-- Minimalist Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
 
   <!-- ==========================================
        STICKY MINI HEADER (ON SCROLL)
@@ -38,7 +42,6 @@
          1. TOP SECTION: PROFILE WITH DYNAMIC BANNER
     =========================================== -->
     <header id="profile-header-card" class="card-section profile-header">
-      <!-- Dynamic Cover Banner -->
       <div id="profile-banner-wrap" class="profile-banner-wrap" style="display: none;">
         <img id="profile-banner-img" src="" alt="Cover Banner">
         <div class="profile-banner-overlay"></div>
@@ -75,7 +78,6 @@
          2. MAIN SECTION: TABBED NOTES & LIBRARY
     =========================================== -->
     <section class="card-section library-section">
-      <!-- Top Switcher Tabs (Notes Priority Left vs Library) -->
       <div class="main-switcher-bar">
         <div class="main-view-tabs">
           <button type="button" class="main-view-btn active" data-view="blog" onclick="switchMainView('blog')">
@@ -88,7 +90,6 @@
           </button>
         </div>
 
-        <!-- Contextual Admin Action Buttons -->
         <button id="btn-add-post" class="minimal-add-btn" style="display: none;" onclick="openPostModal()">
           <ion-icon name="create-outline"></ion-icon>
           <span>New Post</span>
@@ -100,7 +101,7 @@
         </button>
       </div>
 
-      <!-- TAB 1 (DEFAULT PRIORITY): PERSONAL NOTES VIEW -->
+      <!-- TAB 1: PERSONAL NOTES VIEW -->
       <div id="view-blog" class="tab-view-panel active-view">
         <div id="blog-feed-list" class="blog-feed-list">
           <p class="empty-state">Loading posts...</p>
@@ -109,7 +110,6 @@
 
       <!-- TAB 2: MEDIA LIBRARY VIEW -->
       <div id="view-library" class="tab-view-panel" style="display: none;">
-        <!-- Collapsible Stats & View Mode Bar -->
         <div class="library-stats-bar">
           <button type="button" id="btn-toggle-stats" class="stats-toggle-btn" onclick="toggleLibraryStats()">
             <ion-icon name="stats-chart-outline"></ion-icon>
@@ -222,7 +222,6 @@
           </div>
         </div>
 
-        <!-- Category Filter Tabs -->
         <div class="library-top-bar">
           <div class="category-tabs" id="category-tabs">
             <button class="cat-tab active" data-category="all">All</button>
@@ -235,7 +234,6 @@
           </div>
         </div>
 
-        <!-- Filter & Search Controls -->
         <div class="library-controls">
           <div class="search-box">
             <ion-icon name="search-outline"></ion-icon>
@@ -271,12 +269,10 @@
           </div>
         </div>
 
-        <!-- Media Cards Grid / List -->
         <div id="media-grid" class="media-grid">
           <p class="empty-state">Loading media library...</p>
         </div>
 
-        <!-- Load More Button -->
         <div id="load-more-wrap" class="load-more-wrap" style="display: none;">
           <button type="button" id="btn-load-more" class="load-more-btn" onclick="loadMoreMedia()">
             <ion-icon name="chevron-down-outline"></ion-icon>
@@ -286,7 +282,6 @@
       </div>
     </section>
 
-    <!-- Footer -->
     <footer class="section-footer">
       <div class="footer-divider"></div>
       <div class="footer-container">
@@ -302,7 +297,6 @@
 
   </main>
 
-  <!-- Back to Top Floating Button -->
   <button type="button" id="btn-back-to-top" class="back-to-top-btn" onclick="scrollToTopSmooth()" title="Back to top">
     <ion-icon name="arrow-up-outline"></ion-icon>
   </button>
@@ -331,7 +325,7 @@
   </div>
 
   <!-- ==========================================
-       MODAL: EDIT PROFILE (AVATAR, BANNER & SOCIAL LINKS)
+       MODAL: EDIT PROFILE
   =========================================== -->
   <div id="profile-modal" class="custom-modal">
     <div class="custom-modal-backdrop" onclick="closeProfileModal()"></div>
@@ -345,11 +339,11 @@
 
       <form id="profile-form" class="modal-form">
         <div class="form-group">
-          <label>Cover Banner (Optional — URL or Upload)</label>
+          <label>Cover Banner (Optional — URL or Upload & Crop)</label>
           <div class="api-search-row">
             <input type="text" id="edit-profile-banner" class="form-input" placeholder="https://... (leave empty for no banner)">
             <label for="banner-file-input" class="pill-btn primary-btn" style="cursor: pointer; white-space: nowrap;">
-              <ion-icon name="cloud-upload-outline"></ion-icon>
+              <ion-icon name="crop-outline"></ion-icon>
               <span>Upload</span>
             </label>
             <input type="file" id="banner-file-input" accept="image/*" style="display: none;" onchange="handleBannerImageUpload(event)">
@@ -361,11 +355,11 @@
         </div>
 
         <div class="form-group">
-          <label>Profile Avatar</label>
+          <label>Profile Avatar (URL or Upload & Crop)</label>
           <div class="api-search-row">
             <input type="text" id="edit-profile-avatar" class="form-input" placeholder="Image URL or upload file...">
             <label for="profile-file-input" class="pill-btn primary-btn" style="cursor: pointer; white-space: nowrap;">
-              <ion-icon name="cloud-upload-outline"></ion-icon>
+              <ion-icon name="crop-outline"></ion-icon>
               <span>Upload</span>
             </label>
             <input type="file" id="profile-file-input" accept="image/*" style="display: none;" onchange="handleProfileImageUpload(event)">
@@ -383,7 +377,6 @@
           <textarea id="edit-profile-bio" class="form-input" rows="2" placeholder="Write a short bio..." style="resize: vertical; font-family: inherit;"></textarea>
         </div>
 
-        <!-- Social Links Editor -->
         <div class="form-group">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <label>Social Links (Icon auto-detected from URL)</label>
@@ -406,7 +399,7 @@
   </div>
 
   <!-- ==========================================
-       MODAL: ADD / EDIT MEDIA
+       MODAL: ADD / EDIT MEDIA (MULTI-CATEGORY, MULTI-TRACK & ALL-IN-ONE SEASONS/OVA)
   =========================================== -->
   <div id="media-modal" class="custom-modal">
     <div class="custom-modal-backdrop" onclick="closeMediaModal()"></div>
@@ -421,23 +414,19 @@
       <form id="media-form" class="modal-form">
         <input type="hidden" id="media-id">
 
-        <div class="form-group">
-          <label>Category</label>
-          <select id="media-category" class="form-input" onchange="handleCategoryFormChange()">
-            <option value="tv_show">TV Show</option>
-            <option value="movie">Movie</option>
-            <option value="comic">Comic</option>
-            <option value="novel">Novel</option>
-            <option value="game">Game</option>
-            <option value="music">Music</option>
-          </select>
-        </div>
-
         <!-- Auto-Fetch Search Bar -->
         <div class="form-group">
-          <label>Auto-Fetch from API (Title, Cover & Total Units)</label>
+          <label>Auto-Fetch from API (Title, Cover & Units)</label>
           <div class="api-search-row">
-            <input type="text" id="api-search-input" class="form-input" placeholder="Type title and click Search..." onkeydown="if(event.key==='Enter'){event.preventDefault();searchExternalAPI();}">
+            <select id="api-search-cat" class="form-input" style="width: 125px; flex-shrink: 0;">
+              <option value="tv_show">TV Show</option>
+              <option value="movie">Movie</option>
+              <option value="comic">Comic</option>
+              <option value="novel">Novel</option>
+              <option value="game">Game</option>
+              <option value="music">Music</option>
+            </select>
+            <input type="text" id="api-search-input" class="form-input" placeholder="Search title..." onkeydown="if(event.key==='Enter'){event.preventDefault();searchExternalAPI();}">
             <button type="button" class="pill-btn primary-btn" onclick="searchExternalAPI()">
               <ion-icon name="search-outline"></ion-icon>
               <span>Search</span>
@@ -447,16 +436,16 @@
         </div>
 
         <div class="form-group">
-          <label>Title</label>
+          <label>Main Title</label>
           <input type="text" id="media-title" class="form-input" placeholder="Media title" required>
         </div>
 
         <div class="form-group">
-          <label>Cover Image (URL or Upload File)</label>
+          <label>Cover Image (URL or Upload & Crop)</label>
           <div class="api-search-row">
             <input type="url" id="media-cover" class="form-input" placeholder="https://...">
             <label for="media-cover-file" class="pill-btn primary-btn" style="cursor: pointer; white-space: nowrap;">
-              <ion-icon name="cloud-upload-outline"></ion-icon>
+              <ion-icon name="crop-outline"></ion-icon>
               <span>Upload</span>
             </label>
             <input type="file" id="media-cover-file" accept="image/*" style="display: none;" onchange="handleMediaCoverUpload(event)">
@@ -464,57 +453,44 @@
           <small id="cover-upload-status" style="color: var(--light-gray-70); font-size: 11px;"></small>
         </div>
 
-        <div class="form-row-3">
-          <div class="form-group">
-            <label>Status</label>
-            <select id="media-status" class="form-input" onchange="handleStatusFormChange()">
-              <option value="completed">Completed</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="planned">Planned</option>
-              <option value="dropped">Dropped</option>
-            </select>
+        <!-- Multi-Category & Multi-Progress Tracks -->
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label>Categories & Progress Tracks (Auto-Sync Status)</label>
+            <button type="button" class="minimal-add-btn" style="padding: 4px 10px; font-size: 11px;" onclick="addMediaTrackRow()">
+              <ion-icon name="add-outline"></ion-icon>
+              <span>Category</span>
+            </button>
           </div>
-
-          <div class="form-group">
-            <label>Progress</label>
-            <div class="progress-input-row">
-              <input type="number" id="media-progress" class="form-input" min="0" value="0" required>
-              <button type="button" class="step-plus-btn" onclick="stepModalProgress()" title="Add +1">+1</button>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Total Units</label>
-            <input type="number" id="media-total" class="form-input" min="0" placeholder="Optional" oninput="handleTotalUnitsChange()">
-          </div>
+          <div id="media-tracks-editor" class="tracks-editor-list"></div>
         </div>
 
-        <div class="form-row-3">
+        <!-- Rating & Repeat Count -->
+        <div class="form-row-2">
           <div class="form-group">
-            <label>Unit Type</label>
-            <select id="media-unit" class="form-input">
-              <option value="eps">Episode</option>
-              <option value="movie">Movie</option>
-              <option value="ch">Chapter</option>
-              <option value="vol">Volume</option>
-              <option value="pages">Pages</option>
-              <option value="track">Track</option>
-              <option value="item">Item</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>Rating (1.0 – 10.0)</label>
+            <label>Overall Rating (1.0 – 10.0)</label>
             <input type="number" id="media-rating" class="form-input" step="0.1" min="1.0" max="10.0" placeholder="e.g. 8.7">
           </div>
 
           <div class="form-group">
-            <label>Rewatch / Reread</label>
+            <label>Rewatch / Reread Count</label>
             <div class="progress-input-row">
               <input type="number" id="media-repeat" class="form-input" min="0" value="0">
               <button type="button" class="step-plus-btn" onclick="stepModalRepeat()" title="Add +1">+1</button>
             </div>
           </div>
+        </div>
+
+        <!-- All-in-One Entry: Seasons / Sequels / OVA inside 1 Card -->
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label>Seasons / Sequels / OVA (All-in-One Card)</label>
+            <button type="button" class="minimal-add-btn" style="padding: 4px 10px; font-size: 11px;" onclick="addSeasonItemRow()">
+              <ion-icon name="add-outline"></ion-icon>
+              <span>Add Part</span>
+            </button>
+          </div>
+          <div id="media-seasons-editor" class="seasons-editor-list"></div>
         </div>
 
         <div class="modal-submit-row">
@@ -528,6 +504,22 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: MEDIA DETAIL VIEW (CLICK CARD TO VIEW TRACKS & SEASONS/OVA)
+  =========================================== -->
+  <div id="media-detail-modal" class="custom-modal">
+    <div class="custom-modal-backdrop" onclick="closeMediaDetailModal()"></div>
+    <div class="custom-modal-box modal-lg">
+      <div class="modal-header">
+        <h3 class="h3" id="detail-modal-title">Media Details</h3>
+        <button class="modal-close" onclick="closeMediaDetailModal()">
+          <ion-icon name="close-outline"></ion-icon>
+        </button>
+      </div>
+      <div id="media-detail-body" class="media-detail-body"></div>
     </div>
   </div>
 
@@ -548,16 +540,16 @@
         <input type="hidden" id="post-id">
 
         <div class="form-group">
-          <label>Post Content</label>
-          <textarea id="post-content" class="form-input" rows="4" placeholder="Write your thoughts, mini review, or update..." required style="resize: vertical; font-family: inherit;"></textarea>
+          <label>Post Content (Links auto-generate preview cards)</label>
+          <textarea id="post-content" class="form-input" rows="4" placeholder="Write your thoughts, mini review, or paste a link..." required style="resize: vertical; font-family: inherit;"></textarea>
         </div>
 
         <div class="form-group">
-          <label>Photo (Optional — URL or Upload)</label>
+          <label>Photo (Optional — URL or Upload & Crop)</label>
           <div class="api-search-row">
             <input type="text" id="post-image" class="form-input" placeholder="https://... (leave empty for text only)">
             <label for="post-image-file" class="pill-btn primary-btn" style="cursor: pointer; white-space: nowrap;">
-              <ion-icon name="cloud-upload-outline"></ion-icon>
+              <ion-icon name="crop-outline"></ion-icon>
               <span>Upload</span>
             </label>
             <input type="file" id="post-image-file" accept="image/*" style="display: none;" onchange="handlePostImageUpload(event)">
@@ -578,9 +570,42 @@
     </div>
   </div>
 
+  <!-- ==========================================
+       MODAL: IMAGE CROPPER
+  =========================================== -->
+  <div id="cropper-modal" class="custom-modal" style="z-index: 120;">
+    <div class="custom-modal-backdrop" onclick="cancelImageCrop()"></div>
+    <div class="custom-modal-box modal-lg">
+      <div class="modal-header">
+        <h3 class="h3" id="cropper-modal-title">Crop Image</h3>
+        <button class="modal-close" onclick="cancelImageCrop()">
+          <ion-icon name="close-outline"></ion-icon>
+        </button>
+      </div>
+      <div class="cropper-stage-wrap">
+        <img id="cropper-target-img" src="" alt="Crop preview">
+      </div>
+      <div class="cropper-aspect-bar" id="cropper-aspect-bar">
+        <button type="button" class="cat-tab active" onclick="setCropAspectRatio(NaN, this)">Free</button>
+        <button type="button" class="cat-tab" onclick="setCropAspectRatio(1, this)">1:1</button>
+        <button type="button" class="cat-tab" onclick="setCropAspectRatio(2/3, this)">2:3</button>
+        <button type="button" class="cat-tab" onclick="setCropAspectRatio(16/9, this)">16:9</button>
+        <button type="button" class="cat-tab" onclick="setCropAspectRatio(3, this)">3:1</button>
+      </div>
+      <div class="modal-submit-row">
+        <button type="button" class="form-btn danger-submit" onclick="cancelImageCrop()">Cancel</button>
+        <button type="button" class="form-btn primary-submit" onclick="confirmImageCrop()">
+          <ion-icon name="checkmark-outline"></ion-icon>
+          <span>Crop & Upload</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./assets/js/script.js?v=38"></script>
+  <script src="./assets/js/script.js?v=39"></script>
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 </body>
