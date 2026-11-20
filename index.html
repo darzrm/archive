@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=55">
+  <link rel="stylesheet" href="./assets/css/style.css?v=101">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -414,8 +414,10 @@
   <nav class="bottom-nav-dock" id="bottom-nav-dock" aria-label="Primary Navigation">
     <div class="bottom-nav-pill">
       <button type="button" class="bottom-nav-item active" data-view="blog" onclick="switchMainView('blog')">
-        <ion-icon name="chatbubble-ellipses-outline" class="nav-icon-outline"></ion-icon>
-        <ion-icon name="chatbubble-ellipses" class="nav-icon-filled"></ion-icon>
+        <span class="bottom-nav-icon-wrap">
+          <ion-icon name="chatbubble-ellipses-outline" class="nav-icon-outline"></ion-icon>
+          <ion-icon name="chatbubble-ellipses" class="nav-icon-filled"></ion-icon>
+        </span>
         <span>Notes</span>
       </button>
 
@@ -425,11 +427,11 @@
       </button>
 
       <button type="button" class="bottom-nav-item" id="bottom-tab-library" data-view="library" onclick="switchMainView('library')">
-        <div class="bottom-nav-icon-wrap">
+        <span class="bottom-nav-icon-wrap">
           <ion-icon name="albums-outline" class="nav-icon-outline"></ion-icon>
           <ion-icon name="albums" class="nav-icon-filled"></ion-icon>
           <ion-icon name="lock-closed" id="library-private-lock" class="nav-lock-badge" style="display: none;"></ion-icon>
-        </div>
+        </span>
         <span>Library</span>
       </button>
     </div>
@@ -647,7 +649,7 @@
             </div>
             <p class="settings-card-desc">Hide Library tab from public visitors (visible only when logged in as Admin).</p>
           </div>
-          <label class="toggle-switch">
+          <label class="toggle-switch" aria-label="Toggle Private Library">
             <input type="checkbox" id="edit-library-private">
             <span class="toggle-slider"></span>
           </label>
