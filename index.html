@@ -15,14 +15,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=305">
+  <link rel="stylesheet" href="./assets/css/style.css?v=306">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 
-<body>
+<body class="mode-upload-only">
 
   <!-- Minimalist Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
@@ -366,7 +366,7 @@
             </div>
           </div>
 
-          <!-- Custom Icon-Only Per Page Popover (Small, Medium, Large, All) -->
+          <!-- Custom Icon-Only Per Page Popover -->
           <div class="popover-wrapper" id="pages-popover-wrap">
             <button type="button" class="toolbar-btn icon-only-btn" id="btn-pages-toggle" onclick="toggleToolbarPopover('pages')" title="Display size" aria-label="Display size">
               <ion-icon name="layers-outline"></ion-icon>
@@ -399,7 +399,7 @@
 
           <!-- Grid / List View Switcher -->
           <div class="view-mode-toggle" title="Switch layout">
-            <button type="button" id="btn-view-grid" class="view-mode-btn active" onclick="setLibraryViewMode('grid')" aria-label="Grid View">
+            <button type="button" id="btn-view-grid" class="view-mode-btn active" onclick="setLibraryViewMode('grid')" aria-label="Poster Grid View">
               <ion-icon name="grid-outline"></ion-icon>
             </button>
             <button type="button" id="btn-view-list" class="view-mode-btn" onclick="setLibraryViewMode('list')" aria-label="Compact List View">
@@ -478,16 +478,16 @@
 
         <div class="form-group">
           <label>Cover Image</label>
-          <div class="clean-upload-card">
+          <div class="img-upload-only-box">
             <label class="clean-upload-trigger" title="Upload cover from device">
               <ion-icon name="cloud-upload-outline"></ion-icon>
               <span>Upload Cover Image</span>
               <input type="file" id="media-cover-file" accept="image/*" hidden onchange="handleMediaCoverUpload(event)">
             </label>
-            <span class="upload-badge-ok" id="media-cover-ready" style="display: none;">Image Ready</span>
           </div>
-          <!-- Hidden URL input kept for API auto-fill & database storage -->
-          <input type="url" id="media-cover" class="form-input url-fallback-input" placeholder="https://...">
+          <div class="img-manual-url-box">
+            <input type="url" id="media-cover" class="form-input" placeholder="https://...">
+          </div>
           <span class="upload-status-text" id="cover-upload-status"></span>
         </div>
 
@@ -579,7 +579,7 @@
 
         <div class="form-group">
           <label>Attachment (Optional)</label>
-          <div class="clean-upload-card">
+          <div class="img-upload-only-box">
             <label class="clean-upload-trigger" title="Upload photo from device">
               <ion-icon name="image-outline"></ion-icon>
               <span>Upload Photo</span>
@@ -589,7 +589,14 @@
               <ion-icon name="trash-outline"></ion-icon>
             </button>
           </div>
-          <input type="url" id="post-image" class="form-input url-fallback-input" placeholder="https://...">
+          <div class="img-manual-url-box">
+            <div class="manual-url-with-clear">
+              <input type="url" id="post-image" class="form-input" placeholder="https://...">
+              <button type="button" class="clean-clear-btn" onclick="clearPostImageInput()" title="Remove photo">
+                <ion-icon name="trash-outline"></ion-icon>
+              </button>
+            </div>
+          </div>
           <span class="upload-status-text" id="post-upload-status"></span>
         </div>
 
@@ -601,7 +608,7 @@
   </div>
 
   <!-- ========================================== -->
-  <!-- MODAL 3: SETTINGS (MULTI-STEP: ROOT > PROFILE) -->
+  <!-- MODAL 3: SETTINGS (ROOT > PROFILE)         -->
   <!-- ========================================== -->
   <div class="modal-overlay" id="profile-modal">
     <div class="modal-box">
@@ -650,19 +657,25 @@
             </label>
           </div>
 
-          <!-- Toggle Manual Image URL Inputs in Modals -->
-          <div class="settings-card-row">
+          <!-- Exclusive Image Input Mode: Upload Only vs Manual URL -->
+          <div class="settings-card-col">
             <div class="settings-card-info">
               <div class="settings-card-title">
-                <ion-icon name="link-outline"></ion-icon>
-                <span>Manual Image URLs</span>
+                <ion-icon name="image-outline"></ion-icon>
+                <span>Image Input Mode</span>
               </div>
-              <p class="settings-card-desc">Show manual URL text fields alongside device upload buttons.</p>
+              <p class="settings-card-desc">Choose whether forms show device upload buttons or manual image URL inputs.</p>
             </div>
-            <label class="toggle-switch" aria-label="Toggle Manual Image URLs">
-              <input type="checkbox" id="toggle-manual-urls" onchange="toggleManualUrlMode(this.checked)">
-              <span class="toggle-slider"></span>
-            </label>
+            <div class="mode-segmented-control" role="group" aria-label="Image Input Mode">
+              <button type="button" class="mode-seg-option active" id="btn-mode-upload" onclick="setImageInputMode('upload')">
+                <ion-icon name="cloud-upload-outline"></ion-icon>
+                <span>Upload Only</span>
+              </button>
+              <button type="button" class="mode-seg-option" id="btn-mode-url" onclick="setImageInputMode('url')">
+                <ion-icon name="link-outline"></ion-icon>
+                <span>Manual URL</span>
+              </button>
+            </div>
           </div>
 
           <button type="submit" class="form-btn primary-submit">Save Settings</button>
@@ -682,20 +695,22 @@
 
           <div class="form-group">
             <label>Profile Avatar</label>
-            <div class="clean-upload-card">
+            <div class="img-upload-only-box">
               <label class="clean-upload-trigger" title="Upload avatar from device">
                 <ion-icon name="person-circle-outline"></ion-icon>
                 <span>Upload Avatar</span>
                 <input type="file" id="profile-avatar-file" accept="image/*" hidden onchange="handleProfileImageUpload(event)">
               </label>
             </div>
-            <input type="url" id="edit-profile-avatar" class="form-input url-fallback-input" placeholder="https://...">
+            <div class="img-manual-url-box">
+              <input type="url" id="edit-profile-avatar" class="form-input" placeholder="https://...">
+            </div>
             <span class="upload-status-text" id="profile-upload-status"></span>
           </div>
 
           <div class="form-group">
             <label>Header Banner (Optional)</label>
-            <div class="clean-upload-card">
+            <div class="img-upload-only-box">
               <label class="clean-upload-trigger" title="Upload banner from device">
                 <ion-icon name="image-outline"></ion-icon>
                 <span>Upload Banner</span>
@@ -705,7 +720,14 @@
                 <ion-icon name="trash-outline"></ion-icon>
               </button>
             </div>
-            <input type="url" id="edit-profile-banner" class="form-input url-fallback-input" placeholder="https://...">
+            <div class="img-manual-url-box">
+              <div class="manual-url-with-clear">
+                <input type="url" id="edit-profile-banner" class="form-input" placeholder="https://...">
+                <button type="button" class="clean-clear-btn" onclick="clearBannerInput()" title="Remove banner">
+                  <ion-icon name="trash-outline"></ion-icon>
+                </button>
+              </div>
+            </div>
             <span class="upload-status-text" id="banner-upload-status"></span>
           </div>
 
@@ -764,7 +786,7 @@
   <!-- Main JS -->
   <script src="./assets/js/script.js?v=53"></script>
 
-  <!-- Sync Helper for Grid Layout [X] Title [Y], Settings Navigation & Clean Modals -->
+  <!-- Sync Helper for Full Poster Grid Overlay, Exclusive Upload/URL Mode & Settings Navigation -->
   <script>
     (function () {
       let activeSizePreset = 'small';
@@ -832,20 +854,28 @@
         }
       };
 
-      // Optional Toggle for Manual Image URLs inside Settings
-      window.toggleManualUrlMode = function (enabled) {
-        document.body.classList.toggle('show-manual-urls', !!enabled);
+      // Exclusive Image Input Mode: 'upload' (Upload Only) vs 'url' (Manual URL Only)
+      window.setImageInputMode = function (mode) {
+        const isUrlMode = mode === 'url';
+        document.body.classList.toggle('mode-manual-url', isUrlMode);
+        document.body.classList.toggle('mode-upload-only', !isUrlMode);
+
+        const uploadBtn = document.getElementById('btn-mode-upload');
+        const urlBtn = document.getElementById('btn-mode-url');
+        if (uploadBtn) uploadBtn.classList.toggle('active', !isUrlMode);
+        if (urlBtn) urlBtn.classList.toggle('active', isUrlMode);
+
         try {
-          localStorage.setItem('archive_show_manual_urls', enabled ? '1' : '0');
+          localStorage.setItem('archive_image_input_mode', isUrlMode ? 'url' : 'upload');
         } catch (e) {}
       };
 
       try {
-        const savedUrlPref = localStorage.getItem('archive_show_manual_urls') === '1';
-        const toggleEl = document.getElementById('toggle-manual-urls');
-        if (toggleEl) toggleEl.checked = savedUrlPref;
-        document.body.classList.toggle('show-manual-urls', savedUrlPref);
-      } catch (e) {}
+        const savedMode = localStorage.getItem('archive_image_input_mode') || 'upload';
+        window.setImageInputMode(savedMode);
+      } catch (e) {
+        window.setImageInputMode('upload');
+      }
 
       const origSwitch = window.switchMainView;
       window.switchMainView = function (view) {
@@ -874,21 +904,7 @@
         });
       }
 
-      // Status Icon Helper
-      function getStatusIconName(statusClass) {
-        switch (statusClass) {
-          case 'completed': return 'checkmark-circle';
-          case 'ongoing': return 'play-circle';
-          case 'planned': return 'time';
-          case 'dropped': return 'close-circle';
-          default: return 'ellipse';
-        }
-      }
-
-      // Transform Grid Cards into:
-      // {POSTER}
-      // [X] Judul Disini... [Y]
-      // -----------------------
+      // Format Grid (Full Cover + Title with Bottom Dark Shadow) & Compact List
       function formatMediaItems() {
         const grid = document.getElementById('media-grid');
         if (!grid) return;
@@ -930,50 +946,31 @@
           return;
         }
 
-        // Grid View Transformation: [X] Title [Y] + Progress Bar
+        // Poster Grid Mode: Full Cover + Title at Bottom with Dark Gradient Shadow
         grid.querySelectorAll('.media-card').forEach(card => {
-          if (card.dataset.gridFormatted === '1') return;
-          card.dataset.gridFormatted = '1';
+          if (card.dataset.posterMode === '1') return;
+          card.dataset.posterMode = '1';
 
+          const coverWrap = card.querySelector('.media-cover-wrap');
           const body = card.querySelector('.media-body');
           const titleEl = card.querySelector('.media-title');
-          const statusEl = card.querySelector('.status-pill');
-          const progressPillEl = card.querySelector('.progress-pill');
-          const trackEl = card.querySelector('.progress-track');
 
-          if (!body || !titleEl) return;
+          if (coverWrap && titleEl) {
+            const titleText = titleEl.textContent.trim();
+            const overlay = document.createElement('div');
+            overlay.className = 'poster-bottom-overlay';
 
-          const statusClass = statusEl
-            ? Array.from(statusEl.classList).find(c => ['completed', 'ongoing', 'planned', 'dropped'].includes(c)) || 'ongoing'
-            : 'ongoing';
-          const statusLabel = statusEl ? statusEl.textContent.trim() : statusClass;
-          const countText = progressPillEl ? progressPillEl.textContent.trim() : '';
+            const overlayTitle = document.createElement('h3');
+            overlayTitle.className = 'poster-overlay-title';
+            overlayTitle.textContent = titleText;
+            overlayTitle.title = titleText;
 
-          const headerLine = document.createElement('div');
-          headerLine.className = 'card-compact-line';
+            overlay.appendChild(overlayTitle);
+            coverWrap.appendChild(overlay);
+          }
 
-          const iconWrap = document.createElement('span');
-          iconWrap.className = 'card-status-icon';
-          iconWrap.title = statusLabel;
-          iconWrap.innerHTML = `<ion-icon name="${getStatusIconName(statusClass)}"></ion-icon>`;
-
-          const cleanTitle = document.createElement('h3');
-          cleanTitle.className = 'card-inline-title';
-          cleanTitle.textContent = titleEl.textContent.trim();
-          cleanTitle.title = titleEl.textContent.trim();
-
-          const countWrap = document.createElement('span');
-          countWrap.className = 'card-inline-count';
-          countWrap.textContent = countText;
-
-          headerLine.appendChild(iconWrap);
-          headerLine.appendChild(cleanTitle);
-          if (countText) headerLine.appendChild(countWrap);
-
-          body.innerHTML = '';
-          body.appendChild(headerLine);
-          if (trackEl) {
-            body.appendChild(trackEl);
+          if (body) {
+            body.remove();
           }
         });
       }
