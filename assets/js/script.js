@@ -9,7 +9,6 @@ const TMDB_API_KEY = '727a00da59cd2b9873f7636a5bde9561';
 const RAWG_API_KEY = '';
 const STORAGE_BUCKET = 'media-assets';
 const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-const ITEMS_PER_PAGE = 8;
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -21,7 +20,8 @@ let pendingUploadedUrls = [];
 let currentCategory = 'all';
 let currentMainView = 'blog';
 let libraryViewMode = 'grid';
-let visibleMediaLimit = ITEMS_PER_PAGE;
+let itemsPerPage = 8;
+let visibleMediaLimit = 8;
 let isStatsExpanded = false;
 let isAdminLoggedIn = false;
 let isProfileLoaded = false;
@@ -247,8 +247,25 @@ window.setLibraryViewMode = function (mode) {
   renderMediaGrid();
 };
 
+window.onPerPageChange = function () {
+  const selectEl = document.getElementById('items-per-page-select');
+  const val = selectEl ? selectEl.value : '8';
+  if (val === 'all') {
+    itemsPerPage = Infinity;
+    visibleMediaLimit = Infinity;
+  } else {
+    itemsPerPage = parseInt(val, 10) || 8;
+    visibleMediaLimit = itemsPerPage;
+  }
+  renderMediaGrid();
+};
+
 window.loadMoreMedia = function () {
-  visibleMediaLimit += ITEMS_PER_PAGE;
+  if (itemsPerPage === Infinity) {
+    visibleMediaLimit = Infinity;
+  } else {
+    visibleMediaLimit += itemsPerPage;
+  }
   renderMediaGrid();
 };
 
@@ -281,7 +298,6 @@ function updateAdminActionButtons() {
 
   const inLibrary = currentMainView === 'library';
 
-  // Tombol Private/Public hanya muncul di tab Library dengan teks "Private" / "Public" & warna putih
   if (privacyBtn) {
     privacyBtn.style.display = inLibrary ? 'inline-flex' : 'none';
     const isPriv = Boolean(currentProfile.is_library_private);
@@ -923,7 +939,7 @@ function updateStatsUI() {
 // 4. FILTER (CUSTOM RANGES), SORT (2-WAY), PAGINATION & RENDER MEDIA
 // ==========================================
 function resetPaginationAndRender() {
-  visibleMediaLimit = ITEMS_PER_PAGE;
+  visibleMediaLimit = itemsPerPage;
   updateFilterActiveIndicator();
   renderMediaGrid();
 }
@@ -979,7 +995,7 @@ function updateSortUIControls() {
   } else if (currentSortField === 'units') {
     if (descBtn) descBtn.textContent = 'Longest';
     if (ascBtn) ascBtn.textContent = 'Shortest';
-    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Units (Longest)' : 'Units (Shortest)';
+    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Count (Longest)' : 'Count (Shortest)';
   } else if (currentSortField === 'title') {
     if (descBtn) descBtn.textContent = 'Z → A';
     if (ascBtn) ascBtn.textContent = 'A → Z';
@@ -1076,7 +1092,7 @@ function matchesCustomFilters(item) {
     if (rMaxRaw !== '' && rVal > parseFloat(rMaxRaw)) return false;
   }
 
-  // Total Units (Ch/Eps) Range Filter
+  // Total Count (Eps/Ch) Range Filter
   if (uMinRaw !== '' || uMaxRaw !== '') {
     const totalUnits = getItemTotalUnitsValue(item);
     if (uMinRaw !== '' && totalUnits < parseInt(uMinRaw, 10)) return false;
@@ -1152,7 +1168,7 @@ function renderMediaGrid() {
     return;
   }
 
-  const displayedItems = filtered.slice(0, visibleMediaLimit);
+  const displayedItems = visibleMediaLimit === Infinity ? filtered : filtered.slice(0, visibleMediaLimit);
   const remainingCount = filtered.length - displayedItems.length;
 
   if (loadMoreWrap) {
