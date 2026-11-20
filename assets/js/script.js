@@ -2826,7 +2826,7 @@ async function sendAiMessage(userText) {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: GROQ_MODEL,
+        model: 'llama-3.1-8b-instant',
         messages: [
           { role: 'system', content: buildArchiveSystemContext() },
           ...recentHistory
