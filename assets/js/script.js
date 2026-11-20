@@ -26,17 +26,6 @@ let isStatsExpanded = false;
 let isAdminLoggedIn = false;
 let isProfileLoaded = false;
 
-// News State
-const DEFAULT_RSS_SOURCES = [
-  { name: 'CNN Indonesia', topic: 'indonesia', url: 'https://www.cnnindonesia.com/nasional/rss' },
-  { name: 'Antara News', topic: 'indonesia', url: 'https://www.antaranews.com/rss/terkini.xml' },
-  { name: 'The Verge', topic: 'tech', url: 'https://www.theverge.com/rss/index.xml' },
-  { name: 'IGN', topic: 'gaming', url: 'https://feeds.feedburner.com/ign/all' }
-];
-let allNewsItems = [];
-let currentNewsTopic = 'all';
-let newsSearchQuery = '';
-
 // Sort State (Default: Rating Best)
 let currentSortField = 'rating';
 let currentSortDir = 'desc';
@@ -91,7 +80,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupScrollListeners();
     setupOutsidePopoverCloser();
     setupFilterListeners();
-    setupNewsListeners();
     updateSortUIControls();
 
     await checkAdminSession();
@@ -168,6 +156,7 @@ window.toggleToolbarPopover = function (type) {
   closeAllToolbarPopovers();
 
   if (willOpen && menuEl && btnEl) {
+    // Reset inline style agar mengikuti rule CSS (Mobile <= 680px: left 0 | Desktop > 680px: right 0)
     menuEl.style.left = '';
     menuEl.style.right = '';
     menuEl.classList.add('open');
@@ -179,12 +168,16 @@ window.toggleToolbarPopover = function (type) {
     const btnRect = btnEl.getBoundingClientRect();
 
     if (isMobileLayout) {
+      // Mode Mobile: Default rata kiri (membuka ke kanan)
+      // Jika menu melewati tepi kanan layar, geser ke kiri secukupnya
       if (rect.right > viewportWidth - 14) {
         const overflowRight = rect.right - (viewportWidth - 14);
         const safeShift = Math.min(overflowRight, Math.max(0, btnRect.left - 14));
         menuEl.style.left = `-${safeShift}px`;
       }
     } else {
+      // Mode Desktop/Laptop: Default rata kanan (membuka ke kiri)
+      // Jika posisi tombol agak ke tengah sehingga menu melewati tepi kiri, geser ke kanan secukupnya
       if (rect.left < 14) {
         const overflowLeft = 14 - rect.left;
         menuEl.style.right = `-${overflowLeft}px`;
@@ -214,30 +207,22 @@ window.switchMainView = function (viewName) {
 
   const libView = document.getElementById('view-library');
   const blogView = document.getElementById('view-blog');
-  const newsView = document.getElementById('view-news');
 
-  if (libView) {
+  if (libView && blogView) {
     libView.classList.remove('active-view');
-    libView.style.display = 'none';
-  }
-  if (blogView) {
     blogView.classList.remove('active-view');
-    blogView.style.display = 'none';
-  }
-  if (newsView) {
-    newsView.classList.remove('active-view');
-    newsView.style.display = 'none';
-  }
 
-  const targetView = viewName === 'library' ? libView : (viewName === 'news' ? newsView : blogView);
-  if (targetView) {
-    targetView.style.display = 'block';
-    void targetView.offsetWidth;
-    targetView.classList.add('active-view');
-  }
-
-  if (viewName === 'news' && allNewsItems.length === 0) {
-    fetchAllNews();
+    if (viewName === 'library') {
+      blogView.style.display = 'none';
+      libView.style.display = 'block';
+      void libView.offsetWidth;
+      libView.classList.add('active-view');
+    } else {
+      libView.style.display = 'none';
+      blogView.style.display = 'block';
+      void blogView.offsetWidth;
+      blogView.classList.add('active-view');
+    }
   }
 
   updateAdminActionButtons();
@@ -997,6 +982,7 @@ function updateStatsUI() {
 
   setElText('total-entries-label', `${totalEntries} Entries`);
 
+  // Group 1: Categories
   setElText('stat-cat-tv', catStats.tv_show.total.toLocaleString('en-US'));
   setElText('stat-cat-tv-sub', `${catStats.tv_show.done} Completed`);
 
@@ -1015,6 +1001,7 @@ function updateStatsUI() {
   setElText('stat-cat-music', catStats.music.total.toLocaleString('en-US'));
   setElText('stat-cat-music-sub', `${catStats.music.done} Completed`);
 
+  // Group 2: Total Counts by Unit
   setElText('stat-unit-eps', unitCounts.eps.toLocaleString('en-US'));
   setElText('stat-unit-ch', unitCounts.ch.toLocaleString('en-US'));
   setElText('stat-unit-pages', unitCounts.pages.toLocaleString('en-US'));
@@ -1023,6 +1010,7 @@ function updateStatsUI() {
   setElText('stat-unit-track', unitCounts.track.toLocaleString('en-US'));
   setElText('stat-unit-item', unitCounts.item.toLocaleString('en-US'));
 
+  // Group 3 (Bottom): Total Completed & Mean Rating
   setElText('stat-completed-total', totalCompleted.toLocaleString('en-US'));
   setElText('stat-completion-rate', `${completionRate}% Rate`);
 
@@ -1118,9 +1106,9 @@ window.setSortDirection = function (dir) {
 };
 
 function setupFilterListeners() {
-  document.querySelectorAll('#view-library .cat-tab').forEach(btn => {
+  document.querySelectorAll('.cat-tab').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('#view-library .cat-tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       currentCategory = btn.dataset.category;
       resetPaginationAndRender();
@@ -1272,6 +1260,7 @@ function renderMediaGrid() {
     }
   }
 
+  // COMPACT LIST VIEW RENDER
   if (libraryViewMode === 'list') {
     grid.innerHTML = displayedItems.map(item => {
       const safeId = escapeHtml(String(item.id));
@@ -1320,6 +1309,7 @@ function renderMediaGrid() {
     return;
   }
 
+  // GRID VIEW RENDER
   grid.innerHTML = displayedItems.map(item => {
     const safeId = escapeHtml(String(item.id));
     const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
@@ -2571,127 +2561,3 @@ window.deleteBlogPost = async function (id) {
     }
   }
 };
-
-// ==========================================
-// 8. AUTO WEB NEWS FEED (RSS TO JSON)
-// ==========================================
-function setupNewsListeners() {
-  document.querySelectorAll('#news-topic-tabs .cat-tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#news-topic-tabs .cat-tab').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentNewsTopic = btn.dataset.topic || 'all';
-      renderNewsGrid();
-    });
-  });
-
-  const newsSearchInput = document.getElementById('news-search-input');
-  if (newsSearchInput) {
-    newsSearchInput.addEventListener('input', (e) => {
-      newsSearchQuery = e.target.value.toLowerCase().trim();
-      renderNewsGrid();
-    });
-  }
-}
-
-function stripNewsHtml(html) {
-  const div = document.createElement('div');
-  div.innerHTML = html || '';
-  return (div.textContent || div.innerText || '').trim();
-}
-
-function extractNewsImage(item) {
-  if (item.thumbnail && item.thumbnail.startsWith('http')) return item.thumbnail;
-  if (item.enclosure && item.enclosure.link && item.enclosure.link.startsWith('http')) return item.enclosure.link;
-  const match = (item.description || item.content || '').match(/<img[^>]+src="([^">]+)"/i);
-  return match ? match[1] : '';
-}
-
-window.fetchAllNews = async function (forceRefresh = false) {
-  const grid = document.getElementById('news-feed-grid');
-  if (!grid) return;
-
-  const cacheKey = 'archive_news_cache_v1';
-  if (!forceRefresh) {
-    try {
-      const cached = JSON.parse(sessionStorage.getItem(cacheKey) || 'null');
-      if (cached && (Date.now() - cached.ts < 10 * 60 * 1000) && Array.isArray(cached.items) && cached.items.length > 0) {
-        allNewsItems = cached.items;
-        renderNewsGrid();
-        return;
-      }
-    } catch (_) {}
-  }
-
-  grid.innerHTML = `<p class="empty-state" style="grid-column: 1 / -1;">Fetching latest news...</p>`;
-
-  const requests = DEFAULT_RSS_SOURCES.map(async (src) => {
-    try {
-      const res = await fetchWithTimeout(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(src.url)}`, {}, 6000);
-      const data = await res.json();
-      if (data.status !== 'ok' || !Array.isArray(data.items)) return [];
-
-      return data.items.slice(0, 8).map(item => ({
-        title: stripNewsHtml(item.title),
-        link: item.link,
-        timestamp: new Date(item.pubDate).getTime() || Date.now(),
-        snippet: stripNewsHtml(item.description).slice(0, 150),
-        image: normalizeImageUrl(extractNewsImage(item)),
-        source: src.name,
-        topic: src.topic
-      }));
-    } catch (_) {
-      return [];
-    }
-  });
-
-  const results = await Promise.all(requests);
-  allNewsItems = results.flat().sort((a, b) => b.timestamp - a.timestamp);
-
-  if (allNewsItems.length > 0) {
-    sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), items: allNewsItems }));
-    if (forceRefresh) showToast('News updated', 'success');
-  }
-
-  renderNewsGrid();
-};
-
-function renderNewsGrid() {
-  const grid = document.getElementById('news-feed-grid');
-  if (!grid) return;
-
-  const filtered = allNewsItems.filter(item => {
-    const matchTopic = currentNewsTopic === 'all' || item.topic === currentNewsTopic;
-    const matchQuery = !newsSearchQuery || item.title.toLowerCase().includes(newsSearchQuery) || item.source.toLowerCase().includes(newsSearchQuery);
-    return matchTopic && matchQuery;
-  });
-
-  if (filtered.length === 0) {
-    grid.innerHTML = `<p class="empty-state" style="grid-column: 1 / -1;">No news found.</p>`;
-    return;
-  }
-
-  grid.innerHTML = filtered.map(item => {
-    const dateStr = new Date(item.timestamp).toLocaleDateString('id-ID', {
-      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
-    });
-
-    return `
-      <a href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer" class="blog-post-card" style="display: flex; flex-direction: column; overflow: hidden; text-decoration: none; padding: 0;">
-        ${item.image ? `
-          <div style="width: 100%; height: 150px; overflow: hidden; background: var(--onyx);">
-            <img src="${escapeHtml(item.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.parentElement.style.display='none'">
-          </div>
-        ` : ''}
-        <div style="padding: 14px; display: flex; flex-direction: column; gap: 6px; flex: 1;">
-          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--light-gray-70);">
-            <span class="badge-cat">${escapeHtml(item.source)}</span>
-            <span>${dateStr}</span>
-          </div>
-          <h3 style="font-size: 14px; font-weight: 600; color: var(--white-1); line-height: 1.4;">${escapeHtml(item.title)}</h3>
-          ${item.snippet ? `<p style="font-size: 12px; color: var(--light-gray-70); line-height: 1.5; margin-top: auto;">${escapeHtml(item.snippet)}...</p>` : ''}
-        </div>
-      </a>
-    `;
-  }).join('');
-}
