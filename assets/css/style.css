@@ -1653,101 +1653,6 @@ body {
 }
 
 /*-----------------------------------*\
-  #AUTO WEB NEWS FEED CARDS
-\*-----------------------------------*/
-
-.news-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-
-.news-card {
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  border-radius: 16px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  transition: transform 0.2s ease, border-color 0.2s ease;
-}
-
-.news-card:hover {
-  transform: translateY(-3px);
-  border-color: rgba(255, 255, 255, 0.35);
-}
-
-.news-thumb-wrap {
-  width: 100%;
-  height: 155px;
-  background: var(--onyx);
-  overflow: hidden;
-  border-bottom: 1px solid var(--jet);
-  position: relative;
-}
-
-.news-thumb-wrap img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.news-body {
-  padding: 13px 14px;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  gap: 8px;
-}
-
-.news-meta-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 10px;
-}
-
-.news-source-badge {
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  color: var(--white-1);
-  background: var(--onyx);
-  border: 1px solid var(--jet);
-  padding: 2px 8px;
-  border-radius: 6px;
-}
-
-.news-date-text {
-  color: var(--light-gray-70);
-  white-space: nowrap;
-}
-
-.news-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--white-1);
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.news-snippet {
-  font-size: 12px;
-  color: var(--light-gray-70);
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  margin-top: auto;
-}
-
-/*-----------------------------------*\
   #MODALS & FORMS
 \*-----------------------------------*/
 
@@ -2177,12 +2082,6 @@ textarea.form-input {
   }
   .stats-units-grid {
     grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-@media (max-width: 680px) {
-  .news-grid {
-    grid-template-columns: 1fr;
   }
 }
 
