@@ -73,7 +73,7 @@ body {
   background: var(--smoky-black);
   color: var(--white-2);
   min-height: 100vh;
-  padding: 20px 14px 104px;
+  padding: 20px 14px 48px;
 }
 
 ::-webkit-scrollbar {
@@ -210,29 +210,41 @@ body {
   text-overflow: ellipsis;
 }
 
-.sticky-mini-right {
-  display: flex;
+.sticky-mini-nav {
+  display: inline-flex;
   align-items: center;
-  flex-shrink: 0;
-}
-
-.mini-view-badge {
-  padding: 4px 10px;
-  border-radius: 99px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--light-gray);
   background: var(--onyx);
   border: 1px solid var(--jet);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 4px;
+}
+
+.mini-nav-btn {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light-gray-70);
+  transition: var(--transition-1);
+}
+
+.mini-nav-btn:hover {
+  color: var(--white-1);
+}
+
+.mini-nav-btn.active {
+  background: var(--white-1);
+  color: var(--smoky-black);
 }
 
 .back-to-top-btn {
   position: fixed;
-  right: 18px;
-  bottom: 88px;
+  right: 20px;
+  bottom: 24px;
   z-index: 85;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: rgba(28, 28, 30, 0.92);
   backdrop-filter: blur(8px);
@@ -261,137 +273,6 @@ body {
 }
 
 /*-----------------------------------*\
-  #FLOATING BOTTOM NAVIGATION DOCK
-\*-----------------------------------*/
-
-.bottom-nav-dock {
-  position: fixed;
-  bottom: 20px;
-  left: 0;
-  right: 0;
-  z-index: 95;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 0 16px;
-  pointer-events: none;
-}
-
-.bottom-nav-pill {
-  pointer-events: auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 6px;
-  border-radius: 999px;
-  background: rgba(22, 22, 24, 0.92);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-.bottom-nav-item {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 40px;
-  min-width: 112px;
-  padding: 0 18px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1;
-  color: var(--light-gray-70);
-  white-space: nowrap;
-  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
-}
-
-.bottom-nav-item:hover {
-  color: var(--white-1);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.bottom-nav-item.active {
-  background: rgba(255, 255, 255, 0.14);
-  color: var(--white-1);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
-}
-
-.bottom-nav-icon-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.bottom-nav-item ion-icon {
-  font-size: 18px;
-  display: block;
-  flex-shrink: 0;
-}
-
-.bottom-nav-item .nav-icon-filled {
-  display: none;
-}
-
-.bottom-nav-item.active .nav-icon-outline {
-  display: none;
-}
-
-.bottom-nav-item.active .nav-icon-filled {
-  display: block;
-}
-
-.nav-lock-badge {
-  position: absolute;
-  top: -4px;
-  right: -5px;
-  font-size: 10px !important;
-  color: var(--white-1);
-  background: var(--smoky-black);
-  border-radius: 50%;
-  padding: 1px;
-}
-
-/* Center Action Button inside Bottom Nav */
-.bottom-nav-fab {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: var(--white-1);
-  color: var(--smoky-black);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  line-height: 1;
-  margin: 0 2px;
-  flex-shrink: 0;
-  box-shadow: 0 4px 16px rgba(255, 255, 255, 0.25);
-  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease;
-}
-
-.bottom-nav-fab ion-icon {
-  display: block;
-}
-
-.bottom-nav-fab:hover {
-  transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 8px 22px rgba(255, 255, 255, 0.35);
-}
-
-.bottom-nav-fab:active {
-  transform: scale(0.95);
-}
-
-/*-----------------------------------*\
   #MAIN LAYOUT CONTAINER
 \*-----------------------------------*/
 
@@ -404,7 +285,7 @@ body {
 }
 
 /*-----------------------------------*\
-  #PROFILE HEADER CARD & BANNER
+  #PROFILE HEADER CARD & INTEGRATED NAV
 \*-----------------------------------*/
 
 .profile-header-card {
@@ -432,7 +313,7 @@ body {
 }
 
 .profile-content-area {
-  padding: 20px 22px;
+  padding: 20px 22px 18px;
 }
 
 .profile-header-card.has-banner .avatar-box {
@@ -494,21 +375,29 @@ body {
   gap: 8px;
 }
 
-.admin-badge-btn {
+.header-pill-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  height: 34px;
   background: var(--onyx);
   border: 1px solid var(--jet);
   color: var(--light-gray);
-  padding: 7px 12px;
+  padding: 0 13px;
   border-radius: 10px;
   font-size: 12px;
   font-weight: 500;
+  line-height: 1;
   transition: var(--transition-1);
 }
 
-.admin-badge-btn:hover {
+.header-pill-btn ion-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.header-pill-btn:hover {
   border-color: var(--white-1);
   color: var(--white-1);
 }
@@ -544,6 +433,101 @@ body {
 .social-chip ion-icon {
   font-size: 14px;
   color: var(--white-1);
+}
+
+/* Integrated Primary Navigation Bar */
+.primary-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 22px;
+  background: rgba(14, 14, 16, 0.55);
+  border-top: 1px solid var(--jet);
+  flex-wrap: wrap;
+}
+
+.segmented-nav-tabs {
+  display: inline-flex;
+  align-items: center;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.nav-segment-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 34px;
+  min-width: 108px;
+  padding: 0 16px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--light-gray-70);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.nav-segment-btn:hover {
+  color: var(--white-1);
+}
+
+.nav-segment-btn.active {
+  background: var(--white-1);
+  color: var(--smoky-black);
+}
+
+.nav-segment-btn ion-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.nav-segment-btn .nav-icon-filled {
+  display: none;
+}
+
+.nav-segment-btn.active .nav-icon-outline {
+  display: none;
+}
+
+.nav-segment-btn.active .nav-icon-filled {
+  display: inline-block;
+}
+
+.nav-lock-tag {
+  font-size: 12px !important;
+  opacity: 0.75;
+}
+
+.primary-create-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 11px;
+  background: var(--white-1);
+  color: var(--smoky-black);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  transition: transform 0.15s ease, opacity 0.2s ease;
+}
+
+.primary-create-btn ion-icon {
+  font-size: 17px;
+  flex-shrink: 0;
+}
+
+.primary-create-btn:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
 }
 
 /* View Transitions */
@@ -735,7 +719,7 @@ body {
   color: var(--light-gray-70);
 }
 
-/* Bottom Summary Highlights (Total Completed & Mean Rating) */
+/* Bottom Summary Highlights */
 .stats-bottom-highlights {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -799,7 +783,7 @@ body {
 }
 
 /*-----------------------------------*\
-  #CATEGORY TABS (JUSTIFIED / RATA KANAN-KIRI)
+  #CATEGORY TABS
 \*-----------------------------------*/
 
 .category-tabs-wrap {
@@ -1116,7 +1100,7 @@ body {
 }
 
 /*-----------------------------------*\
-  #MEDIA GRID & CARDS (MONOCHROME WHITE)
+  #MEDIA GRID & CARDS
 \*-----------------------------------*/
 
 .media-grid {
@@ -1285,7 +1269,6 @@ body {
   font-size: 10px;
 }
 
-/* Monochrome White Status Pill */
 .status-pill {
   padding: 2px 7px;
   border-radius: 6px;
@@ -1318,7 +1301,6 @@ body {
   text-decoration: line-through;
 }
 
-/* Monochrome White Total Count / Progress Pill */
 .progress-pill {
   font-weight: 700;
   font-size: 11px;
@@ -1333,7 +1315,6 @@ body {
   color: var(--mono-dim);
 }
 
-/* Monochrome White Progress Track & Fill */
 .progress-track {
   width: 100%;
   height: 4px;
@@ -1495,7 +1476,6 @@ body {
   color: var(--white-1);
 }
 
-/* Load More Button */
 .load-more-wrap {
   display: flex;
   justify-content: center;
@@ -1960,7 +1940,6 @@ textarea.form-input {
   border-color: var(--white-1);
 }
 
-/* Multi-Category Track Cards & Additional Entries Cards */
 .tracks-editor-list,
 .seasons-editor-list {
   display: flex;
@@ -2025,7 +2004,6 @@ textarea.form-input {
   color: var(--smoky-black);
 }
 
-/* File Upload Row */
 .upload-input-row {
   display: flex;
   align-items: center;
@@ -2058,7 +2036,6 @@ textarea.form-input {
   color: var(--white-1);
 }
 
-/* Social Links Editor in Profile Modal */
 .social-editor-header {
   display: flex;
   justify-content: space-between;
@@ -2230,6 +2207,22 @@ textarea.form-input {
 }
 
 @media (max-width: 560px) {
+  .primary-nav-bar {
+    padding: 10px 14px;
+  }
+  .segmented-nav-tabs {
+    flex: 1;
+  }
+  .nav-segment-btn {
+    flex: 1;
+    min-width: 0;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+  .primary-create-btn {
+    padding: 0 12px;
+    height: 36px;
+  }
   .category-tabs {
     gap: 5px;
   }
@@ -2277,22 +2270,9 @@ textarea.form-input {
   .list-hide-mobile {
     display: none;
   }
-  .bottom-nav-dock {
-    bottom: 14px;
-  }
-  .bottom-nav-item {
-    min-width: 96px;
-    padding: 0 14px;
-    height: 38px;
-    font-size: 12px;
-  }
-  .bottom-nav-fab {
-    width: 40px;
-    height: 40px;
-  }
   .back-to-top-btn {
     right: 14px;
-    bottom: 78px;
+    bottom: 18px;
     width: 36px;
     height: 36px;
   }
