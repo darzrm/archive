@@ -1377,36 +1377,38 @@ body {
 }
 
 /*-----------------------------------*\
-  #COMPACT LIST VIEW MODE (WITH PROGRESS BAR & COMPACT STATUS)
+  #COMPACT LIST VIEW MODE (MINIMALIST & UNIFORM)
 \*-----------------------------------*/
 
 .media-grid.list-view {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .media-list-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  height: 58px;
   background: var(--eerie-black-2);
   border: 1px solid var(--jet);
-  border-radius: 12px;
-  padding: 9px 12px;
+  border-radius: 11px;
+  padding: 6px 10px;
   cursor: pointer;
+  overflow: hidden;
   transition: border-color 0.2s ease, background 0.2s ease;
 }
 
 .media-list-row:hover {
-  border-color: rgba(255, 255, 255, 0.32);
+  border-color: rgba(255, 255, 255, 0.3);
   background: rgba(255, 255, 255, 0.02);
 }
 
 .list-thumb {
-  width: 38px;
-  height: 54px;
-  border-radius: 7px;
+  width: 30px;
+  height: 44px;
+  border-radius: 5px;
   object-fit: cover;
   background: var(--onyx);
   flex-shrink: 0;
@@ -1417,11 +1419,12 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  justify-content: center;
+  gap: 3px;
 }
 
 .list-title {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--white-1);
   line-height: 1.25;
@@ -1433,72 +1436,84 @@ body {
 .list-sub-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
+  gap: 5px;
+  font-size: 10px;
+  line-height: 1;
   color: var(--light-gray-70);
-  flex-wrap: wrap;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Compact Status Pill inside List View */
+/* Ultra-clean minimalist Status Pill inside List View */
 .media-list-row .status-pill {
-  padding: 1px 6px;
-  font-size: 9px;
-  border-radius: 5px;
+  padding: 1px 5px;
+  font-size: 8.5px;
+  font-weight: 600;
+  border-radius: 4px;
+  line-height: 1.25;
   letter-spacing: 0.2px;
+  flex-shrink: 0;
 }
 
 .list-cat-tag {
   text-transform: uppercase;
   font-size: 9px;
   font-weight: 600;
-  letter-spacing: 0.4px;
-  color: var(--light-gray);
+  letter-spacing: 0.3px;
+  color: var(--light-gray-70);
+  flex-shrink: 0;
 }
 
 .list-repeat-tag {
   color: var(--white-1);
   font-weight: 600;
-  font-size: 10px;
+  font-size: 9.5px;
+  flex-shrink: 0;
 }
 
-/* Progress Bar inside Compact List View */
-.list-progress-wrap {
-  width: 100%;
-  max-width: 240px;
-  margin-top: 1px;
-}
-
-.list-progress-track {
-  height: 3.5px;
-  background: rgba(255, 255, 255, 0.1);
-}
-
+/* Right-aligned uniform Progress Bar, Rating & Edit button */
 .list-right-meta {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
+  margin-left: auto;
+}
+
+.list-progress-box {
+  width: 72px;
+  flex-shrink: 0;
+}
+
+.list-progress-track {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .list-rating-pill {
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--white-1);
-  min-width: 38px;
+  width: 34px;
   text-align: right;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
 
 .list-edit-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   background: var(--onyx);
   border: 1px solid var(--jet);
-  color: var(--light-gray);
+  color: var(--light-gray-70);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 12px;
+  flex-shrink: 0;
   transition: var(--transition-1);
 }
 
@@ -2306,8 +2321,24 @@ textarea.form-input {
   .list-hide-mobile {
     display: none;
   }
-  .list-progress-wrap {
-    max-width: 140px;
+  .media-list-row {
+    height: 54px;
+    padding: 5px 9px;
+    gap: 8px;
+  }
+  .list-thumb {
+    width: 28px;
+    height: 40px;
+  }
+  .list-right-meta {
+    gap: 7px;
+  }
+  .list-progress-box {
+    width: 44px;
+  }
+  .list-rating-pill {
+    width: 30px;
+    font-size: 10.5px;
   }
   .back-to-top-btn {
     right: 14px;
