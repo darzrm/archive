@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=301">
+  <link rel="stylesheet" href="./assets/css/style.css?v=302">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -693,7 +693,7 @@
   <!-- Main JS -->
   <script src="./assets/js/script.js?v=53"></script>
 
-  <!-- Sync Helper for Navigation, Minimalist Compact List & Responsive Page Sizes -->
+  <!-- Sync Helper for Navigation, Tabular Compact List & Responsive Page Sizes -->
   <script>
     (function () {
       let activeSizePreset = 'small';
@@ -756,31 +756,37 @@
         });
       }
 
-      // Format Compact List View rows cleanly with aligned right-side progress bar
+      // Align Compact List View into strict vertical columns (Title | Status | Count | Bar | Rating | Edit)
       function formatCompactListRows() {
         const grid = document.getElementById('media-grid');
         if (!grid || !grid.classList.contains('list-view')) return;
 
         grid.querySelectorAll('.media-list-row').forEach(row => {
-          if (row.dataset.formatted === '1') return;
-          row.dataset.formatted = '1';
+          if (row.dataset.tabular === '1') return;
+          row.dataset.tabular = '1';
 
           const subMeta = row.querySelector('.list-sub-meta');
           const rightMeta = row.querySelector('.list-right-meta');
           if (!subMeta || !rightMeta) return;
 
+          // Extract Status Pill
           const statusEl = subMeta.querySelector('.status-pill');
           const statusClass = statusEl
             ? Array.from(statusEl.classList).find(c => ['completed', 'ongoing', 'planned', 'dropped'].includes(c)) || 'ongoing'
             : 'ongoing';
+          const statusText = statusEl ? statusEl.textContent.trim() : statusClass;
 
+          // Extract Count Text (e.g. 12/24 Eps, 100 Ch, etc.)
           const rawText = subMeta.textContent || '';
-          const match = rawText.match(/(\d+)\s*\/\s*(\d+)/);
-          let pct = 0;
+          const countMatch = rawText.match(/(\d+(?:\s*\/\s*\d+)?\s*(?:Eps|Ch|Vol|Pages|Movies|Tracks|Items)?)/i);
+          const countText = countMatch ? countMatch[1].trim() : '-';
 
-          if (match) {
-            const cur = parseFloat(match[1]);
-            const tot = parseFloat(match[2]);
+          // Calculate Percentage for Progress Bar
+          const ratioMatch = rawText.match(/(\d+)\s*\/\s*(\d+)/);
+          let pct = 0;
+          if (ratioMatch) {
+            const cur = parseFloat(ratioMatch[1]);
+            const tot = parseFloat(ratioMatch[2]);
             pct = tot > 0 ? Math.min(100, Math.max(0, (cur / tot) * 100)) : 0;
           } else if (statusClass === 'completed') {
             pct = 100;
@@ -790,10 +796,39 @@
             pct = 30;
           }
 
-          const barWrap = document.createElement('div');
-          barWrap.className = 'list-progress-box';
-          barWrap.innerHTML = `<div class="progress-track list-progress-track"><div class="progress-fill ${statusClass}" style="width: ${pct}%;"></div></div>`;
-          rightMeta.insertBefore(barWrap, rightMeta.firstChild);
+          // Clean subMeta to only show Category + Repeat tag
+          if (statusEl) statusEl.remove();
+          subMeta.childNodes.forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE) {
+              node.textContent = node.textContent
+                .replace(/•/g, '')
+                .replace(/(\d+(?:\s*\/\s*\d+)?\s*(?:Eps|Ch|Vol|Pages|Movies|Tracks|Items)?)/gi, '')
+                .trim();
+            }
+          });
+
+          // Build strict aligned columns inside rightMeta
+          const ratingEl = rightMeta.querySelector('.list-rating-pill');
+          const editBtn = rightMeta.querySelector('.list-edit-btn');
+
+          const statusCol = document.createElement('div');
+          statusCol.className = 'list-col-status';
+          statusCol.innerHTML = `<span class="status-pill ${statusClass}">${statusText}</span>`;
+
+          const countCol = document.createElement('div');
+          countCol.className = 'list-col-count';
+          countCol.textContent = countText;
+
+          const barCol = document.createElement('div');
+          barCol.className = 'list-col-bar';
+          barCol.innerHTML = `<div class="progress-track list-progress-track"><div class="progress-fill ${statusClass}" style="width: ${pct}%;"></div></div>`;
+
+          rightMeta.innerHTML = '';
+          rightMeta.appendChild(statusCol);
+          rightMeta.appendChild(countCol);
+          rightMeta.appendChild(barCol);
+          if (ratingEl) rightMeta.appendChild(ratingEl);
+          if (editBtn) rightMeta.appendChild(editBtn);
         });
       }
 
