@@ -26,6 +26,10 @@ let isStatsExpanded = false;
 let isAdminLoggedIn = false;
 let isProfileLoaded = false;
 
+// Sort State (Default: Highest Rating 10 -> 1)
+let currentSortField = 'rating';
+let currentSortDir = 'desc';
+
 let currentProfile = {
   name: '',
   bio: '',
@@ -73,6 +77,8 @@ function showToast(message, type = 'success', duration = 2600) {
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
   setupScrollListeners();
+  setupOutsidePopoverCloser();
+  updateSortUIControls();
   await checkAdminSession();
   await fetchProfileSettings();
   await Promise.all([fetchBlogPosts(), fetchMediaLogs()]);
@@ -97,6 +103,43 @@ function setupScrollListeners() {
     }
   }, { passive: true });
 }
+
+function setupOutsidePopoverCloser() {
+  document.addEventListener('click', (e) => {
+    const filterWrap = document.getElementById('filter-popover-wrap');
+    const sortWrap = document.getElementById('sort-popover-wrap');
+
+    if (filterWrap && !filterWrap.contains(e.target)) {
+      document.getElementById('filter-popover-menu')?.classList.remove('open');
+      document.getElementById('btn-filter-toggle')?.classList.remove('active');
+    }
+    if (sortWrap && !sortWrap.contains(e.target)) {
+      document.getElementById('sort-popover-menu')?.classList.remove('open');
+      document.getElementById('btn-sort-toggle')?.classList.remove('active');
+    }
+  });
+}
+
+window.toggleToolbarPopover = function (type) {
+  const filterMenu = document.getElementById('filter-popover-menu');
+  const sortMenu = document.getElementById('sort-popover-menu');
+  const filterBtn = document.getElementById('btn-filter-toggle');
+  const sortBtn = document.getElementById('btn-sort-toggle');
+
+  if (type === 'filter') {
+    const willOpen = !filterMenu?.classList.contains('open');
+    sortMenu?.classList.remove('open');
+    sortBtn?.classList.remove('active');
+    filterMenu?.classList.toggle('open', willOpen);
+    filterBtn?.classList.toggle('active', willOpen);
+  } else {
+    const willOpen = !sortMenu?.classList.contains('open');
+    filterMenu?.classList.remove('open');
+    filterBtn?.classList.remove('active');
+    sortMenu?.classList.toggle('open', willOpen);
+    sortBtn?.classList.toggle('active', willOpen);
+  }
+};
 
 window.scrollToTopSmooth = function () {
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -163,11 +206,16 @@ window.toggleLibraryPrivacy = async function () {
   const nextState = !currentProfile.is_library_private;
   const { error } = await supabaseClient
     .from('profile_settings')
-    .update({
+    .upsert([{
+      id: 1,
+      name: currentProfile.name,
+      bio: currentProfile.bio,
+      avatar_url: currentProfile.avatar_url,
+      banner_url: currentProfile.banner_url,
+      social_links: currentProfile.social_links,
       is_library_private: nextState,
       updated_at: new Date().toISOString()
-    })
-    .eq('id', 1);
+    }]);
 
   if (error) {
     showToast(error.message, 'error');
@@ -177,7 +225,7 @@ window.toggleLibraryPrivacy = async function () {
   currentProfile.is_library_private = nextState;
   updateLibraryTabVisibility();
   updateAdminActionButtons();
-  showToast(nextState ? 'Library tab set to Private' : 'Library tab set to Public', 'info');
+  showToast(nextState ? 'Library tab is now Private' : 'Library tab is now Public', 'info');
 };
 
 window.setLibraryViewMode = function (mode) {
@@ -219,15 +267,16 @@ function updateAdminActionButtons() {
     return;
   }
 
-  const isLibView = currentMainView === 'library';
-  if (addMediaBtn) addMediaBtn.style.display = isLibView ? 'inline-flex' : 'none';
+  // Tombol Library Public/Private selalu tampil di header tab saat Admin login
   if (privacyBtn) {
-    privacyBtn.style.display = isLibView ? 'inline-flex' : 'none';
+    privacyBtn.style.display = 'inline-flex';
     const isPriv = Boolean(currentProfile.is_library_private);
     privacyBtn.classList.toggle('is-private', isPriv);
     if (privacyIcon) privacyIcon.setAttribute('name', isPriv ? 'eye-off-outline' : 'eye-outline');
-    if (privacyText) privacyText.textContent = isPriv ? 'Private' : 'Public';
+    if (privacyText) privacyText.textContent = isPriv ? 'Library: Private' : 'Library: Public';
   }
+
+  if (addMediaBtn) addMediaBtn.style.display = currentMainView === 'library' ? 'inline-flex' : 'none';
   if (addPostBtn) addPostBtn.style.display = currentMainView === 'blog' ? 'inline-flex' : 'none';
 }
 
@@ -699,11 +748,6 @@ function getItemSeasons(item) {
   return Array.isArray(item.seasons) ? item.seasons : [];
 }
 
-// Prioritas Status Kartu Luar:
-// 1. Jika ada yang 'ongoing' -> 'ongoing'
-// 2. Jika SEMUA 'completed' -> 'completed'
-// 3. Jika ada 'dropped' -> 'dropped'
-// 4. Sisanya -> 'planned'
 function computeSyncedStatus(tracks) {
   const statuses = tracks.map(t => (t.status || 'planned').toLowerCase().trim());
 
@@ -719,7 +763,6 @@ function computeSyncedStatus(tracks) {
   return { key: 'planned', label: 'Planned' };
 }
 
-// Gabungkan total progress seluruh kategori menjadi 1 angka minimalis (misal: 444/444 atau 444/?)
 function computeCombinedProgress(tracks, syncedStatusKey) {
   const totalProgress = tracks.reduce((sum, t) => sum + (Number(t.progress) || 0), 0);
   const allHaveTotal = tracks.every(t => t.total_units !== null && Number(t.total_units) > 0);
@@ -745,6 +788,11 @@ function computeCombinedProgress(tracks, syncedStatusKey) {
     percent,
     isPlannedEmpty: syncedStatusKey === 'planned' && totalProgress === 0
   };
+}
+
+function formatEntryBadgeLabel(extraPartsCount) {
+  const totalEntries = extraPartsCount + 1;
+  return totalEntries === 1 ? '1 Entry' : `${totalEntries} Entries`;
 }
 
 // ==========================================
@@ -839,12 +887,71 @@ function updateStatsUI() {
 }
 
 // ==========================================
-// 4. FILTER, SEARCH, PAGINATION & RENDER MEDIA
+// 4. FILTER, SORT (2-WAY), PAGINATION & RENDER MEDIA
 // ==========================================
 function resetPaginationAndRender() {
   visibleMediaLimit = ITEMS_PER_PAGE;
+  updateFilterActiveIndicator();
   renderMediaGrid();
 }
+
+function updateFilterActiveIndicator() {
+  const statusVal = document.getElementById('filter-status')?.value || 'all';
+  const ratingVal = document.getElementById('filter-rating')?.value || 'all';
+  const dot = document.getElementById('filter-active-dot');
+  if (dot) {
+    dot.style.display = (statusVal !== 'all' || ratingVal !== 'all') ? 'inline-block' : 'none';
+  }
+}
+
+window.resetLibraryFilters = function () {
+  const statusEl = document.getElementById('filter-status');
+  const ratingEl = document.getElementById('filter-rating');
+  if (statusEl) statusEl.value = 'all';
+  if (ratingEl) ratingEl.value = 'all';
+  resetPaginationAndRender();
+};
+
+function updateSortUIControls() {
+  const fieldEl = document.getElementById('sort-library-field');
+  if (fieldEl) fieldEl.value = currentSortField;
+
+  const descBtn = document.getElementById('btn-sort-desc');
+  const ascBtn = document.getElementById('btn-sort-asc');
+  const labelEl = document.getElementById('sort-btn-label');
+
+  descBtn?.classList.toggle('active', currentSortDir === 'desc');
+  ascBtn?.classList.toggle('active', currentSortDir === 'asc');
+
+  if (currentSortField === 'rating') {
+    if (descBtn) descBtn.textContent = '10 → 1';
+    if (ascBtn) ascBtn.textContent = '1 → 10';
+    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Rating (10→1)' : 'Rating (1→10)';
+  } else if (currentSortField === 'title') {
+    if (descBtn) descBtn.textContent = 'Z → A';
+    if (ascBtn) ascBtn.textContent = 'A → Z';
+    if (labelEl) labelEl.textContent = currentSortDir === 'asc' ? 'Title (A→Z)' : 'Title (Z→A)';
+  } else {
+    if (descBtn) descBtn.textContent = 'Newest';
+    if (ascBtn) ascBtn.textContent = 'Oldest';
+    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Updated (New)' : 'Updated (Old)';
+  }
+}
+
+window.onSortOptionChange = function () {
+  const fieldVal = document.getElementById('sort-library-field')?.value || 'rating';
+  currentSortField = fieldVal;
+  // Default natural direction saat ganti field: Title -> A-Z (asc), Rating/Updated -> desc
+  currentSortDir = fieldVal === 'title' ? 'asc' : 'desc';
+  updateSortUIControls();
+  resetPaginationAndRender();
+};
+
+window.setSortDirection = function (dir) {
+  currentSortDir = dir;
+  updateSortUIControls();
+  resetPaginationAndRender();
+};
 
 function setupFilterListeners() {
   document.querySelectorAll('.cat-tab').forEach(btn => {
@@ -859,7 +966,6 @@ function setupFilterListeners() {
   document.getElementById('search-library').addEventListener('input', resetPaginationAndRender);
   document.getElementById('filter-status').addEventListener('change', resetPaginationAndRender);
   document.getElementById('filter-rating').addEventListener('change', resetPaginationAndRender);
-  document.getElementById('sort-library').addEventListener('change', resetPaginationAndRender);
 }
 
 function normalizeImageUrl(url) {
@@ -904,7 +1010,6 @@ function renderMediaGrid() {
   const query = document.getElementById('search-library').value.toLowerCase().trim();
   const statusFilter = document.getElementById('filter-status').value;
   const ratingFilter = document.getElementById('filter-rating').value;
-  const sortBy = document.getElementById('sort-library').value;
 
   grid.classList.toggle('list-view', libraryViewMode === 'list');
 
@@ -924,11 +1029,30 @@ function renderMediaGrid() {
     return matchCat && matchStatus && matchRating && matchQuery;
   });
 
-  if (sortBy === 'rating_desc') {
-    filtered.sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0));
-  } else if (sortBy === 'title_asc') {
-    filtered.sort((a, b) => a.title.localeCompare(b.title));
-  }
+  // Sortir berdasarkan pilihan dan arah (10->1 / 1->10, A->Z / Z->A, Newest / Oldest)
+  filtered.sort((a, b) => {
+    if (currentSortField === 'rating') {
+      const aHas = a.rating !== null && a.rating !== undefined && a.rating !== '';
+      const bHas = b.rating !== null && b.rating !== undefined && b.rating !== '';
+      // Item tanpa rating selalu di taruh paling bawah agar rapi
+      if (!aHas && !bHas) return 0;
+      if (!aHas) return 1;
+      if (!bHas) return -1;
+
+      const diff = Number(a.rating) - Number(b.rating);
+      return currentSortDir === 'desc' ? -diff : diff;
+    }
+
+    if (currentSortField === 'title') {
+      const cmp = (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' });
+      return currentSortDir === 'asc' ? cmp : -cmp;
+    }
+
+    // Recently Updated
+    const timeA = new Date(a.updated_at || a.created_at || 0).getTime();
+    const timeB = new Date(b.updated_at || b.created_at || 0).getTime();
+    return currentSortDir === 'desc' ? (timeB - timeA) : (timeA - timeB);
+  });
 
   if (filtered.length === 0) {
     grid.innerHTML = `<p class="empty-state">No media found matching these filters.</p>`;
@@ -963,7 +1087,7 @@ function renderMediaGrid() {
       const statusDateText = formatStatusDate(item.updated_at || item.created_at);
 
       const catLabels = cats.map(c => CATEGORY_LABELS[c] || c).join(' / ');
-      const seasonTag = seasons.length > 0 ? `<span>• ${seasons.length + 1} Entries</span>` : '';
+      const seasonTag = seasons.length > 0 ? `<span>• ${formatEntryBadgeLabel(seasons.length)}</span>` : '';
       const repeatHtml = repeatCount > 0 ? `<span class="list-repeat-tag">• ↻ ${repeatCount}x</span>` : '';
 
       const editBtnHtml = isAdminLoggedIn ? `
@@ -1018,7 +1142,7 @@ function renderMediaGrid() {
       : '';
 
     const seasonsBadgeHtml = seasons.length > 0
-      ? `<span class="badge-seasons">${seasons.length + 1} Entries</span>`
+      ? `<span class="badge-seasons">${formatEntryBadgeLabel(seasons.length)}</span>`
       : '';
 
     const coverEditHtml = isAdminLoggedIn ? `
