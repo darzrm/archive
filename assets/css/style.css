@@ -748,30 +748,36 @@ body {
 }
 
 /*-----------------------------------*\
-  #CATEGORY TABS
+  #CATEGORY TABS (NO HORIZONTAL SLIDE / FIT SCREEN)
 \*-----------------------------------*/
 
 .category-tabs-wrap {
-  overflow-x: auto;
-  padding-bottom: 4px;
+  width: 100%;
   margin-bottom: 12px;
+  overflow: visible;
 }
 
 .category-tabs {
   display: flex;
-  gap: 8px;
-  min-width: max-content;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+}
+
+.category-tabs li {
+  display: flex;
 }
 
 .cat-tab {
-  padding: 8px 15px;
-  border-radius: 12px;
+  padding: 7px 14px;
+  border-radius: 11px;
   font-size: 12px;
   font-weight: 500;
   color: var(--light-gray-70);
   background: var(--eerie-black-2);
   border: 1px solid var(--jet);
   transition: var(--transition-1);
+  white-space: nowrap;
 }
 
 .cat-tab:hover {
@@ -2076,6 +2082,14 @@ textarea.form-input {
 }
 
 @media (max-width: 560px) {
+  .category-tabs {
+    gap: 5px;
+  }
+  .cat-tab {
+    padding: 6px 10px;
+    font-size: 11px;
+    border-radius: 9px;
+  }
   .media-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;
