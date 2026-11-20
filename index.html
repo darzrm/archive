@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Archive</title>
   <link id="favicon-link" rel="shortcut icon" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" type="image/x-icon">
-  <link rel="stylesheet" href="./assets/css/style.css?v=42">
+  <link rel="stylesheet" href="./assets/css/style.css?v=43">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -91,14 +91,14 @@
         </div>
 
         <div class="main-right-actions">
+          <button type="button" id="btn-toggle-library-privacy" class="minimal-add-btn" style="display: none;" onclick="toggleLibraryPrivacy()" title="Toggle Library Public / Private">
+            <ion-icon id="library-privacy-icon" name="eye-outline"></ion-icon>
+            <span id="library-privacy-text">Library: Public</span>
+          </button>
+
           <button type="button" id="btn-add-post" class="minimal-add-btn" style="display: none;" onclick="openPostModal()">
             <ion-icon name="create-outline"></ion-icon>
             <span>New Post</span>
-          </button>
-
-          <button type="button" id="btn-toggle-library-privacy" class="minimal-add-btn" style="display: none;" onclick="toggleLibraryPrivacy()" title="Toggle Library Public / Private">
-            <ion-icon id="library-privacy-icon" name="eye-outline"></ion-icon>
-            <span id="library-privacy-text">Public</span>
           </button>
 
           <button type="button" id="btn-add-media" class="minimal-add-btn" style="display: none;" onclick="openMediaModal()">
@@ -241,38 +241,79 @@
           </div>
         </div>
 
+        <!-- SEARCH + SINGLE FILTER BUTTON + SINGLE SORT BUTTON -->
         <div class="library-controls">
           <div class="search-box">
             <ion-icon name="search-outline"></ion-icon>
             <input type="text" id="search-library" placeholder="Search titles...">
           </div>
 
-          <div class="select-controls">
-            <select id="filter-status" class="control-select">
-              <option value="all">All Status</option>
-              <option value="completed">Completed</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="planned">Planned</option>
-              <option value="dropped">Dropped</option>
-            </select>
+          <div class="toolbar-btn-group">
+            <!-- 1. FILTER BUTTON & POPOVER -->
+            <div class="popover-wrapper" id="filter-popover-wrap">
+              <button type="button" id="btn-filter-toggle" class="toolbar-action-btn" onclick="toggleToolbarPopover('filter')">
+                <ion-icon name="funnel-outline"></ion-icon>
+                <span>Filter</span>
+                <span id="filter-active-dot" class="active-dot" style="display: none;"></span>
+              </button>
 
-            <select id="filter-rating" class="control-select">
-              <option value="all">All Ratings</option>
-              <option value="under_5">&lt; 5.0</option>
-              <option value="5_plus">5.0+</option>
-              <option value="6_plus">6.0+</option>
-              <option value="7_plus">7.0+</option>
-              <option value="8_plus">8.0+</option>
-              <option value="9_plus">9.0+</option>
-              <option value="exact_10">10.0</option>
-              <option value="unrated">Unrated</option>
-            </select>
+              <div id="filter-popover-menu" class="toolbar-popover-menu">
+                <div class="popover-field">
+                  <label>Status</label>
+                  <select id="filter-status" class="control-select">
+                    <option value="all">All Status</option>
+                    <option value="completed">Completed</option>
+                    <option value="ongoing">Ongoing</option>
+                    <option value="planned">Planned</option>
+                    <option value="dropped">Dropped</option>
+                  </select>
+                </div>
 
-            <select id="sort-library" class="control-select">
-              <option value="recent">Recently Updated</option>
-              <option value="rating_desc">Highest Rated</option>
-              <option value="title_asc">Title A–Z</option>
-            </select>
+                <div class="popover-field">
+                  <label>Rating</label>
+                  <select id="filter-rating" class="control-select">
+                    <option value="all">All Ratings</option>
+                    <option value="under_5">&lt; 5.0</option>
+                    <option value="5_plus">5.0+</option>
+                    <option value="6_plus">6.0+</option>
+                    <option value="7_plus">7.0+</option>
+                    <option value="8_plus">8.0+</option>
+                    <option value="9_plus">9.0+</option>
+                    <option value="exact_10">10.0</option>
+                    <option value="unrated">Unrated</option>
+                  </select>
+                </div>
+
+                <button type="button" class="popover-reset-btn" onclick="resetLibraryFilters()">Reset Filters</button>
+              </div>
+            </div>
+
+            <!-- 2. SORT BUTTON & POPOVER (WITH DIRECTION TOGGLE 10->1 / 1->10, A->Z / Z->A) -->
+            <div class="popover-wrapper" id="sort-popover-wrap">
+              <button type="button" id="btn-sort-toggle" class="toolbar-action-btn" onclick="toggleToolbarPopover('sort')">
+                <ion-icon name="swap-vertical-outline"></ion-icon>
+                <span id="sort-btn-label">Rating (10→1)</span>
+              </button>
+
+              <div id="sort-popover-menu" class="toolbar-popover-menu">
+                <div class="popover-field">
+                  <label>Sort By</label>
+                  <select id="sort-library-field" class="control-select" onchange="onSortOptionChange()">
+                    <option value="rating" selected>Highest Rating</option>
+                    <option value="recent">Recently Updated</option>
+                    <option value="title">Title</option>
+                  </select>
+                </div>
+
+                <div class="popover-field">
+                  <label>Order Direction</label>
+                  <div class="sort-dir-row">
+                    <button type="button" id="btn-sort-desc" class="sort-dir-btn active" onclick="setSortDirection('desc')">10 → 1</button>
+                    <button type="button" id="btn-sort-asc" class="sort-dir-btn" onclick="setSortDirection('asc')">1 → 10</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -421,7 +462,6 @@
       <form id="media-form" class="modal-form">
         <input type="hidden" id="media-id">
 
-        <!-- Auto-Fetch Search Bar -->
         <div class="form-group">
           <label>Auto-Fetch from API (Title, Cover & Units)</label>
           <div class="api-search-row">
@@ -460,7 +500,6 @@
           <small id="cover-upload-status" style="color: var(--light-gray-70); font-size: 11px;"></small>
         </div>
 
-        <!-- Multi-Category & Multi-Progress Tracks -->
         <div class="form-group">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <label>Categories & Progress Tracks (Auto-Sync Status)</label>
@@ -472,7 +511,6 @@
           <div id="media-tracks-editor" class="tracks-editor-list"></div>
         </div>
 
-        <!-- Rating & Repeat Count -->
         <div class="form-row-2">
           <div class="form-group">
             <label>Overall Rating (1.0 – 10.0)</label>
@@ -488,7 +526,6 @@
           </div>
         </div>
 
-        <!-- All-in-One Entry: Seasons / Sequels / OVA inside 1 Card -->
         <div class="form-group">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <label>Seasons / Sequels / OVA (All-in-One Card)</label>
@@ -579,7 +616,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./assets/js/script.js?v=42"></script>
+  <script src="./assets/js/script.js?v=43"></script>
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 </body>
