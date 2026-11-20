@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=55">
+  <link rel="stylesheet" href="./assets/css/style.css?v=60">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -453,7 +453,7 @@
               </div>
               <div>
                 <h3>Archive AI Assistant</h3>
-                <span>Groq • Connected to Library & Notes</span>
+                <span id="ai-model-subtitle">Groq • Auto Model</span>
               </div>
             </div>
 
@@ -467,14 +467,20 @@
             </div>
           </div>
 
-          <!-- Collapsible Groq API Key Panel -->
+          <!-- Collapsible Groq API Key & Model Panel -->
           <div class="ai-settings-panel" id="ai-settings-panel" style="display: none;">
-            <label class="form-label" style="margin-bottom: 4px;">Groq API Key (Stored locally in browser)</label>
+            <label class="form-label" style="margin-bottom: 4px;">Groq API Key & Model</label>
             <div class="ai-settings-row">
               <input type="password" id="groq-api-key-input" class="form-input" placeholder="gsk_...">
-              <button type="button" class="form-btn primary-submit" style="flex: 0 0 auto;" onclick="saveGroqApiKey()">Save Key</button>
+              <select id="groq-model-select" class="form-input" style="max-width: 190px;">
+                <option value="auto">Auto (Best Available)</option>
+                <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
+                <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+                <option value="gemma2-9b-it">gemma2-9b-it</option>
+              </select>
+              <button type="button" class="form-btn primary-submit" style="flex: 0 0 auto;" onclick="saveGroqApiKey()">Save</button>
             </div>
-            <p class="ai-settings-hint">Get a free API key at console.groq.com. Uses Llama 3.3 70B Versatile.</p>
+            <p class="ai-settings-hint">Stored locally in your browser. "Auto" automatically selects an active chat model from your Groq account.</p>
           </div>
 
           <!-- Messages Feed -->
@@ -482,7 +488,7 @@
             <div class="ai-empty-welcome">
               <ion-icon name="sparkles-outline"></ion-icon>
               <h4>Hello, Admin</h4>
-              <p>I have live access to your Media Library and Personal Notes. Ask me anything for daily tasks, recommendations, or database insights.</p>
+              <p>I have live access to your Media Library and Personal Notes. Click the key icon above to set your Groq API key, then ask anything.</p>
             </div>
           </div>
 
@@ -795,7 +801,7 @@
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 
   <!-- Main JS -->
-  <script src="./assets/js/script.js?v=53"></script>
+  <script src="./assets/js/script.js?v=60"></script>
 </body>
 
 </html>
