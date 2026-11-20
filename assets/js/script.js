@@ -26,7 +26,7 @@ let isStatsExpanded = false;
 let isAdminLoggedIn = false;
 let isProfileLoaded = false;
 
-// Sort State (Default: Highest Rating 10 -> 1)
+// Sort State (Default: Rating Best)
 let currentSortField = 'rating';
 let currentSortDir = 'desc';
 
@@ -235,7 +235,7 @@ window.toggleLibraryPrivacy = async function () {
   currentProfile.is_library_private = nextState;
   updateLibraryTabVisibility();
   updateAdminActionButtons();
-  showToast(nextState ? 'Library tab is now Private' : 'Library tab is now Public', 'info');
+  showToast(nextState ? 'Library set to Private' : 'Library set to Public', 'info');
 };
 
 window.setLibraryViewMode = function (mode) {
@@ -279,15 +279,17 @@ function updateAdminActionButtons() {
     return;
   }
 
+  const inLibrary = currentMainView === 'library';
+
+  // Tombol Private/Public hanya muncul di tab Library dengan teks "Private" / "Public" & warna putih
   if (privacyBtn) {
-    privacyBtn.style.display = 'inline-flex';
+    privacyBtn.style.display = inLibrary ? 'inline-flex' : 'none';
     const isPriv = Boolean(currentProfile.is_library_private);
-    privacyBtn.classList.toggle('is-private', isPriv);
     if (privacyIcon) privacyIcon.setAttribute('name', isPriv ? 'eye-off-outline' : 'eye-outline');
-    if (privacyText) privacyText.textContent = isPriv ? 'Library: Private' : 'Library: Public';
+    if (privacyText) privacyText.textContent = isPriv ? 'Private' : 'Public';
   }
 
-  if (addMediaBtn) addMediaBtn.style.display = currentMainView === 'library' ? 'inline-flex' : 'none';
+  if (addMediaBtn) addMediaBtn.style.display = inLibrary ? 'inline-flex' : 'none';
   if (addPostBtn) addPostBtn.style.display = currentMainView === 'blog' ? 'inline-flex' : 'none';
 }
 
@@ -771,6 +773,13 @@ function getItemSeasons(item) {
   return Array.isArray(item.seasons) ? item.seasons : [];
 }
 
+function getItemTotalUnitsValue(item) {
+  const tracks = getItemTracks(item);
+  const sumTotal = tracks.reduce((sum, t) => sum + (Number(t.total_units) || 0), 0);
+  if (sumTotal > 0) return sumTotal;
+  return tracks.reduce((sum, t) => sum + (Number(t.progress) || 0), 0);
+}
+
 function computeSyncedStatus(tracks) {
   const statuses = tracks.map(t => (t.status || 'planned').toLowerCase().trim());
 
@@ -911,7 +920,7 @@ function updateStatsUI() {
 }
 
 // ==========================================
-// 4. FILTER, SORT (2-WAY), PAGINATION & RENDER MEDIA
+// 4. FILTER (CUSTOM RANGES), SORT (2-WAY), PAGINATION & RENDER MEDIA
 // ==========================================
 function resetPaginationAndRender() {
   visibleMediaLimit = ITEMS_PER_PAGE;
@@ -920,21 +929,35 @@ function resetPaginationAndRender() {
 }
 
 function updateFilterActiveIndicator() {
-  const statusEl = document.getElementById('filter-status');
-  const ratingEl = document.getElementById('filter-rating');
-  const statusVal = statusEl ? statusEl.value : 'all';
-  const ratingVal = ratingEl ? ratingEl.value : 'all';
+  const statusVal = document.getElementById('filter-status')?.value || 'all';
+  const rMin = document.getElementById('filter-rating-min')?.value || '';
+  const rMax = document.getElementById('filter-rating-max')?.value || '';
+  const unratedOnly = document.getElementById('filter-unrated-only')?.checked || false;
+  const uMin = document.getElementById('filter-units-min')?.value || '';
+  const uMax = document.getElementById('filter-units-max')?.value || '';
+
+  const isFiltered = statusVal !== 'all' || rMin !== '' || rMax !== '' || unratedOnly || uMin !== '' || uMax !== '';
   const dot = document.getElementById('filter-active-dot');
   if (dot) {
-    dot.style.display = (statusVal !== 'all' || ratingVal !== 'all') ? 'inline-block' : 'none';
+    dot.style.display = isFiltered ? 'inline-block' : 'none';
   }
 }
 
 window.resetLibraryFilters = function () {
   const statusEl = document.getElementById('filter-status');
-  const ratingEl = document.getElementById('filter-rating');
+  const rMinEl = document.getElementById('filter-rating-min');
+  const rMaxEl = document.getElementById('filter-rating-max');
+  const unratedEl = document.getElementById('filter-unrated-only');
+  const uMinEl = document.getElementById('filter-units-min');
+  const uMaxEl = document.getElementById('filter-units-max');
+
   if (statusEl) statusEl.value = 'all';
-  if (ratingEl) ratingEl.value = 'all';
+  if (rMinEl) { rMinEl.value = ''; rMinEl.disabled = false; }
+  if (rMaxEl) { rMaxEl.value = ''; rMaxEl.disabled = false; }
+  if (unratedEl) unratedEl.checked = false;
+  if (uMinEl) uMinEl.value = '';
+  if (uMaxEl) uMaxEl.value = '';
+
   resetPaginationAndRender();
 };
 
@@ -950,9 +973,13 @@ function updateSortUIControls() {
   if (ascBtn) ascBtn.classList.toggle('active', currentSortDir === 'asc');
 
   if (currentSortField === 'rating') {
-    if (descBtn) descBtn.textContent = '10 → 1';
-    if (ascBtn) ascBtn.textContent = '1 → 10';
-    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Rating (10→1)' : 'Rating (1→10)';
+    if (descBtn) descBtn.textContent = 'Best';
+    if (ascBtn) ascBtn.textContent = 'Worst';
+    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Rating (Best)' : 'Rating (Worst)';
+  } else if (currentSortField === 'units') {
+    if (descBtn) descBtn.textContent = 'Longest';
+    if (ascBtn) ascBtn.textContent = 'Shortest';
+    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Units (Longest)' : 'Units (Shortest)';
   } else if (currentSortField === 'title') {
     if (descBtn) descBtn.textContent = 'Z → A';
     if (ascBtn) ascBtn.textContent = 'A → Z';
@@ -991,11 +1018,27 @@ function setupFilterListeners() {
 
   const searchInput = document.getElementById('search-library');
   const statusSelect = document.getElementById('filter-status');
-  const ratingSelect = document.getElementById('filter-rating');
+  const rMinInput = document.getElementById('filter-rating-min');
+  const rMaxInput = document.getElementById('filter-rating-max');
+  const unratedCheck = document.getElementById('filter-unrated-only');
+  const uMinInput = document.getElementById('filter-units-min');
+  const uMaxInput = document.getElementById('filter-units-max');
 
   if (searchInput) searchInput.addEventListener('input', resetPaginationAndRender);
   if (statusSelect) statusSelect.addEventListener('change', resetPaginationAndRender);
-  if (ratingSelect) ratingSelect.addEventListener('change', resetPaginationAndRender);
+  if (rMinInput) rMinInput.addEventListener('input', resetPaginationAndRender);
+  if (rMaxInput) rMaxInput.addEventListener('input', resetPaginationAndRender);
+  if (uMinInput) uMinInput.addEventListener('input', resetPaginationAndRender);
+  if (uMaxInput) uMaxInput.addEventListener('input', resetPaginationAndRender);
+
+  if (unratedCheck) {
+    unratedCheck.addEventListener('change', () => {
+      const isChecked = unratedCheck.checked;
+      if (rMinInput) rMinInput.disabled = isChecked;
+      if (rMaxInput) rMaxInput.disabled = isChecked;
+      resetPaginationAndRender();
+    });
+  }
 }
 
 function normalizeImageUrl(url) {
@@ -1014,21 +1057,32 @@ function formatStatusDate(isoString) {
   });
 }
 
-function matchesRatingFilter(item, ratingFilter) {
-  if (ratingFilter === 'all') return true;
+function matchesCustomFilters(item) {
+  const rMinRaw = document.getElementById('filter-rating-min')?.value ?? '';
+  const rMaxRaw = document.getElementById('filter-rating-max')?.value ?? '';
+  const unratedOnly = document.getElementById('filter-unrated-only')?.checked ?? false;
+  const uMinRaw = document.getElementById('filter-units-min')?.value ?? '';
+  const uMaxRaw = document.getElementById('filter-units-max')?.value ?? '';
+
   const hasRating = item.rating !== null && item.rating !== undefined && item.rating !== '';
-  const r = Number(item.rating);
+  const rVal = hasRating ? Number(item.rating) : null;
 
-  if (ratingFilter === 'unrated') return !hasRating;
-  if (!hasRating || Number.isNaN(r)) return false;
+  // Rating Range Filter
+  if (unratedOnly) {
+    if (hasRating) return false;
+  } else if (rMinRaw !== '' || rMaxRaw !== '') {
+    if (!hasRating || Number.isNaN(rVal)) return false;
+    if (rMinRaw !== '' && rVal < parseFloat(rMinRaw)) return false;
+    if (rMaxRaw !== '' && rVal > parseFloat(rMaxRaw)) return false;
+  }
 
-  if (ratingFilter === 'under_5') return r < 5;
-  if (ratingFilter === '5_plus') return r >= 5;
-  if (ratingFilter === '6_plus') return r >= 6;
-  if (ratingFilter === '7_plus') return r >= 7;
-  if (ratingFilter === '8_plus') return r >= 8;
-  if (ratingFilter === '9_plus') return r >= 9;
-  if (ratingFilter === 'exact_10') return r === 10;
+  // Total Units (Ch/Eps) Range Filter
+  if (uMinRaw !== '' || uMaxRaw !== '') {
+    const totalUnits = getItemTotalUnitsValue(item);
+    if (uMinRaw !== '' && totalUnits < parseInt(uMinRaw, 10)) return false;
+    if (uMaxRaw !== '' && totalUnits > parseInt(uMaxRaw, 10)) return false;
+  }
+
   return true;
 }
 
@@ -1041,11 +1095,9 @@ function renderMediaGrid() {
 
   const searchEl = document.getElementById('search-library');
   const statusEl = document.getElementById('filter-status');
-  const ratingEl = document.getElementById('filter-rating');
 
   const query = searchEl ? searchEl.value.toLowerCase().trim() : '';
   const statusFilter = statusEl ? statusEl.value : 'all';
-  const ratingFilter = ratingEl ? ratingEl.value : 'all';
 
   grid.classList.toggle('list-view', libraryViewMode === 'list');
 
@@ -1057,12 +1109,12 @@ function renderMediaGrid() {
 
     const matchCat = currentCategory === 'all' || cats.includes(currentCategory);
     const matchStatus = statusFilter === 'all' || synced.key === statusFilter || tracks.some(t => t.status === statusFilter);
-    const matchRating = matchesRatingFilter(item, ratingFilter);
+    const matchRange = matchesCustomFilters(item);
     const matchTitle = (item.title || '').toLowerCase().includes(query);
     const matchSeason = seasons.some(s => (s.name || '').toLowerCase().includes(query));
     const matchQuery = !query || matchTitle || matchSeason;
 
-    return matchCat && matchStatus && matchRating && matchQuery;
+    return matchCat && matchStatus && matchRange && matchQuery;
   });
 
   // Sortir berdasarkan pilihan dan arah
@@ -1076,6 +1128,12 @@ function renderMediaGrid() {
 
       const diff = Number(a.rating) - Number(b.rating);
       return currentSortDir === 'desc' ? -diff : diff;
+    }
+
+    if (currentSortField === 'units') {
+      const uA = getItemTotalUnitsValue(a);
+      const uB = getItemTotalUnitsValue(b);
+      return currentSortDir === 'desc' ? (uB - uA) : (uA - uB);
     }
 
     if (currentSortField === 'title') {
