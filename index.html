@@ -467,20 +467,14 @@
             </div>
           </div>
 
-          <!-- Collapsible Groq API Key & Model Panel -->
+                   <!-- Collapsible Groq API Key Panel -->
           <div class="ai-settings-panel" id="ai-settings-panel" style="display: none;">
-            <label class="form-label" style="margin-bottom: 4px;">Groq API Key & Model</label>
+            <label class="form-label" style="margin-bottom: 4px;">Groq API Key</label>
             <div class="ai-settings-row">
               <input type="password" id="groq-api-key-input" class="form-input" placeholder="gsk_...">
-              <select id="groq-model-select" class="form-input" style="max-width: 190px;">
-                <option value="auto">Auto (Best Available)</option>
-                <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
-                <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
-                <option value="gemma2-9b-it">gemma2-9b-it</option>
-              </select>
               <button type="button" class="form-btn primary-submit" style="flex: 0 0 auto;" onclick="saveGroqApiKey()">Save</button>
             </div>
-            <p class="ai-settings-hint">Stored locally in your browser. "Auto" automatically selects an active chat model from your Groq account.</p>
+            <p class="ai-settings-hint">Full-auto mode: otomatis merotasi model aktif di akun Groq Anda jika salah satu terkena limit.</p>
           </div>
 
           <!-- Messages Feed -->
