@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=49">
+  <link rel="stylesheet" href="./assets/css/style.css?v=50">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -45,7 +45,6 @@
 
     <!-- PROFILE HEADER CARD -->
     <section class="profile-header-card" id="profile-header-card">
-      <!-- Banner Area (Auto-hidden if empty) -->
       <div class="profile-banner-wrap" id="profile-banner-wrap" style="display: none;">
         <img id="profile-banner-img" src="" alt="Profile Banner">
       </div>
@@ -77,7 +76,7 @@
         <!-- Dynamic Social Links Bar -->
         <div class="profile-socials-bar" id="profile-socials-bar" style="display: none;"></div>
 
-        <!-- Main View Switcher Tabs (Default: Notes first) -->
+        <!-- Main View Switcher Tabs -->
         <nav class="main-view-tabs">
           <button type="button" class="main-view-btn active" data-view="blog" onclick="switchMainView('blog')">
             <ion-icon name="chatbubble-ellipses-outline"></ion-icon>
@@ -122,11 +121,11 @@
     <!-- ========================================== -->
     <div id="view-library" class="view-section" style="display: none;">
 
-      <!-- COLLAPSIBLE STATS BAR -->
+      <!-- COLLAPSIBLE MODERN BENTO STATS -->
       <section class="stats-accordion-wrap">
         <div class="stats-accordion-header" onclick="toggleLibraryStats()">
           <div class="stats-summary-left">
-            <ion-icon name="bar-chart-outline"></ion-icon>
+            <ion-icon name="stats-chart-outline"></ion-icon>
             <span>Library Statistics</span>
             <span class="entries-pill" id="total-entries-label">0 Entries</span>
           </div>
@@ -137,48 +136,137 @@
         </div>
 
         <div class="collapsible-stats-panel" id="collapsible-stats-panel" style="display: none;">
-          <section class="stats-grid">
-            <div class="stat-card">
-              <span class="stat-label">TV Shows</span>
-              <span class="stat-value" id="stat-tv-eps">0</span>
-              <span class="stat-sub" id="stat-tv-count">0 Show</span>
+
+          <!-- GROUP 1: ALL CATEGORIES -->
+          <div class="stats-section-block">
+            <div class="stats-group-heading">
+              <ion-icon name="grid-outline"></ion-icon>
+              <span>Categories</span>
             </div>
-            <div class="stat-card">
-              <span class="stat-label">Movies</span>
-              <span class="stat-value" id="stat-movies-total">0</span>
-              <span class="stat-sub" id="stat-movies-done">0 Completed</span>
+            <div class="stats-bento-grid">
+              <div class="stat-bento-card">
+                <div class="stat-bento-top">
+                  <span class="stat-label">TV Shows</span>
+                  <ion-icon name="tv-outline"></ion-icon>
+                </div>
+                <span class="stat-value" id="stat-cat-tv">0</span>
+                <span class="stat-sub" id="stat-cat-tv-sub">0 Completed</span>
+              </div>
+
+              <div class="stat-bento-card">
+                <div class="stat-bento-top">
+                  <span class="stat-label">Movies</span>
+                  <ion-icon name="film-outline"></ion-icon>
+                </div>
+                <span class="stat-value" id="stat-cat-movie">0</span>
+                <span class="stat-sub" id="stat-cat-movie-sub">0 Completed</span>
+              </div>
+
+              <div class="stat-bento-card">
+                <div class="stat-bento-top">
+                  <span class="stat-label">Comics</span>
+                  <ion-icon name="book-outline"></ion-icon>
+                </div>
+                <span class="stat-value" id="stat-cat-comic">0</span>
+                <span class="stat-sub" id="stat-cat-comic-sub">0 Completed</span>
+              </div>
+
+              <div class="stat-bento-card">
+                <div class="stat-bento-top">
+                  <span class="stat-label">Novels</span>
+                  <ion-icon name="reader-outline"></ion-icon>
+                </div>
+                <span class="stat-value" id="stat-cat-novel">0</span>
+                <span class="stat-sub" id="stat-cat-novel-sub">0 Completed</span>
+              </div>
+
+              <div class="stat-bento-card">
+                <div class="stat-bento-top">
+                  <span class="stat-label">Games</span>
+                  <ion-icon name="game-controller-outline"></ion-icon>
+                </div>
+                <span class="stat-value" id="stat-cat-game">0</span>
+                <span class="stat-sub" id="stat-cat-game-sub">0 Completed</span>
+              </div>
+
+              <div class="stat-bento-card">
+                <div class="stat-bento-top">
+                  <span class="stat-label">Music</span>
+                  <ion-icon name="musical-notes-outline"></ion-icon>
+                </div>
+                <span class="stat-value" id="stat-cat-music">0</span>
+                <span class="stat-sub" id="stat-cat-music-sub">0 Completed</span>
+              </div>
             </div>
-            <div class="stat-card">
-              <span class="stat-label">Comics</span>
-              <span class="stat-value" id="stat-comic-ch">0</span>
-              <span class="stat-sub" id="stat-comic-count">0 Comic</span>
+          </div>
+
+          <!-- GROUP 2: ALL COUNT UNITS -->
+          <div class="stats-section-block">
+            <div class="stats-group-heading">
+              <ion-icon name="layers-outline"></ion-icon>
+              <span>Total Counts</span>
             </div>
-            <div class="stat-card">
-              <span class="stat-label">Novels</span>
-              <span class="stat-value" id="stat-novel-total">0</span>
-              <span class="stat-sub" id="stat-novel-done">0 Completed</span>
+            <div class="stats-units-grid">
+              <div class="stat-unit-pill-card">
+                <span class="unit-val" id="stat-unit-eps">0</span>
+                <span class="unit-lbl">Episodes</span>
+              </div>
+              <div class="stat-unit-pill-card">
+                <span class="unit-val" id="stat-unit-ch">0</span>
+                <span class="unit-lbl">Chapters</span>
+              </div>
+              <div class="stat-unit-pill-card">
+                <span class="unit-val" id="stat-unit-pages">0</span>
+                <span class="unit-lbl">Pages</span>
+              </div>
+              <div class="stat-unit-pill-card">
+                <span class="unit-val" id="stat-unit-vol">0</span>
+                <span class="unit-lbl">Volumes</span>
+              </div>
+              <div class="stat-unit-pill-card">
+                <span class="unit-val" id="stat-unit-movie">0</span>
+                <span class="unit-lbl">Movies</span>
+              </div>
+              <div class="stat-unit-pill-card">
+                <span class="unit-val" id="stat-unit-track">0</span>
+                <span class="unit-lbl">Tracks</span>
+              </div>
+              <div class="stat-unit-pill-card">
+                <span class="unit-val" id="stat-unit-item">0</span>
+                <span class="unit-lbl">Items</span>
+              </div>
             </div>
-            <div class="stat-card">
-              <span class="stat-label">Games</span>
-              <span class="stat-value" id="stat-game-total">0</span>
-              <span class="stat-sub" id="stat-game-done">0 Completed</span>
+          </div>
+
+          <!-- GROUP 3 (BOTTOM): TOTAL COMPLETED & MEAN RATING -->
+          <div class="stats-bottom-highlights">
+            <div class="stat-highlight-card">
+              <div class="highlight-icon-box">
+                <ion-icon name="checkmark-done-outline"></ion-icon>
+              </div>
+              <div class="highlight-info">
+                <span class="stat-label">Total Completed</span>
+                <div class="highlight-value-row">
+                  <span class="highlight-value" id="stat-completed-total">0</span>
+                  <span class="highlight-badge" id="stat-completion-rate">0% Rate</span>
+                </div>
+              </div>
             </div>
-            <div class="stat-card">
-              <span class="stat-label">Music</span>
-              <span class="stat-value" id="stat-music-total">0</span>
-              <span class="stat-sub" id="stat-music-tracks">0 Track</span>
+
+            <div class="stat-highlight-card">
+              <div class="highlight-icon-box">
+                <ion-icon name="star-outline"></ion-icon>
+              </div>
+              <div class="highlight-info">
+                <span class="stat-label">Mean Rating</span>
+                <div class="highlight-value-row">
+                  <span class="highlight-value" id="stat-avg-rating">0.0</span>
+                  <span class="highlight-badge" id="stat-rated-count">0 Rated</span>
+                </div>
+              </div>
             </div>
-            <div class="stat-card">
-              <span class="stat-label">Completed</span>
-              <span class="stat-value" id="stat-completed-total">0</span>
-              <span class="stat-sub" id="stat-completion-rate">0% Rate</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">Mean Rating</span>
-              <span class="stat-value" id="stat-avg-rating">0.0</span>
-              <span class="stat-sub" id="stat-rated-count">0 Rated</span>
-            </div>
-          </section>
+          </div>
+
         </div>
       </section>
 
@@ -195,7 +283,7 @@
         </ul>
       </nav>
 
-      <!-- SEARCH, POPOVER FILTER & SORT, ICON PER-PAGE, GRID/LIST SWITCHER -->
+      <!-- SEARCH, POPOVER FILTER, SORT, CUSTOM PAGES POPOVER & VIEW SWITCHER -->
       <section class="library-toolbar">
         <div class="search-box">
           <ion-icon name="search-outline"></ion-icon>
@@ -284,16 +372,39 @@
             </div>
           </div>
 
-          <!-- Compact Icon-Only Per Page Selector -->
-          <div class="toolbar-icon-select-wrap" title="Items per page">
-            <ion-icon name="layers-outline" class="toolbar-select-icon"></ion-icon>
-            <select id="items-per-page-select" class="toolbar-btn per-page-icon-select" onchange="onPerPageChange()" aria-label="Items per page">
-              <option value="8" selected>8 Pages</option>
-              <option value="16">16 Pages</option>
-              <option value="32">32 Pages</option>
-              <option value="64">64 Pages</option>
-              <option value="all">All</option>
-            </select>
+          <!-- Custom Icon-Only Per Page Popover -->
+          <div class="popover-wrapper" id="pages-popover-wrap">
+            <button type="button" class="toolbar-btn icon-only-btn" id="btn-pages-toggle" onclick="toggleToolbarPopover('pages')" title="Items per page" aria-label="Items per page">
+              <ion-icon name="layers-outline"></ion-icon>
+            </button>
+
+            <div class="toolbar-popover-menu compact-popover-menu" id="pages-popover-menu">
+              <div class="popover-header">
+                <span>Items Per Page</span>
+              </div>
+              <div class="page-option-list">
+                <button type="button" class="page-option-item active" data-limit="8" onclick="selectItemsPerPage('8')">
+                  <span>8 Pages</span>
+                  <ion-icon name="checkmark-outline"></ion-icon>
+                </button>
+                <button type="button" class="page-option-item" data-limit="16" onclick="selectItemsPerPage('16')">
+                  <span>16 Pages</span>
+                  <ion-icon name="checkmark-outline"></ion-icon>
+                </button>
+                <button type="button" class="page-option-item" data-limit="32" onclick="selectItemsPerPage('32')">
+                  <span>32 Pages</span>
+                  <ion-icon name="checkmark-outline"></ion-icon>
+                </button>
+                <button type="button" class="page-option-item" data-limit="64" onclick="selectItemsPerPage('64')">
+                  <span>64 Pages</span>
+                  <ion-icon name="checkmark-outline"></ion-icon>
+                </button>
+                <button type="button" class="page-option-item" data-limit="all" onclick="selectItemsPerPage('all')">
+                  <span>All</span>
+                  <ion-icon name="checkmark-outline"></ion-icon>
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Grid / List View Switcher -->
@@ -394,7 +505,7 @@
           <div id="media-tracks-editor" class="tracks-editor-list"></div>
         </div>
 
-        <!-- OPTIONAL ENTRIES / PARTS (OVA, SEASON, SEQUEL, ETC.) -->
+        <!-- OPTIONAL ADDITIONAL ENTRIES / PARTS (OVA, SEASON, SEQUEL, ETC.) -->
         <div class="form-group">
           <div class="social-editor-header">
             <label style="margin: 0;">Additional Entries / Parts (OVA, Season, Sequel)</label>
@@ -575,7 +686,7 @@
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 
   <!-- Main JS -->
-  <script src="./assets/js/script.js?v=49"></script>
+  <script src="./assets/js/script.js?v=50"></script>
 </body>
 
 </html>
