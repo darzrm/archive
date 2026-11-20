@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Archive</title>
   <link id="favicon-link" rel="shortcut icon" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" type="image/x-icon">
-  <link rel="stylesheet" href="./assets/css/style.css?v=45">
+  <link rel="stylesheet" href="./assets/css/style.css?v=46">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -126,6 +126,15 @@
 
           <div class="library-right-meta">
             <span class="stats-total-badge" id="total-entries-label">0 Entries</span>
+
+            <select id="items-per-page-select" class="per-page-select" onchange="onPerPageChange()" title="Items per page">
+              <option value="8" selected>8 / page</option>
+              <option value="16">16 / page</option>
+              <option value="32">32 / page</option>
+              <option value="64">64 / page</option>
+              <option value="all">All</option>
+            </select>
+
             <div class="view-mode-switch" title="Switch Layout">
               <button type="button" id="btn-view-grid" class="view-mode-btn active" onclick="setLibraryViewMode('grid')" title="Grid View">
                 <ion-icon name="grid-outline"></ion-icon>
@@ -270,11 +279,11 @@
                 </div>
 
                 <div class="popover-field">
-                  <label>Rating Range (1.0 – 10.0)</label>
+                  <label>Rating (1.0 – 10.0)</label>
                   <div class="range-input-row">
-                    <input type="number" id="filter-rating-min" class="control-input" step="0.1" min="1" max="10" placeholder="Min">
+                    <input type="number" id="filter-rating-min" class="range-num-input" step="0.1" min="1" max="10" placeholder="Min">
                     <span class="range-sep">–</span>
-                    <input type="number" id="filter-rating-max" class="control-input" step="0.1" min="1" max="10" placeholder="Max">
+                    <input type="number" id="filter-rating-max" class="range-num-input" step="0.1" min="1" max="10" placeholder="Max">
                   </div>
                   <label class="checkbox-inline-label">
                     <input type="checkbox" id="filter-unrated-only">
@@ -283,11 +292,11 @@
                 </div>
 
                 <div class="popover-field">
-                  <label>Total Units (Ch / Eps)</label>
+                  <label>Total Count (Eps / Ch)</label>
                   <div class="range-input-row">
-                    <input type="number" id="filter-units-min" class="control-input" min="0" placeholder="Min">
+                    <input type="number" id="filter-units-min" class="range-num-input" min="0" placeholder="Min">
                     <span class="range-sep">–</span>
-                    <input type="number" id="filter-units-max" class="control-input" min="0" placeholder="Max">
+                    <input type="number" id="filter-units-max" class="range-num-input" min="0" placeholder="Max">
                   </div>
                 </div>
 
@@ -307,7 +316,7 @@
                   <label>Sort By</label>
                   <select id="sort-library-field" class="control-select" onchange="onSortOptionChange()">
                     <option value="rating" selected>Rating</option>
-                    <option value="units">Total Units (Ch/Eps)</option>
+                    <option value="units">Total Count</option>
                     <option value="recent">Recently Updated</option>
                     <option value="title">Title</option>
                   </select>
@@ -471,7 +480,7 @@
         <input type="hidden" id="media-id">
 
         <div class="form-group">
-          <label>Auto-Fetch from API (Title, Cover & Units)</label>
+          <label>Auto-Fetch from API (Title, Cover & Count)</label>
           <div class="api-search-row">
             <select id="api-search-cat" class="form-input" style="width: 125px; flex-shrink: 0;">
               <option value="tv_show">TV Show</option>
@@ -624,7 +633,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./assets/js/script.js?v=45"></script>
+  <script src="./assets/js/script.js?v=46"></script>
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 </body>
