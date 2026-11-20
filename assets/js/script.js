@@ -11,7 +11,7 @@ const STORAGE_BUCKET = 'media-assets';
 const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 const ITEMS_PER_PAGE = 8;
 
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Application State
 let allMediaLogs = [];
@@ -76,13 +76,19 @@ function showToast(message, type = 'success', duration = 2600) {
 // 2. INITIALIZATION, SCROLL LISTENERS & VIEW TABS
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
-  setupScrollListeners();
-  setupOutsidePopoverCloser();
-  updateSortUIControls();
-  await checkAdminSession();
-  await fetchProfileSettings();
-  await Promise.all([fetchBlogPosts(), fetchMediaLogs()]);
-  setupFilterListeners();
+  try {
+    setupScrollListeners();
+    setupOutsidePopoverCloser();
+    setupFilterListeners();
+    updateSortUIControls();
+
+    await checkAdminSession();
+    await fetchProfileSettings();
+    await Promise.all([fetchBlogPosts(), fetchMediaLogs()]);
+  } catch (err) {
+    console.error('Initialization error:', err);
+    showToast('Init error: ' + err.message, 'error', 5000);
+  }
 });
 
 function setupScrollListeners() {
@@ -110,12 +116,16 @@ function setupOutsidePopoverCloser() {
     const sortWrap = document.getElementById('sort-popover-wrap');
 
     if (filterWrap && !filterWrap.contains(e.target)) {
-      document.getElementById('filter-popover-menu')?.classList.remove('open');
-      document.getElementById('btn-filter-toggle')?.classList.remove('active');
+      const fm = document.getElementById('filter-popover-menu');
+      const fb = document.getElementById('btn-filter-toggle');
+      if (fm) fm.classList.remove('open');
+      if (fb) fb.classList.remove('active');
     }
     if (sortWrap && !sortWrap.contains(e.target)) {
-      document.getElementById('sort-popover-menu')?.classList.remove('open');
-      document.getElementById('btn-sort-toggle')?.classList.remove('active');
+      const sm = document.getElementById('sort-popover-menu');
+      const sb = document.getElementById('btn-sort-toggle');
+      if (sm) sm.classList.remove('open');
+      if (sb) sb.classList.remove('active');
     }
   });
 }
@@ -127,17 +137,17 @@ window.toggleToolbarPopover = function (type) {
   const sortBtn = document.getElementById('btn-sort-toggle');
 
   if (type === 'filter') {
-    const willOpen = !filterMenu?.classList.contains('open');
-    sortMenu?.classList.remove('open');
-    sortBtn?.classList.remove('active');
-    filterMenu?.classList.toggle('open', willOpen);
-    filterBtn?.classList.toggle('active', willOpen);
+    const willOpen = filterMenu ? !filterMenu.classList.contains('open') : false;
+    if (sortMenu) sortMenu.classList.remove('open');
+    if (sortBtn) sortBtn.classList.remove('active');
+    if (filterMenu) filterMenu.classList.toggle('open', willOpen);
+    if (filterBtn) filterBtn.classList.toggle('active', willOpen);
   } else {
-    const willOpen = !sortMenu?.classList.contains('open');
-    filterMenu?.classList.remove('open');
-    filterBtn?.classList.remove('active');
-    sortMenu?.classList.toggle('open', willOpen);
-    sortBtn?.classList.toggle('active', willOpen);
+    const willOpen = sortMenu ? !sortMenu.classList.contains('open') : false;
+    if (filterMenu) filterMenu.classList.remove('open');
+    if (filterBtn) filterBtn.classList.remove('active');
+    if (sortMenu) sortMenu.classList.toggle('open', willOpen);
+    if (sortBtn) sortBtn.classList.toggle('active', willOpen);
   }
 };
 
@@ -230,8 +240,10 @@ window.toggleLibraryPrivacy = async function () {
 
 window.setLibraryViewMode = function (mode) {
   libraryViewMode = mode;
-  document.getElementById('btn-view-grid')?.classList.toggle('active', mode === 'grid');
-  document.getElementById('btn-view-list')?.classList.toggle('active', mode === 'list');
+  const gridBtn = document.getElementById('btn-view-grid');
+  const listBtn = document.getElementById('btn-view-list');
+  if (gridBtn) gridBtn.classList.toggle('active', mode === 'grid');
+  if (listBtn) listBtn.classList.toggle('active', mode === 'list');
   renderMediaGrid();
 };
 
@@ -267,7 +279,6 @@ function updateAdminActionButtons() {
     return;
   }
 
-  // Tombol Library Public/Private selalu tampil di header tab saat Admin login
   if (privacyBtn) {
     privacyBtn.style.display = 'inline-flex';
     const isPriv = Boolean(currentProfile.is_library_private);
@@ -333,21 +344,24 @@ window.closeLoginModal = function () {
   document.getElementById('login-modal').classList.remove('active');
 };
 
-document.getElementById('admin-login-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const email = document.getElementById('login-email').value;
-  const password = document.getElementById('login-password').value;
+const loginForm = document.getElementById('admin-login-form');
+if (loginForm) {
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
 
-  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-  if (error) {
-    showToast(error.message, 'error');
-  } else {
-    isAdminLoggedIn = true;
-    closeLoginModal();
-    updateAdminUI();
-    showToast('Admin login successful', 'success');
-  }
-});
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      isAdminLoggedIn = true;
+      closeLoginModal();
+      updateAdminUI();
+      showToast('Admin login successful', 'success');
+    }
+  });
+}
 
 // ==========================================
 // 2B. IMAGE COMPRESSION & STORAGE UPLOAD/CLEANUP
@@ -461,6 +475,10 @@ async function fetchProfileSettings() {
     .select('*')
     .eq('id', 1)
     .single();
+
+  if (error) {
+    console.warn('Profile fetch warning:', error.message);
+  }
 
   if (!error && data) {
     currentProfile = {
@@ -600,7 +618,7 @@ window.clearBannerInput = function () {
 };
 
 window.handleBannerImageUpload = async function (event) {
-  const file = event.target.files?.[0];
+  const file = event.target.files ? event.target.files[0] : null;
   event.target.value = '';
   if (!file) return;
 
@@ -617,7 +635,7 @@ window.handleBannerImageUpload = async function (event) {
 };
 
 window.handleProfileImageUpload = async function (event) {
-  const file = event.target.files?.[0];
+  const file = event.target.files ? event.target.files[0] : null;
   event.target.value = '';
   if (!file) return;
 
@@ -633,55 +651,60 @@ window.handleProfileImageUpload = async function (event) {
   }
 };
 
-document.getElementById('profile-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
+const profileForm = document.getElementById('profile-form');
+if (profileForm) {
+  profileForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
 
-  const oldAvatar = currentProfile.avatar_url;
-  const oldBanner = currentProfile.banner_url;
-  const newAvatar = document.getElementById('edit-profile-avatar').value.trim();
-  const newBanner = document.getElementById('edit-profile-banner').value.trim();
+    const oldAvatar = currentProfile.avatar_url;
+    const oldBanner = currentProfile.banner_url;
+    const newAvatar = document.getElementById('edit-profile-avatar').value.trim();
+    const newBanner = document.getElementById('edit-profile-banner').value.trim();
 
-  const socialRows = document.querySelectorAll('#social-links-editor .social-edit-row');
-  const collectedLinks = [];
-  socialRows.forEach(row => {
-    const label = row.querySelector('.social-label-input')?.value.trim() || '';
-    const url = row.querySelector('.social-url-input')?.value.trim() || '';
-    if (url) {
-      collectedLinks.push({ label, url });
+    const socialRows = document.querySelectorAll('#social-links-editor .social-edit-row');
+    const collectedLinks = [];
+    socialRows.forEach(row => {
+      const labelEl = row.querySelector('.social-label-input');
+      const urlEl = row.querySelector('.social-url-input');
+      const label = labelEl ? labelEl.value.trim() : '';
+      const url = urlEl ? urlEl.value.trim() : '';
+      if (url) {
+        collectedLinks.push({ label, url });
+      }
+    });
+
+    const updatedProfile = {
+      id: 1,
+      name: document.getElementById('edit-profile-name').value.trim(),
+      bio: document.getElementById('edit-profile-bio').value.trim(),
+      avatar_url: newAvatar,
+      banner_url: newBanner,
+      social_links: collectedLinks,
+      is_library_private: Boolean(currentProfile.is_library_private),
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabaseClient
+      .from('profile_settings')
+      .upsert([updatedProfile]);
+
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      await cleanupPendingUploads([newAvatar, newBanner]);
+      if (oldAvatar && oldAvatar !== newAvatar) {
+        await deleteOldStorageFile(oldAvatar);
+      }
+      if (oldBanner && oldBanner !== newBanner) {
+        await deleteOldStorageFile(oldBanner);
+      }
+      currentProfile = updatedProfile;
+      applyProfileToUI();
+      document.getElementById('profile-modal').classList.remove('active');
+      showToast('Profile updated', 'success');
     }
   });
-
-  const updatedProfile = {
-    id: 1,
-    name: document.getElementById('edit-profile-name').value.trim(),
-    bio: document.getElementById('edit-profile-bio').value.trim(),
-    avatar_url: newAvatar,
-    banner_url: newBanner,
-    social_links: collectedLinks,
-    is_library_private: Boolean(currentProfile.is_library_private),
-    updated_at: new Date().toISOString()
-  };
-
-  const { error } = await supabaseClient
-    .from('profile_settings')
-    .upsert([updatedProfile]);
-
-  if (error) {
-    showToast(error.message, 'error');
-  } else {
-    await cleanupPendingUploads([newAvatar, newBanner]);
-    if (oldAvatar && oldAvatar !== newAvatar) {
-      await deleteOldStorageFile(oldAvatar);
-    }
-    if (oldBanner && oldBanner !== newBanner) {
-      await deleteOldStorageFile(oldBanner);
-    }
-    currentProfile = updatedProfile;
-    applyProfileToUI();
-    document.getElementById('profile-modal').classList.remove('active');
-    showToast('Profile updated', 'success');
-  }
-});
+}
 
 // ==========================================
 // 3. MULTI-CATEGORY, MULTI-TRACK & SMART STATUS HELPERS
@@ -805,7 +828,8 @@ async function fetchMediaLogs() {
     .order('updated_at', { ascending: false });
 
   if (error) {
-    document.getElementById('media-grid').innerHTML = `<p class="empty-state">Failed to load data: ${error.message}</p>`;
+    const grid = document.getElementById('media-grid');
+    if (grid) grid.innerHTML = `<p class="empty-state">Failed to load data: ${escapeHtml(error.message)}</p>`;
     return;
   }
 
@@ -896,8 +920,10 @@ function resetPaginationAndRender() {
 }
 
 function updateFilterActiveIndicator() {
-  const statusVal = document.getElementById('filter-status')?.value || 'all';
-  const ratingVal = document.getElementById('filter-rating')?.value || 'all';
+  const statusEl = document.getElementById('filter-status');
+  const ratingEl = document.getElementById('filter-rating');
+  const statusVal = statusEl ? statusEl.value : 'all';
+  const ratingVal = ratingEl ? ratingEl.value : 'all';
   const dot = document.getElementById('filter-active-dot');
   if (dot) {
     dot.style.display = (statusVal !== 'all' || ratingVal !== 'all') ? 'inline-block' : 'none';
@@ -920,8 +946,8 @@ function updateSortUIControls() {
   const ascBtn = document.getElementById('btn-sort-asc');
   const labelEl = document.getElementById('sort-btn-label');
 
-  descBtn?.classList.toggle('active', currentSortDir === 'desc');
-  ascBtn?.classList.toggle('active', currentSortDir === 'asc');
+  if (descBtn) descBtn.classList.toggle('active', currentSortDir === 'desc');
+  if (ascBtn) ascBtn.classList.toggle('active', currentSortDir === 'asc');
 
   if (currentSortField === 'rating') {
     if (descBtn) descBtn.textContent = '10 → 1';
@@ -939,9 +965,9 @@ function updateSortUIControls() {
 }
 
 window.onSortOptionChange = function () {
-  const fieldVal = document.getElementById('sort-library-field')?.value || 'rating';
+  const fieldEl = document.getElementById('sort-library-field');
+  const fieldVal = fieldEl ? fieldEl.value : 'rating';
   currentSortField = fieldVal;
-  // Default natural direction saat ganti field: Title -> A-Z (asc), Rating/Updated -> desc
   currentSortDir = fieldVal === 'title' ? 'asc' : 'desc';
   updateSortUIControls();
   resetPaginationAndRender();
@@ -963,9 +989,13 @@ function setupFilterListeners() {
     });
   });
 
-  document.getElementById('search-library').addEventListener('input', resetPaginationAndRender);
-  document.getElementById('filter-status').addEventListener('change', resetPaginationAndRender);
-  document.getElementById('filter-rating').addEventListener('change', resetPaginationAndRender);
+  const searchInput = document.getElementById('search-library');
+  const statusSelect = document.getElementById('filter-status');
+  const ratingSelect = document.getElementById('filter-rating');
+
+  if (searchInput) searchInput.addEventListener('input', resetPaginationAndRender);
+  if (statusSelect) statusSelect.addEventListener('change', resetPaginationAndRender);
+  if (ratingSelect) ratingSelect.addEventListener('change', resetPaginationAndRender);
 }
 
 function normalizeImageUrl(url) {
@@ -1004,12 +1034,18 @@ function matchesRatingFilter(item, ratingFilter) {
 
 function renderMediaGrid() {
   const grid = document.getElementById('media-grid');
+  if (!grid) return;
+
   const loadMoreWrap = document.getElementById('load-more-wrap');
   const loadMoreText = document.getElementById('load-more-text');
 
-  const query = document.getElementById('search-library').value.toLowerCase().trim();
-  const statusFilter = document.getElementById('filter-status').value;
-  const ratingFilter = document.getElementById('filter-rating').value;
+  const searchEl = document.getElementById('search-library');
+  const statusEl = document.getElementById('filter-status');
+  const ratingEl = document.getElementById('filter-rating');
+
+  const query = searchEl ? searchEl.value.toLowerCase().trim() : '';
+  const statusFilter = statusEl ? statusEl.value : 'all';
+  const ratingFilter = ratingEl ? ratingEl.value : 'all';
 
   grid.classList.toggle('list-view', libraryViewMode === 'list');
 
@@ -1022,19 +1058,18 @@ function renderMediaGrid() {
     const matchCat = currentCategory === 'all' || cats.includes(currentCategory);
     const matchStatus = statusFilter === 'all' || synced.key === statusFilter || tracks.some(t => t.status === statusFilter);
     const matchRating = matchesRatingFilter(item, ratingFilter);
-    const matchTitle = item.title.toLowerCase().includes(query);
+    const matchTitle = (item.title || '').toLowerCase().includes(query);
     const matchSeason = seasons.some(s => (s.name || '').toLowerCase().includes(query));
     const matchQuery = !query || matchTitle || matchSeason;
 
     return matchCat && matchStatus && matchRating && matchQuery;
   });
 
-  // Sortir berdasarkan pilihan dan arah (10->1 / 1->10, A->Z / Z->A, Newest / Oldest)
+  // Sortir berdasarkan pilihan dan arah
   filtered.sort((a, b) => {
     if (currentSortField === 'rating') {
       const aHas = a.rating !== null && a.rating !== undefined && a.rating !== '';
       const bHas = b.rating !== null && b.rating !== undefined && b.rating !== '';
-      // Item tanpa rating selalu di taruh paling bawah agar rapi
       if (!aHas && !bHas) return 0;
       if (!aHas) return 1;
       if (!bHas) return -1;
@@ -1048,7 +1083,6 @@ function renderMediaGrid() {
       return currentSortDir === 'asc' ? cmp : -cmp;
     }
 
-    // Recently Updated
     const timeA = new Date(a.updated_at || a.created_at || 0).getTime();
     const timeB = new Date(b.updated_at || b.created_at || 0).getTime();
     return currentSortDir === 'desc' ? (timeB - timeA) : (timeA - timeB);
@@ -1187,7 +1221,7 @@ function renderMediaGrid() {
 }
 
 // ==========================================
-// 4B. MEDIA DETAIL MODAL (VIEW TRACKS & ALL-IN-ONE SEASONS/OVA)
+// 4B. MEDIA DETAIL MODAL
 // ==========================================
 window.openMediaDetailModal = function (id) {
   const item = allMediaLogs.find(m => String(m.id) === String(id));
@@ -1284,17 +1318,17 @@ window.closeMediaDetailModal = function () {
 };
 
 // ==========================================
-// 5. ADD / EDIT MODAL (MULTI-TRACK, SEASONS/OVA & MULTI-API)
+// 5. ADD / EDIT MODAL
 // ==========================================
 window.addMediaTrackRow = function (track = null) {
   const container = document.getElementById('media-tracks-editor');
   if (!container) return;
 
-  const cat = track?.category || 'tv_show';
-  const status = track?.status || 'completed';
-  const progress = track?.progress ?? 0;
-  const total = track?.total_units ?? '';
-  const unit = track?.unit_label || DEFAULT_UNITS_BY_CAT[cat] || 'eps';
+  const cat = (track && track.category) ? track.category : 'tv_show';
+  const status = (track && track.status) ? track.status : 'completed';
+  const progress = (track && track.progress !== undefined) ? track.progress : 0;
+  const total = (track && track.total_units !== undefined) ? track.total_units : '';
+  const unit = (track && track.unit_label) ? track.unit_label : (DEFAULT_UNITS_BY_CAT[cat] || 'eps');
 
   const card = document.createElement('div');
   card.className = 'track-edit-card';
@@ -1344,12 +1378,13 @@ window.removeMediaTrackRow = function (btn) {
     showToast('At least 1 category track is required', 'info');
     return;
   }
-  btn.closest('.track-edit-card')?.remove();
+  const card = btn.closest('.track-edit-card');
+  if (card) card.remove();
 };
 
 window.onTrackCategoryChange = function (selectEl) {
   const card = selectEl.closest('.track-edit-card');
-  const unitSelect = card?.querySelector('.track-unit-select');
+  const unitSelect = card ? card.querySelector('.track-unit-select') : null;
   if (unitSelect && DEFAULT_UNITS_BY_CAT[selectEl.value]) {
     unitSelect.value = DEFAULT_UNITS_BY_CAT[selectEl.value];
   }
@@ -1357,9 +1392,13 @@ window.onTrackCategoryChange = function (selectEl) {
 
 window.onTrackStatusOrTotalChange = function (el) {
   const card = el.closest('.track-edit-card');
-  const status = card?.querySelector('.track-status-select')?.value;
-  const totalVal = parseInt(card?.querySelector('.track-total-input')?.value, 10);
-  const progInput = card?.querySelector('.track-progress-input');
+  if (!card) return;
+  const statusEl = card.querySelector('.track-status-select');
+  const totalEl = card.querySelector('.track-total-input');
+  const progInput = card.querySelector('.track-progress-input');
+
+  const status = statusEl ? statusEl.value : '';
+  const totalVal = totalEl ? parseInt(totalEl.value, 10) : NaN;
 
   if (status === 'completed' && totalVal > 0 && progInput) {
     progInput.value = totalVal;
@@ -1368,11 +1407,13 @@ window.onTrackStatusOrTotalChange = function (el) {
 
 window.stepTrackProgress = function (btn) {
   const card = btn.closest('.track-edit-card');
-  const progInput = card?.querySelector('.track-progress-input');
-  const totalVal = parseInt(card?.querySelector('.track-total-input')?.value, 10);
-  const statusSelect = card?.querySelector('.track-status-select');
+  if (!card) return;
+  const progInput = card.querySelector('.track-progress-input');
+  const totalEl = card.querySelector('.track-total-input');
+  const statusSelect = card.querySelector('.track-status-select');
 
   if (!progInput) return;
+  const totalVal = totalEl ? parseInt(totalEl.value, 10) : NaN;
   const nextVal = (parseInt(progInput.value, 10) || 0) + 1;
   progInput.value = nextVal;
 
@@ -1385,11 +1426,11 @@ window.addSeasonItemRow = function (season = null) {
   const container = document.getElementById('media-seasons-editor');
   if (!container) return;
 
-  const name = season?.name || '';
-  const status = season?.status || 'completed';
-  const progress = season?.progress ?? 0;
-  const total = season?.total_units ?? '';
-  const rating = season?.rating ?? '';
+  const name = (season && season.name) ? season.name : '';
+  const status = (season && season.status) ? season.status : 'completed';
+  const progress = (season && season.progress !== undefined) ? season.progress : 0;
+  const total = (season && season.total_units !== undefined) ? season.total_units : '';
+  const rating = (season && season.rating !== undefined) ? season.rating : '';
 
   const card = document.createElement('div');
   card.className = 'season-edit-card';
@@ -1462,7 +1503,7 @@ window.openEditModal = function (id) {
     const tracks = getItemTracks(item);
     tracks.forEach(t => addMediaTrackRow(t));
     const apiCatSelect = document.getElementById('api-search-cat');
-    if (apiCatSelect) apiCatSelect.value = tracks[0]?.category || 'tv_show';
+    if (apiCatSelect && tracks[0]) apiCatSelect.value = tracks[0].category || 'tv_show';
   }
 
   const seasonsEditor = document.getElementById('media-seasons-editor');
@@ -1480,7 +1521,7 @@ window.closeMediaModal = async function () {
 };
 
 window.handleMediaCoverUpload = async function (event) {
-  const file = event.target.files?.[0];
+  const file = event.target.files ? event.target.files[0] : null;
   event.target.value = '';
   if (!file) return;
 
@@ -1532,12 +1573,14 @@ async function fetchAniListMedia(query, isNovel = false) {
     body: JSON.stringify({ query: gql, variables: { search: query } })
   });
   const json = await res.json();
-  return (json.data?.Page?.media || []).map(m => {
+  const mediaList = (json.data && json.data.Page && json.data.Page.media) ? json.data.Page.media : [];
+  return mediaList.map(m => {
     const originMap = { JP: 'Manga', KR: 'Manhwa', CN: 'Manhua' };
     const label = isNovel ? 'Novel' : (originMap[m.countryOfOrigin] || 'Comic');
+    const coverImg = m.coverImage ? (m.coverImage.large || m.coverImage.medium || '') : '';
     return {
       title: m.title.english || m.title.romaji,
-      cover: normalizeImageUrl(m.coverImage?.large || m.coverImage?.medium || ''),
+      cover: normalizeImageUrl(coverImg),
       total: isNovel ? (m.volumes || m.chapters || null) : (m.chapters || null),
       unit: isNovel ? (m.volumes ? 'vol' : 'ch') : 'ch',
       meta: `${label} · ${isNovel ? (m.volumes || '?') + ' Volume' : (m.chapters || '?') + ' Chapter'}`
@@ -1574,7 +1617,7 @@ window.searchExternalAPI = async function () {
         const data = await res.json();
         return (data.data || []).map(a => ({
           title: a.title_english || a.title,
-          cover: normalizeImageUrl(a.images?.jpg?.large_image_url || a.images?.jpg?.image_url || a.images?.webp?.large_image_url || ''),
+          cover: normalizeImageUrl((a.images && a.images.jpg && (a.images.jpg.large_image_url || a.images.jpg.image_url)) || ''),
           total: a.episodes || null,
           unit: 'eps',
           meta: `Anime TV · ${a.episodes || '?'} Episode`
@@ -1586,10 +1629,10 @@ window.searchExternalAPI = async function () {
         return (data || []).slice(0, 5).map(entry => ({
           tvmazeId: entry.show.id,
           title: entry.show.name,
-          cover: normalizeImageUrl(entry.show.image?.original || entry.show.image?.medium || ''),
+          cover: normalizeImageUrl((entry.show.image && (entry.show.image.original || entry.show.image.medium)) || ''),
           total: null,
           unit: 'eps',
-          meta: `TV Show · ${entry.show.premiered?.slice(0, 4) || 'Show'}`
+          meta: `TV Show · ${entry.show.premiered ? entry.show.premiered.slice(0, 4) : 'Show'}`
         }));
       })(),
       (async () => {
@@ -1603,7 +1646,7 @@ window.searchExternalAPI = async function () {
           cover: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : '',
           total: null,
           unit: 'eps',
-          meta: `TV Show · ${t.first_air_date?.slice(0, 4) || 'TMDB'}`
+          meta: `TV Show · ${t.first_air_date ? t.first_air_date.slice(0, 4) : 'TMDB'}`
         }));
       })()
     ]);
@@ -1621,7 +1664,7 @@ window.searchExternalAPI = async function () {
         const data = await res.json();
         return (data.data || []).map(a => ({
           title: a.title_english || a.title,
-          cover: normalizeImageUrl(a.images?.jpg?.large_image_url || a.images?.jpg?.image_url || a.images?.webp?.large_image_url || ''),
+          cover: normalizeImageUrl((a.images && a.images.jpg && (a.images.jpg.large_image_url || a.images.jpg.image_url)) || ''),
           total: 1,
           unit: 'movie',
           meta: `Anime Movie · ${a.year || 'Film'}`
@@ -1635,7 +1678,7 @@ window.searchExternalAPI = async function () {
           cover: normalizeImageUrl(m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : ''),
           total: 1,
           unit: 'movie',
-          meta: `Movie · ${m.releaseDate?.slice(0, 4) || 'Film'}`
+          meta: `Movie · ${m.releaseDate ? m.releaseDate.slice(0, 4) : 'Film'}`
         }));
       })(),
       (async () => {
@@ -1648,7 +1691,7 @@ window.searchExternalAPI = async function () {
           cover: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : '',
           total: 1,
           unit: 'movie',
-          meta: `Movie · ${m.release_date?.slice(0, 4) || 'TMDB'}`
+          meta: `Movie · ${m.release_date ? m.release_date.slice(0, 4) : 'TMDB'}`
         }));
       })()
     ]);
@@ -1668,7 +1711,7 @@ window.searchExternalAPI = async function () {
           .filter(m => m.type !== 'Light Novel' && m.type !== 'Novel')
           .map(m => ({
             title: m.title_english || m.title,
-            cover: normalizeImageUrl(m.images?.jpg?.large_image_url || m.images?.jpg?.image_url || m.images?.webp?.large_image_url || ''),
+            cover: normalizeImageUrl((m.images && m.images.jpg && (m.images.jpg.large_image_url || m.images.jpg.image_url)) || ''),
             total: m.chapters || null,
             unit: 'ch',
             meta: `${m.type} · ${m.chapters || '?'} Chapter`
@@ -1705,7 +1748,7 @@ window.searchExternalAPI = async function () {
         const data = await res.json();
         return (data.data || []).map(ln => ({
           title: ln.title_english || ln.title,
-          cover: normalizeImageUrl(ln.images?.jpg?.large_image_url || ln.images?.jpg?.image_url || ln.images?.webp?.large_image_url || ''),
+          cover: normalizeImageUrl((ln.images && ln.images.jpg && (ln.images.jpg.large_image_url || ln.images.jpg.image_url)) || ''),
           total: ln.volumes || ln.chapters || null,
           unit: ln.volumes ? 'vol' : 'ch',
           meta: `Light Novel · ${ln.volumes || '?'} Volume`
@@ -1744,20 +1787,21 @@ window.searchExternalAPI = async function () {
           candidates.map(async c => {
             const ent = entities[c.id];
             if (!ent) return null;
-            const title = ent.labels?.en?.value || c.label;
-            const desc = ent.descriptions?.en?.value || 'Video Game';
+            const title = (ent.labels && ent.labels.en && ent.labels.en.value) || c.label;
+            const desc = (ent.descriptions && ent.descriptions.en && ent.descriptions.en.value) || 'Video Game';
             let cover = '';
-            const p18 = ent.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+            const p18 = ent.claims && ent.claims.P18 && ent.claims.P18[0] && ent.claims.P18[0].mainsnak && ent.claims.P18[0].mainsnak.datavalue && ent.claims.P18[0].mainsnak.datavalue.value;
             if (p18) cover = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(p18)}?width=500`;
-            const enWikiTitle = ent.sitelinks?.enwiki?.title;
+            const enWikiTitle = ent.sitelinks && ent.sitelinks.enwiki && ent.sitelinks.enwiki.title;
             if (!cover && enWikiTitle) {
               try {
                 const wpRes = await fetchWithTimeout(
                   `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(enWikiTitle)}&prop=pageimages&pithumbsize=500&format=json&origin=*`
                 );
                 const wpData = await wpRes.json();
-                const pageObj = Object.values(wpData.query?.pages || {})[0];
-                if (pageObj?.thumbnail?.source) cover = normalizeImageUrl(pageObj.thumbnail.source);
+                const pagesObj = (wpData.query && wpData.query.pages) ? wpData.query.pages : {};
+                const pageObj = Object.values(pagesObj)[0];
+                if (pageObj && pageObj.thumbnail && pageObj.thumbnail.source) cover = normalizeImageUrl(pageObj.thumbnail.source);
               } catch (_) {}
             }
             return { title, cover, total: 1, unit: 'item', meta: desc.charAt(0).toUpperCase() + desc.slice(1) };
@@ -1778,7 +1822,7 @@ window.searchExternalAPI = async function () {
         const data = await res.json();
         return (data.results || []).map(g => ({
           title: g.title,
-          cover: normalizeImageUrl(g.image?.url || ''),
+          cover: normalizeImageUrl(g.image ? g.image.url : ''),
           total: 1,
           unit: 'item',
           meta: `Visual Novel · ${g.released || ''}`
@@ -1794,7 +1838,7 @@ window.searchExternalAPI = async function () {
           cover: normalizeImageUrl(g.background_image || ''),
           total: 1,
           unit: 'item',
-          meta: `Game · ${g.released?.slice(0, 4) || ''}`
+          meta: `Game · ${g.released ? g.released.slice(0, 4) : ''}`
         }));
       })()
     ]);
@@ -1813,7 +1857,7 @@ window.searchExternalAPI = async function () {
         cover: normalizeImageUrl(m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : ''),
         total: m.trackCount || 1,
         unit: 'track',
-        meta: `Album · ${m.trackCount || '?'} Tracks · ${m.releaseDate?.slice(0, 4) || ''}`
+        meta: `Album · ${m.trackCount || '?'} Tracks · ${m.releaseDate ? m.releaseDate.slice(0, 4) : ''}`
       }));
       items = deduplicateResults(items);
     } catch (e) {
@@ -1852,7 +1896,10 @@ window.applyApiResult = async function (idx) {
   }
 
   const trackCards = Array.from(document.querySelectorAll('#media-tracks-editor .track-edit-card'));
-  let targetCard = trackCards.find(c => c.querySelector('.track-cat-select')?.value === searchedCat) || trackCards[0];
+  let targetCard = trackCards.find(c => {
+    const sel = c.querySelector('.track-cat-select');
+    return sel && sel.value === searchedCat;
+  }) || trackCards[0];
 
   if (targetCard) {
     targetCard.querySelector('.track-cat-select').value = searchedCat;
@@ -1889,109 +1936,112 @@ window.applyApiResult = async function (idx) {
 // ==========================================
 // 6. SUPABASE MEDIA CRUD + AUTO-CLEANUP
 // ==========================================
-document.getElementById('media-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
+const mediaForm = document.getElementById('media-form');
+if (mediaForm) {
+  mediaForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
 
-  const id = document.getElementById('media-id').value;
-  const existingItem = id ? allMediaLogs.find(m => String(m.id) === String(id)) : null;
-  const oldCover = existingItem ? existingItem.cover_url : null;
-  const newCover = normalizeImageUrl(document.getElementById('media-cover').value) || null;
+    const id = document.getElementById('media-id').value;
+    const existingItem = id ? allMediaLogs.find(m => String(m.id) === String(id)) : null;
+    const oldCover = existingItem ? existingItem.cover_url : null;
+    const newCover = normalizeImageUrl(document.getElementById('media-cover').value) || null;
 
-  const trackCards = document.querySelectorAll('#media-tracks-editor .track-edit-card');
-  const tracks = [];
-  trackCards.forEach(card => {
-    const cat = card.querySelector('.track-cat-select').value;
-    const status = card.querySelector('.track-status-select').value;
-    const totalRaw = card.querySelector('.track-total-input').value;
-    const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
-    let progressVal = parseInt(card.querySelector('.track-progress-input').value, 10) || 0;
-    const unitLabel = card.querySelector('.track-unit-select').value;
+    const trackCards = document.querySelectorAll('#media-tracks-editor .track-edit-card');
+    const tracks = [];
+    trackCards.forEach(card => {
+      const cat = card.querySelector('.track-cat-select').value;
+      const status = card.querySelector('.track-status-select').value;
+      const totalRaw = card.querySelector('.track-total-input').value;
+      const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
+      let progressVal = parseInt(card.querySelector('.track-progress-input').value, 10) || 0;
+      const unitLabel = card.querySelector('.track-unit-select').value;
 
-    if (status === 'completed' && totalUnits && totalUnits > 0) {
-      progressVal = totalUnits;
-    }
+      if (status === 'completed' && totalUnits && totalUnits > 0) {
+        progressVal = totalUnits;
+      }
 
-    tracks.push({
-      category: cat,
-      status,
-      progress: progressVal,
-      total_units: totalUnits,
-      unit_label: unitLabel
+      tracks.push({
+        category: cat,
+        status,
+        progress: progressVal,
+        total_units: totalUnits,
+        unit_label: unitLabel
+      });
     });
-  });
 
-  if (tracks.length === 0) {
-    showToast('Please add at least 1 category track', 'error');
-    return;
-  }
-
-  const seasonCards = document.querySelectorAll('#media-seasons-editor .season-edit-card');
-  const seasons = [];
-  seasonCards.forEach(card => {
-    const name = card.querySelector('.season-name-input').value.trim();
-    if (!name) return;
-    const status = card.querySelector('.season-status-select').value;
-    const totalRaw = card.querySelector('.season-total-input').value;
-    const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
-    let progressVal = parseInt(card.querySelector('.season-progress-input').value, 10) || 0;
-    const ratingRaw = card.querySelector('.season-rating-input').value;
-
-    if (status === 'completed' && totalUnits && totalUnits > 0) {
-      progressVal = totalUnits;
+    if (tracks.length === 0) {
+      showToast('Please add at least 1 category track', 'error');
+      return;
     }
 
-    seasons.push({
-      name,
-      status,
-      progress: progressVal,
-      total_units: totalUnits,
-      rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null
+    const seasonCards = document.querySelectorAll('#media-seasons-editor .season-edit-card');
+    const seasons = [];
+    seasonCards.forEach(card => {
+      const name = card.querySelector('.season-name-input').value.trim();
+      if (!name) return;
+      const status = card.querySelector('.season-status-select').value;
+      const totalRaw = card.querySelector('.season-total-input').value;
+      const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
+      let progressVal = parseInt(card.querySelector('.season-progress-input').value, 10) || 0;
+      const ratingRaw = card.querySelector('.season-rating-input').value;
+
+      if (status === 'completed' && totalUnits && totalUnits > 0) {
+        progressVal = totalUnits;
+      }
+
+      seasons.push({
+        name,
+        status,
+        progress: progressVal,
+        total_units: totalUnits,
+        rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null
+      });
     });
-  });
 
-  const categories = Array.from(new Set(tracks.map(t => t.category)));
-  const primaryTrack = tracks[0];
-  const syncedStatus = computeSyncedStatus(tracks);
+    const categories = Array.from(new Set(tracks.map(t => t.category)));
+    const primaryTrack = tracks[0];
+    const syncedStatus = computeSyncedStatus(tracks);
 
-  const ratingRaw = document.getElementById('media-rating').value;
-  const repeatVal = Math.max(0, parseInt(document.getElementById('media-repeat').value, 10) || 0);
+    const ratingRaw = document.getElementById('media-rating').value;
+    const repeatVal = Math.max(0, parseInt(document.getElementById('media-repeat').value, 10) || 0);
 
-  const payload = {
-    title: document.getElementById('media-title').value.trim(),
-    category: primaryTrack.category,
-    categories,
-    tracks,
-    seasons,
-    sub_category: null,
-    cover_url: newCover,
-    status: syncedStatus.key,
-    progress: primaryTrack.progress,
-    total_units: primaryTrack.total_units,
-    unit_label: primaryTrack.unit_label,
-    rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null,
-    repeat_count: repeatVal,
-    updated_at: new Date().toISOString()
-  };
+    const payload = {
+      title: document.getElementById('media-title').value.trim(),
+      category: primaryTrack.category,
+      categories,
+      tracks,
+      seasons,
+      sub_category: null,
+      cover_url: newCover,
+      status: syncedStatus.key,
+      progress: primaryTrack.progress,
+      total_units: primaryTrack.total_units,
+      unit_label: primaryTrack.unit_label,
+      rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null,
+      repeat_count: repeatVal,
+      updated_at: new Date().toISOString()
+    };
 
-  let error;
-  if (id) {
-    ({ error } = await supabaseClient.from('media_logs').update(payload).eq('id', id));
-  } else {
-    ({ error } = await supabaseClient.from('media_logs').insert([payload]));
-  }
-
-  if (error) {
-    showToast(error.message, 'error');
-  } else {
-    await cleanupPendingUploads([newCover]);
-    if (oldCover && oldCover !== newCover) {
-      await deleteOldStorageFile(oldCover);
+    let error;
+    if (id) {
+      ({ error } = await supabaseClient.from('media_logs').update(payload).eq('id', id));
+    } else {
+      ({ error } = await supabaseClient.from('media_logs').insert([payload]));
     }
-    document.getElementById('media-modal').classList.remove('active');
-    await fetchMediaLogs();
-    showToast(id ? 'Media entry updated' : 'Media entry added', 'success');
-  }
-});
+
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      await cleanupPendingUploads([newCover]);
+      if (oldCover && oldCover !== newCover) {
+        await deleteOldStorageFile(oldCover);
+      }
+      document.getElementById('media-modal').classList.remove('active');
+      await fetchMediaLogs();
+      showToast(id ? 'Media entry updated' : 'Media entry added', 'success');
+    }
+  });
+}
 
 window.deleteCurrentModalMedia = async function () {
   const id = document.getElementById('media-id').value;
@@ -2016,7 +2066,7 @@ window.deleteCurrentModalMedia = async function () {
       showToast(error.message, 'error');
     } else {
       await cleanupPendingUploads([]);
-      if (existingItem?.cover_url) {
+      if (existingItem && existingItem.cover_url) {
         await deleteOldStorageFile(existingItem.cover_url);
       }
       document.getElementById('media-modal').classList.remove('active');
@@ -2051,7 +2101,7 @@ function formatPostDateTime(createdIso, updatedIso) {
 
 function escapeHtml(text) {
   const div = document.createElement('div');
-  div.textContent = text;
+  div.textContent = text == null ? '' : String(text);
   return div.innerHTML;
 }
 
@@ -2101,7 +2151,7 @@ async function fetchBlogPosts() {
 
   if (error) {
     const listEl = document.getElementById('blog-feed-list');
-    if (listEl) listEl.innerHTML = `<p class="empty-state">Failed to load posts: ${error.message}</p>`;
+    if (listEl) listEl.innerHTML = `<p class="empty-state">Failed to load posts: ${escapeHtml(error.message)}</p>`;
     return;
   }
 
@@ -2198,7 +2248,7 @@ window.clearPostImageInput = function () {
 };
 
 window.handlePostImageUpload = async function (event) {
-  const file = event.target.files?.[0];
+  const file = event.target.files ? event.target.files[0] : null;
   event.target.value = '';
   if (!file) return;
 
@@ -2214,44 +2264,47 @@ window.handlePostImageUpload = async function (event) {
   }
 };
 
-document.getElementById('post-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
+const postForm = document.getElementById('post-form');
+if (postForm) {
+  postForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
 
-  const id = document.getElementById('post-id').value;
-  const existingPost = id ? allBlogPosts.find(p => String(p.id) === String(id)) : null;
-  const oldImage = existingPost ? existingPost.image_url : null;
-  const newImage = normalizeImageUrl(document.getElementById('post-image').value) || null;
-  const contentVal = document.getElementById('post-content').value.trim();
+    const id = document.getElementById('post-id').value;
+    const existingPost = id ? allBlogPosts.find(p => String(p.id) === String(id)) : null;
+    const oldImage = existingPost ? existingPost.image_url : null;
+    const newImage = normalizeImageUrl(document.getElementById('post-image').value) || null;
+    const contentVal = document.getElementById('post-content').value.trim();
 
-  if (!contentVal) return;
+    if (!contentVal) return;
 
-  const nowIso = new Date().toISOString();
-  const payload = {
-    content: contentVal,
-    image_url: newImage,
-    updated_at: nowIso
-  };
+    const nowIso = new Date().toISOString();
+    const payload = {
+      content: contentVal,
+      image_url: newImage,
+      updated_at: nowIso
+    };
 
-  let error;
-  if (id) {
-    ({ error } = await supabaseClient.from('blog_posts').update(payload).eq('id', id));
-  } else {
-    payload.created_at = nowIso;
-    ({ error } = await supabaseClient.from('blog_posts').insert([payload]));
-  }
-
-  if (error) {
-    showToast(error.message, 'error');
-  } else {
-    await cleanupPendingUploads([newImage]);
-    if (oldImage && oldImage !== newImage) {
-      await deleteOldStorageFile(oldImage);
+    let error;
+    if (id) {
+      ({ error } = await supabaseClient.from('blog_posts').update(payload).eq('id', id));
+    } else {
+      payload.created_at = nowIso;
+      ({ error } = await supabaseClient.from('blog_posts').insert([payload]));
     }
-    document.getElementById('post-modal').classList.remove('active');
-    await fetchBlogPosts();
-    showToast(id ? 'Post updated' : 'Post published', 'success');
-  }
-});
+
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      await cleanupPendingUploads([newImage]);
+      if (oldImage && oldImage !== newImage) {
+        await deleteOldStorageFile(oldImage);
+      }
+      document.getElementById('post-modal').classList.remove('active');
+      await fetchBlogPosts();
+      showToast(id ? 'Post updated' : 'Post published', 'success');
+    }
+  });
+}
 
 window.deleteBlogPost = async function (id) {
   const existingPost = allBlogPosts.find(p => String(p.id) === String(id));
@@ -2272,7 +2325,7 @@ window.deleteBlogPost = async function (id) {
     if (error) {
       showToast(error.message, 'error');
     } else {
-      if (existingPost?.image_url) {
+      if (existingPost && existingPost.image_url) {
         await deleteOldStorageFile(existingPost.image_url);
       }
       await fetchBlogPosts();
