@@ -2597,18 +2597,22 @@ window.deleteBlogPost = async function (id) {
 
 
 // ==========================================
-// 8. ADMIN AI WORKSPACE (GROQ + AUTO MODEL FALLBACK)
+// 8. ADMIN AI WORKSPACE (GROQ FULL-AUTO ROTATION)
 // ==========================================
-const GROQ_MODEL_STORAGE = 'archive_groq_model';
+const GROQ_AUTO_POOL = [
+  'openai/gpt-oss-120b',
+  'openai/gpt-oss-20b',
+  'qwen/qwen3.8-27b',
+  'allam-2-7b'
+];
+
+let groqPoolCursor = 0;
 
 function initGroqKeyInput() {
-  const savedKey = localStorage.getItem(GROQ_KEY_STORAGE) || '';
-  const savedModel = localStorage.getItem(GROQ_MODEL_STORAGE) || 'auto';
+  const savedKey = (localStorage.getItem(GROQ_KEY_STORAGE) || '').trim();
   const inputEl = document.getElementById('groq-api-key-input');
-  const selectEl = document.getElementById('groq-model-select');
   if (inputEl && savedKey) inputEl.value = savedKey;
-  if (selectEl) selectEl.value = savedModel;
-  setElText('ai-model-subtitle', `Groq • ${savedModel === 'auto' ? 'Auto Model' : savedModel}`);
+  setElText('ai-model-subtitle', 'Groq • Full Auto');
 }
 
 window.toggleAiSettings = function () {
@@ -2620,20 +2624,17 @@ window.toggleAiSettings = function () {
 
 window.saveGroqApiKey = function () {
   const inputEl = document.getElementById('groq-api-key-input');
-  const selectEl = document.getElementById('groq-model-select');
   if (!inputEl) return;
 
-  const keyVal = inputEl.value.trim();
-  const modelVal = selectEl ? selectEl.value : 'auto';
+  const keyVal = inputEl.value.replace(/\s+/g, '').trim();
 
   if (!keyVal) {
     localStorage.removeItem(GROQ_KEY_STORAGE);
     showToast('Groq API key cleared', 'info');
   } else {
     localStorage.setItem(GROQ_KEY_STORAGE, keyVal);
-    localStorage.setItem(GROQ_MODEL_STORAGE, modelVal);
-    setElText('ai-model-subtitle', `Groq • ${modelVal === 'auto' ? 'Auto Model' : modelVal}`);
-    showToast('Groq settings saved', 'success');
+    setElText('ai-model-subtitle', 'Groq • Full Auto');
+    showToast('Groq API key saved', 'success');
   }
 
   const panel = document.getElementById('ai-settings-panel');
@@ -2735,35 +2736,33 @@ function buildArchiveSystemContext() {
   const totalMedia = allMediaLogs.length;
   const completedCount = allMediaLogs.filter(item => computeSyncedStatus(getAllItemUnits(item)).key === 'completed').length;
 
-  const mediaSummaryLines = allMediaLogs.slice(0, 120).map(item => {
+  // Dibatasi 50 entri terbaru/teratas & 15 catatan agar hemat token (tidak mudah kena limit 8K TPM)
+  const mediaSummaryLines = allMediaLogs.slice(0, 50).map(item => {
     const allUnits = getAllItemUnits(item);
     const cats = getItemCategories(item).map(c => CATEGORY_LABELS[c] || c).join('/');
     const synced = computeSyncedStatus(allUnits);
     const combined = computeCombinedProgress(allUnits, synced.key);
     const ratingStr = (item.rating !== null && item.rating !== undefined) ? `Rating: ${item.rating}/10` : 'Unrated';
-    return `- ${item.title} [${cats}] | Status: ${synced.label} (${combined.text}) | ${ratingStr}`;
+    return `- ${item.title} [${cats}] | ${synced.label} (${combined.text}) | ${ratingStr}`;
   }).join('\n');
 
-  const notesSummaryLines = allBlogPosts.slice(0, 40).map(post => {
+  const notesSummaryLines = allBlogPosts.slice(0, 15).map(post => {
     const dateStr = formatStatusDate(post.created_at);
-    const cleanText = (post.content || '').replace(/\s+/g, ' ').slice(0, 240);
+    const cleanText = (post.content || '').replace(/\s+/g, ' ').slice(0, 180);
     return `- (${dateStr}) ${cleanText}`;
   }).join('\n');
 
-  return `You are a helpful, intelligent personal AI assistant integrated into ${adminName}'s private Archive website.
-Always communicate strictly in natural, fluent English unless the user explicitly writes in another language.
-You can assist with everyday tasks, brainstorming, coding, planning, and answering questions about the user's Supabase archive database below.
+  return `You are a helpful personal AI assistant integrated into ${adminName}'s private Archive website.
+Reply in the same language as the user's message.
 
 === LIVE DATABASE SNAPSHOT ===
-Profile Name: ${adminName}
-Profile Bio: ${currentProfile.bio || 'N/A'}
-Total Library Entries: ${totalMedia} (${completedCount} Completed)
+Profile: ${adminName} | Total Media: ${totalMedia} (${completedCount} Completed)
 
-MEDIA LIBRARY ENTRIES:
-${mediaSummaryLines || '(No media entries yet)'}
+MEDIA LIBRARY (TOP 50):
+${mediaSummaryLines || '(Empty)'}
 
-RECENT PERSONAL NOTES:
-${notesSummaryLines || '(No personal notes yet)'}`;
+RECENT NOTES (TOP 15):
+${notesSummaryLines || '(Empty)'}`;
 }
 
 window.handleAiInputKeydown = function (e) {
@@ -2791,46 +2790,64 @@ window.handleAiFormSubmit = function (e) {
   sendAiMessage(text);
 };
 
-async function resolveActiveGroqModel(apiKey, preferredModel) {
-  if (preferredModel && preferredModel !== 'auto') {
-    return preferredModel;
+async function sendGroqFullAuto(apiKey, messagesPayload) {
+  // Rotasi round-robin mulai dari cursor saat ini agar beban TPM terbagi merata
+  const orderedModels = [];
+  for (let i = 0; i < GROQ_AUTO_POOL.length; i++) {
+    orderedModels.push(GROQ_AUTO_POOL[(groqPoolCursor + i) % GROQ_AUTO_POOL.length]);
+  }
+  groqPoolCursor = (groqPoolCursor + 1) % GROQ_AUTO_POOL.length;
+
+  let lastErrorMsg = 'All Groq models are currently busy or rate-limited.';
+
+  for (const modelId of orderedModels) {
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: modelId,
+          messages: messagesPayload,
+          temperature: 0.7,
+          max_tokens: 1500
+        })
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        setElText('ai-model-subtitle', `Groq • Auto (${modelId})`);
+        return data?.choices?.[0]?.message?.content || 'No response received.';
+      }
+
+      lastErrorMsg = data?.error?.message || `Error ${response.status}`;
+
+      // Jika API key salah total (401), langsung hentikan
+      if (response.status === 401) {
+        throw new Error(lastErrorMsg);
+      }
+
+      // Jika kena rate limit (429), model tidak ada, atau server sibuk (5xx), langsung pindah ke model berikutnya
+      continue;
+    } catch (networkErr) {
+      if (networkErr.message.toLowerCase().includes('invalid api key')) {
+        throw networkErr;
+      }
+      lastErrorMsg = networkErr.message;
+      continue;
+    }
   }
 
-  const res = await fetch('https://api.groq.com/openai/v1/models', {
-    headers: { 'Authorization': `Bearer ${apiKey}` }
-  });
-
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData?.error?.message || 'Invalid Groq API Key');
-  }
-
-  const data = await res.json();
-  const availableIds = (data.data || [])
-    .map(m => m.id)
-    .filter(id => !id.includes('whisper') && !id.includes('guard') && !id.includes('tts') && !id.includes('safeguard'));
-
-  const priorityOrder = [
-    'llama-3.3-70b-versatile',
-    'llama-3.1-8b-instant',
-    'openai/gpt-oss-120b',
-    'openai/gpt-oss-20b',
-    'qwen/qwen3-32b',
-    'gemma2-9b-it'
-  ];
-
-  for (const candidate of priorityOrder) {
-    if (availableIds.includes(candidate)) return candidate;
-  }
-
-  if (availableIds.length > 0) return availableIds[0];
-  throw new Error('No active text generation models available on your Groq account.');
+  throw new Error(lastErrorMsg);
 }
 
 async function sendAiMessage(userText) {
   if (!isAdminLoggedIn) return;
 
-  const apiKey = (localStorage.getItem(GROQ_KEY_STORAGE) || '').trim();
+  const apiKey = (localStorage.getItem(GROQ_KEY_STORAGE) || '').replace(/\s+/g, '').trim();
   if (!apiKey) {
     const panel = document.getElementById('ai-settings-panel');
     if (panel) panel.style.display = 'flex';
@@ -2854,39 +2871,18 @@ async function sendAiMessage(userText) {
   }]);
 
   try {
-    const preferredModel = localStorage.getItem(GROQ_MODEL_STORAGE) || 'auto';
-    const activeModel = await resolveActiveGroqModel(apiKey, preferredModel);
-    setElText('ai-model-subtitle', `Groq • ${activeModel}`);
-
-    const recentHistory = aiChatMessages.slice(-16).map(m => ({
+    // Kirim 8 pesan terakhir agar konteks nyambung namun tetap ringan di token
+    const recentHistory = aiChatMessages.slice(-8).map(m => ({
       role: m.role === 'user' ? 'user' : 'assistant',
       content: m.content
     }));
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: activeModel,
-        messages: [
-          { role: 'system', content: buildArchiveSystemContext() },
-          ...recentHistory
-        ],
-        temperature: 0.7,
-        max_tokens: 2048
-      })
-    });
+    const messagesPayload = [
+      { role: 'system', content: buildArchiveSystemContext() },
+      ...recentHistory
+    ];
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data?.error?.message || 'Groq API request failed');
-    }
-
-    const aiReplyText = data?.choices?.[0]?.message?.content || 'No response received.';
+    const aiReplyText = await sendGroqFullAuto(apiKey, messagesPayload);
     const replyIso = new Date().toISOString();
 
     aiChatMessages.push({
