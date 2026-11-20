@@ -10,28 +10,21 @@ const RAWG_API_KEY = '';
 const STORAGE_BUCKET = 'media-assets';
 const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-/*-----------------------------------*\
-  #GLOBAL STATE & CONSTANTS
-\*-----------------------------------*/
-
-let isAdmin = false;
-let currentPrimaryView = 'notes';
-let allEntries = [];
-let allNotes = [];
-
-// Library Filters & View State
-let selectedCategory = 'all';
-let selectedStatus = 'all';
-let ratingMin = null;
-let ratingMax = null;
-let rewatchedOnly = false;
-let sortField = 'updated';
-let sortDir = 'desc';
-let itemsPerPage = 24;
-let currentPageMultiplier = 1;
-let viewMode = 'grid';
+// Application State
+let allMediaLogs = [];
+let allBlogPosts = [];
+let lastApiResults = [];
+let pendingUploadedUrls = [];
+let currentCategory = 'all';
+let currentMainView = 'blog';
+let libraryViewMode = 'grid';
+let itemsPerPage = 8;
+let visibleMediaLimit = 8;
+let isStatsExpanded = false;
+let isAdminLoggedIn = false;
+let isProfileLoaded = false;
 
 // News State
 const DEFAULT_RSS_SOURCES = [
@@ -40,229 +33,418 @@ const DEFAULT_RSS_SOURCES = [
   { name: 'The Verge', topic: 'tech', url: 'https://www.theverge.com/rss/index.xml' },
   { name: 'IGN', topic: 'gaming', url: 'https://feeds.feedburner.com/ign/all' }
 ];
-let rssSources = JSON.parse(localStorage.getItem('archive_rss_sources')) || DEFAULT_RSS_SOURCES;
 let allNewsItems = [];
 let currentNewsTopic = 'all';
 let newsSearchQuery = '';
 
-let profileData = {
-  name: 'Personal Archive',
-  bio: 'Notes, movies, shows, comics, novels, games & music log.',
-  avatar: './assets/images/my-avatar.png',
-  banner: '',
-  socials: []
+// Sort State (Default: Rating Best)
+let currentSortField = 'rating';
+let currentSortDir = 'desc';
+
+let currentProfile = {
+  name: '',
+  bio: '',
+  avatar_url: '',
+  banner_url: '',
+  social_links: [],
+  is_library_private: false
 };
 
-const CATEGORY_LABELS = {
-  tv: 'TV Show',
-  movie: 'Movie',
-  comic: 'Comic',
-  novel: 'Novel',
-  game: 'Game',
-  music: 'Music'
-};
-
-const CATEGORY_UNITS = {
-  tv: 'eps',
-  movie: 'watched',
-  comic: 'ch',
-  novel: 'ch',
-  game: 'done',
-  music: 'tracks'
-};
-
-/*-----------------------------------*\
-  #UTILITIES & TOAST
-\*-----------------------------------*/
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+function setElText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
 }
 
-function showToast(message, isError = false) {
+// ==========================================
+// MINIMALIST TOAST NOTIFICATION
+// ==========================================
+function showToast(message, type = 'success', duration = 2600) {
   const container = document.getElementById('toast-container');
   if (!container) return;
 
+  const iconMap = {
+    success: 'checkmark-circle-outline',
+    error: 'alert-circle-outline',
+    info: 'information-circle-outline'
+  };
+
   const toast = document.createElement('div');
-  toast.className = `toast-item ${isError ? 'error' : ''}`;
+  toast.className = `toast-item ${type}`;
   toast.innerHTML = `
-    <ion-icon name="${isError ? 'alert-circle-outline' : 'checkmark-circle-outline'}"></ion-icon>
+    <ion-icon name="${iconMap[type] || iconMap.info}"></ion-icon>
     <span>${escapeHtml(message)}</span>
   `;
+
   container.appendChild(toast);
 
   setTimeout(() => {
     toast.classList.add('hide');
     setTimeout(() => toast.remove(), 240);
-  }, 2800);
+  }, duration);
 }
 
-function openModal(id) {
-  const el = document.getElementById(id);
-  if (el) el.classList.add('active');
-}
-
-function closeModal(id) {
-  const el = document.getElementById(id);
-  if (el) el.classList.remove('active');
-}
-
-function formatDateDisplay(dateStr) {
-  if (!dateStr) return '';
+// ==========================================
+// 2. INITIALIZATION, SCROLL LISTENERS & VIEW TABS
+// ==========================================
+document.addEventListener('DOMContentLoaded', async () => {
   try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  } catch (_) {
-    return dateStr;
+    setupScrollListeners();
+    setupOutsidePopoverCloser();
+    setupFilterListeners();
+    setupNewsListeners();
+    updateSortUIControls();
+
+    await checkAdminSession();
+    await fetchProfileSettings();
+    await Promise.all([fetchBlogPosts(), fetchMediaLogs()]);
+  } catch (err) {
+    console.error('Initialization error:', err);
+    showToast('Init error: ' + err.message, 'error', 5000);
   }
+});
+
+function setupScrollListeners() {
+  const stickyHeader = document.getElementById('sticky-mini-header');
+  const backToTopBtn = document.getElementById('btn-back-to-top');
+  const profileCard = document.getElementById('profile-header-card');
+
+  window.addEventListener('scroll', () => {
+    const scrollY = window.scrollY || document.documentElement.scrollTop;
+    const triggerHeight = profileCard ? (profileCard.offsetTop + profileCard.offsetHeight - 20) : 180;
+
+    if (stickyHeader) {
+      stickyHeader.classList.toggle('visible', scrollY > triggerHeight);
+    }
+
+    if (backToTopBtn) {
+      backToTopBtn.classList.toggle('visible', scrollY > 360);
+    }
+  }, { passive: true });
 }
 
-/*-----------------------------------*\
-  #STICKY MINI HEADER & SCROLL
-\*-----------------------------------*/
+function closeAllToolbarPopovers() {
+  const pairs = [
+    ['filter-popover-menu', 'btn-filter-toggle'],
+    ['sort-popover-menu', 'btn-sort-toggle'],
+    ['pages-popover-menu', 'btn-pages-toggle']
+  ];
+  pairs.forEach(([menuId, btnId]) => {
+    const m = document.getElementById(menuId);
+    const b = document.getElementById(btnId);
+    if (m) m.classList.remove('open');
+    if (b) b.classList.remove('active');
+  });
+}
 
-window.addEventListener('scroll', () => {
-  const scrollY = window.scrollY;
-  const miniHeader = document.getElementById('sticky-mini-header');
-  const backTopBtn = document.getElementById('back-to-top-btn');
+function setupOutsidePopoverCloser() {
+  document.addEventListener('click', (e) => {
+    const filterWrap = document.getElementById('filter-popover-wrap');
+    const sortWrap = document.getElementById('sort-popover-wrap');
+    const pagesWrap = document.getElementById('pages-popover-wrap');
 
-  if (miniHeader) {
-    miniHeader.classList.toggle('visible', scrollY > 190);
+    const insideFilter = filterWrap && filterWrap.contains(e.target);
+    const insideSort = sortWrap && sortWrap.contains(e.target);
+    const insidePages = pagesWrap && pagesWrap.contains(e.target);
+
+    if (!insideFilter && !insideSort && !insidePages) {
+      closeAllToolbarPopovers();
+    }
+  });
+}
+
+window.toggleToolbarPopover = function (type) {
+  const map = {
+    filter: ['filter-popover-menu', 'btn-filter-toggle'],
+    sort: ['sort-popover-menu', 'btn-sort-toggle'],
+    pages: ['pages-popover-menu', 'btn-pages-toggle']
+  };
+  const target = map[type];
+  if (!target) return;
+
+  const menuEl = document.getElementById(target[0]);
+  const btnEl = document.getElementById(target[1]);
+  const willOpen = menuEl ? !menuEl.classList.contains('open') : false;
+
+  closeAllToolbarPopovers();
+
+  if (willOpen && menuEl && btnEl) {
+    menuEl.style.left = '';
+    menuEl.style.right = '';
+    menuEl.classList.add('open');
+    btnEl.classList.add('active');
+
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const isMobileLayout = viewportWidth <= 680;
+    const rect = menuEl.getBoundingClientRect();
+    const btnRect = btnEl.getBoundingClientRect();
+
+    if (isMobileLayout) {
+      if (rect.right > viewportWidth - 14) {
+        const overflowRight = rect.right - (viewportWidth - 14);
+        const safeShift = Math.min(overflowRight, Math.max(0, btnRect.left - 14));
+        menuEl.style.left = `-${safeShift}px`;
+      }
+    } else {
+      if (rect.left < 14) {
+        const overflowLeft = 14 - rect.left;
+        menuEl.style.right = `-${overflowLeft}px`;
+      }
+    }
   }
-  if (backTopBtn) {
-    backTopBtn.classList.toggle('visible', scrollY > 360);
+};
+
+window.scrollToTopSmooth = function () {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.switchMainView = function (viewName) {
+  if (viewName === 'library' && currentProfile.is_library_private && !isAdminLoggedIn) {
+    viewName = 'blog';
   }
-});
 
-document.getElementById('sticky-scroll-top')?.addEventListener('click', () => {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-});
-
-document.getElementById('back-to-top-btn')?.addEventListener('click', () => {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-});
-
-/*-----------------------------------*\
-  #VIEW SWITCHING (NOTES / LIBRARY / NEWS)
-\*-----------------------------------*/
-
-function switchPrimaryView(view) {
-  currentPrimaryView = view;
+  currentMainView = viewName;
 
   document.querySelectorAll('.main-view-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.view === view);
+    btn.classList.toggle('active', btn.dataset.view === viewName);
   });
+
   document.querySelectorAll('.mini-tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.miniView === view);
+    btn.classList.toggle('active', btn.dataset.view === viewName);
   });
 
-  document.getElementById('notes-view').style.display = view === 'notes' ? 'block' : 'none';
-  document.getElementById('library-view').style.display = view === 'library' ? 'block' : 'none';
-  document.getElementById('news-view').style.display = view === 'news' ? 'block' : 'none';
+  const libView = document.getElementById('view-library');
+  const blogView = document.getElementById('view-blog');
+  const newsView = document.getElementById('view-news');
 
-  updateAdminUI();
+  if (libView) {
+    libView.classList.remove('active-view');
+    libView.style.display = 'none';
+  }
+  if (blogView) {
+    blogView.classList.remove('active-view');
+    blogView.style.display = 'none';
+  }
+  if (newsView) {
+    newsView.classList.remove('active-view');
+    newsView.style.display = 'none';
+  }
 
-  if (view === 'news' && allNewsItems.length === 0) {
+  const targetView = viewName === 'library' ? libView : (viewName === 'news' ? newsView : blogView);
+  if (targetView) {
+    targetView.style.display = 'block';
+    void targetView.offsetWidth;
+    targetView.classList.add('active-view');
+  }
+
+  if (viewName === 'news' && allNewsItems.length === 0) {
     fetchAllNews();
   }
+
+  updateAdminActionButtons();
+};
+
+function updateLibraryTabVisibility() {
+  const isPrivate = Boolean(currentProfile.is_library_private);
+  const canViewLibrary = !isPrivate || isAdminLoggedIn;
+
+  const mainLibBtn = document.getElementById('main-tab-library');
+  const miniLibBtn = document.getElementById('mini-tab-library');
+  const lockBadge = document.getElementById('library-private-lock');
+
+  if (mainLibBtn) mainLibBtn.style.display = canViewLibrary ? 'inline-flex' : 'none';
+  if (miniLibBtn) miniLibBtn.style.display = canViewLibrary ? 'inline-flex' : 'none';
+  if (lockBadge) lockBadge.style.display = (isPrivate && isAdminLoggedIn) ? 'inline-block' : 'none';
+
+  if (!canViewLibrary && currentMainView === 'library') {
+    switchMainView('blog');
+  }
 }
 
-document.querySelectorAll('.main-view-btn').forEach(btn => {
-  btn.addEventListener('click', () => switchPrimaryView(btn.dataset.view));
-});
+window.toggleLibraryPrivacy = async function () {
+  if (!isAdminLoggedIn) return;
 
-document.querySelectorAll('.mini-tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => switchPrimaryView(btn.dataset.miniView));
-});
+  const nextState = !currentProfile.is_library_private;
+  const { error } = await supabaseClient
+    .from('profile_settings')
+    .upsert([{
+      id: 1,
+      name: currentProfile.name,
+      bio: currentProfile.bio,
+      avatar_url: currentProfile.avatar_url,
+      banner_url: currentProfile.banner_url,
+      social_links: currentProfile.social_links,
+      is_library_private: nextState,
+      updated_at: new Date().toISOString()
+    }]);
 
-/*-----------------------------------*\
-  #ADMIN AUTHENTICATION
-\*-----------------------------------*/
-
-function updateAdminUI() {
-  const adminBtn = document.getElementById('admin-toggle-btn');
-  const editProfileBtn = document.getElementById('edit-profile-btn');
-  const newNoteBtn = document.getElementById('new-note-btn');
-  const exportBtn = document.getElementById('export-library-btn');
-  const addMediaBtn = document.getElementById('open-add-modal-btn');
-  const manageRssBtn = document.getElementById('manage-rss-btn');
-
-  if (adminBtn) {
-    adminBtn.innerHTML = isAdmin
-      ? '<ion-icon name="lock-open-outline"></ion-icon><span>Logout</span>'
-      : '<ion-icon name="lock-closed-outline"></ion-icon><span>Admin</span>';
+  if (error) {
+    showToast(error.message, 'error');
+    return;
   }
 
-  if (editProfileBtn) editProfileBtn.style.display = isAdmin ? 'inline-flex' : 'none';
-  if (newNoteBtn) newNoteBtn.style.display = (isAdmin && currentPrimaryView === 'notes') ? 'inline-flex' : 'none';
-  if (exportBtn) exportBtn.style.display = (isAdmin && currentPrimaryView === 'library') ? 'inline-flex' : 'none';
-  if (addMediaBtn) addMediaBtn.style.display = (isAdmin && currentPrimaryView === 'library') ? 'inline-flex' : 'none';
-  if (manageRssBtn) manageRssBtn.style.display = (isAdmin && currentPrimaryView === 'news') ? 'inline-flex' : 'none';
+  currentProfile.is_library_private = nextState;
+  updateLibraryTabVisibility();
+  updateAdminActionButtons();
+  showToast(nextState ? 'Library set to Private' : 'Library set to Public', 'info');
+};
 
-  renderNotesFeed();
+window.setLibraryViewMode = function (mode) {
+  libraryViewMode = mode;
+  const gridBtn = document.getElementById('btn-view-grid');
+  const listBtn = document.getElementById('btn-view-list');
+  if (gridBtn) gridBtn.classList.toggle('active', mode === 'grid');
+  if (listBtn) listBtn.classList.toggle('active', mode === 'list');
   renderMediaGrid();
+};
+
+window.selectItemsPerPage = function (val) {
+  if (val === 'all') {
+    itemsPerPage = Infinity;
+    visibleMediaLimit = Infinity;
+  } else {
+    itemsPerPage = parseInt(val, 10) || 8;
+    visibleMediaLimit = itemsPerPage;
+  }
+
+  document.querySelectorAll('#pages-popover-menu .page-option-item').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.limit === String(val));
+  });
+
+  closeAllToolbarPopovers();
+  renderMediaGrid();
+};
+
+window.loadMoreMedia = function () {
+  if (itemsPerPage === Infinity) {
+    visibleMediaLimit = Infinity;
+  } else {
+    visibleMediaLimit += itemsPerPage;
+  }
+  renderMediaGrid();
+};
+
+window.toggleLibraryStats = function () {
+  isStatsExpanded = !isStatsExpanded;
+  const panel = document.getElementById('collapsible-stats-panel');
+  const toggleBtn = document.getElementById('btn-toggle-stats');
+  const textEl = document.getElementById('stats-toggle-text');
+  const iconEl = document.getElementById('stats-chevron-icon');
+
+  if (panel) panel.style.display = isStatsExpanded ? 'flex' : 'none';
+  if (toggleBtn) toggleBtn.classList.toggle('active', isStatsExpanded);
+  if (textEl) textEl.textContent = isStatsExpanded ? 'Hide Stats' : 'Show Stats';
+  if (iconEl) iconEl.setAttribute('name', isStatsExpanded ? 'chevron-up-outline' : 'chevron-down-outline');
+};
+
+function updateAdminActionButtons() {
+  const addMediaBtn = document.getElementById('btn-add-media');
+  const addPostBtn = document.getElementById('btn-add-post');
+  const privacyBtn = document.getElementById('btn-toggle-library-privacy');
+  const privacyIcon = document.getElementById('library-privacy-icon');
+  const privacyText = document.getElementById('library-privacy-text');
+
+  if (!isAdminLoggedIn) {
+    if (addMediaBtn) addMediaBtn.style.display = 'none';
+    if (addPostBtn) addPostBtn.style.display = 'none';
+    if (privacyBtn) privacyBtn.style.display = 'none';
+    return;
+  }
+
+  const inLibrary = currentMainView === 'library';
+
+  if (privacyBtn) {
+    privacyBtn.style.display = inLibrary ? 'inline-flex' : 'none';
+    const isPriv = Boolean(currentProfile.is_library_private);
+    if (privacyIcon) privacyIcon.setAttribute('name', isPriv ? 'eye-off-outline' : 'eye-outline');
+    if (privacyText) privacyText.textContent = isPriv ? 'Private' : 'Public';
+  }
+
+  if (addMediaBtn) addMediaBtn.style.display = inLibrary ? 'inline-flex' : 'none';
+  if (addPostBtn) addPostBtn.style.display = currentMainView === 'blog' ? 'inline-flex' : 'none';
 }
 
-async function checkAuthSession() {
-  if (!sb) return;
-  const { data } = await sb.auth.getSession();
-  isAdmin = !!data?.session;
+async function checkAdminSession() {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  isAdminLoggedIn = !!session;
   updateAdminUI();
 }
 
-document.getElementById('admin-toggle-btn')?.addEventListener('click', async () => {
-  if (isAdmin) {
-    if (sb) await sb.auth.signOut();
-    isAdmin = false;
-    updateAdminUI();
-    showToast('Signed out from Admin mode');
+function updateAdminUI() {
+  const editProfileBtn = document.getElementById('btn-edit-profile');
+  const lockIcon = document.getElementById('admin-lock-icon');
+  const btnText = document.getElementById('admin-btn-text');
+
+  if (isAdminLoggedIn) {
+    if (editProfileBtn) editProfileBtn.style.display = 'inline-flex';
+    if (lockIcon) lockIcon.setAttribute('name', 'log-out-outline');
+    if (btnText) btnText.textContent = 'Logout';
   } else {
-    openModal('login-modal');
+    if (editProfileBtn) editProfileBtn.style.display = 'none';
+    if (lockIcon) lockIcon.setAttribute('name', 'lock-closed-outline');
+    if (btnText) btnText.textContent = 'Admin';
   }
-});
 
-document.getElementById('login-form')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!sb) return showToast('Supabase is not configured yet', true);
+  updateLibraryTabVisibility();
+  updateAdminActionButtons();
+  renderMediaGrid();
+  if (isProfileLoaded) renderBlogPosts();
+}
 
-  const email = document.getElementById('admin-email').value.trim();
-  const password = document.getElementById('admin-password').value;
-
-  const { error } = await sb.auth.signInWithPassword({ email, password });
-  if (error) {
-    showToast(error.message, true);
+window.handleAdminAuthClick = async function () {
+  if (isAdminLoggedIn) {
+    const confirm = await Swal.fire({
+      text: 'Exit Admin mode?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Logout',
+      cancelButtonText: 'Cancel',
+      background: '#1e1e1f',
+      color: '#fff'
+    });
+    if (confirm.isConfirmed) {
+      await supabaseClient.auth.signOut();
+      isAdminLoggedIn = false;
+      updateAdminUI();
+      showToast('Logged out from Admin mode', 'info');
+    }
   } else {
-    isAdmin = true;
-    closeModal('login-modal');
-    updateAdminUI();
-    showToast('Welcome back, Admin');
+    document.getElementById('login-modal').classList.add('active');
   }
-});
+};
 
-/*-----------------------------------*\
-  #IMAGE UPLOAD HELPER (SUPABASE STORAGE)
-\*-----------------------------------*/
+window.closeLoginModal = function () {
+  document.getElementById('login-modal').classList.remove('active');
+};
 
-async function compressAndUploadImage(file, folder = 'images') {
-  if (!sb) {
-    showToast('Configure Supabase first to upload files', true);
-    return null;
-  }
+const loginForm = document.getElementById('admin-login-form');
+if (loginForm) {
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
 
-  return new Promise((resolve) => {
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      isAdminLoggedIn = true;
+      closeLoginModal();
+      updateAdminUI();
+      showToast('Admin login successful', 'success');
+    }
+  });
+}
+
+// ==========================================
+// 2B. IMAGE COMPRESSION & STORAGE UPLOAD/CLEANUP
+// ==========================================
+function compressImageFile(file, maxWidth = 800, quality = 0.82) {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
-      img.onload = async () => {
+      img.onload = () => {
         const canvas = document.createElement('canvas');
-        const maxWidth = 1280;
         let width = img.width;
         let height = img.height;
 
@@ -276,542 +458,861 @@ async function compressAndUploadImage(file, folder = 'images') {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
 
-        canvas.toBlob(async (blob) => {
-          if (!blob) return resolve(null);
-          const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.webp`;
-          const { error } = await sb.storage.from(STORAGE_BUCKET).upload(fileName, blob, {
-            contentType: 'image/webp',
-            upsert: true
-          });
-
-          if (error) {
-            showToast('Upload failed: ' + error.message, true);
-            return resolve(null);
-          }
-
-          const { data: pub } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(fileName);
-          resolve(pub?.publicUrl || null);
-        }, 'image/webp', 0.82);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Image compression failed'));
+          },
+          'image/webp',
+          quality
+        );
       };
+      img.onerror = () => reject(new Error('Invalid image file'));
       img.src = event.target.result;
     };
+    reader.onerror = () => reject(new Error('Failed to read file'));
     reader.readAsDataURL(file);
   });
 }
 
-/*-----------------------------------*\
-  #PROFILE MANAGEMENT
-\*-----------------------------------*/
+async function uploadImageToSupabase(file, folder = 'covers') {
+  const maxWidth = folder === 'avatars' ? 400 : (folder === 'banners' ? 1200 : (folder === 'posts' ? 900 : 600));
+  const compressedBlob = await compressImageFile(file, maxWidth, 0.82);
+  const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.webp`;
 
-function renderProfileHeader() {
-  const card = document.getElementById('profile-header-card');
-  const bannerWrap = document.getElementById('profile-banner-wrap');
-  const bannerImg = document.getElementById('display-banner');
-  const avatarImg = document.getElementById('display-avatar');
-  const miniAvatar = document.getElementById('mini-avatar');
-  const nameEl = document.getElementById('display-name');
-  const miniName = document.getElementById('mini-name');
-  const bioEl = document.getElementById('display-bio');
-  const socialsBar = document.getElementById('profile-socials-bar');
-  const footerText = document.getElementById('footer-text');
+  const { error } = await supabaseClient.storage
+    .from(STORAGE_BUCKET)
+    .upload(fileName, compressedBlob, {
+      contentType: 'image/webp',
+      upsert: false
+    });
 
-  if (nameEl) nameEl.textContent = profileData.name || 'Personal Archive';
-  if (miniName) miniName.textContent = profileData.name || 'Personal Archive';
-  if (bioEl) bioEl.textContent = profileData.bio || '';
-  if (avatarImg) avatarImg.src = profileData.avatar || './assets/images/my-avatar.png';
-  if (miniAvatar) miniAvatar.src = profileData.avatar || './assets/images/my-avatar.png';
-  if (footerText) footerText.textContent = `© ${new Date().getFullYear()} ${profileData.name || 'Personal Archive'} — All rights reserved.`;
+  if (error) throw error;
 
-  if (profileData.banner && profileData.banner.trim() !== '') {
-    bannerWrap.style.display = 'block';
-    bannerImg.src = profileData.banner;
-    card.classList.add('has-banner');
-  } else {
-    bannerWrap.style.display = 'none';
-    card.classList.remove('has-banner');
-  }
+  const { data: publicData } = supabaseClient.storage
+    .from(STORAGE_BUCKET)
+    .getPublicUrl(fileName);
 
-  const socials = Array.isArray(profileData.socials) ? profileData.socials : [];
-  if (socials.length > 0) {
-    socialsBar.style.display = 'flex';
-    socialsBar.innerHTML = socials.map(s => `
-      <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer" class="social-chip">
-        <ion-icon name="link-outline"></ion-icon>
-        <span>${escapeHtml(s.label || 'Link')}</span>
-      </a>
-    `).join('');
-  } else {
-    socialsBar.style.display = 'none';
-  }
+  pendingUploadedUrls.push(publicData.publicUrl);
+  return publicData.publicUrl;
 }
 
-async function loadProfile() {
-  const localSaved = localStorage.getItem('archive_profile_data');
-  if (localSaved) {
-    try {
-      profileData = { ...profileData, ...JSON.parse(localSaved) };
-    } catch (_) {}
-  }
-  renderProfileHeader();
+async function deleteOldStorageFile(fileUrl) {
+  if (!fileUrl) return;
+  const marker = `/storage/v1/object/public/${STORAGE_BUCKET}/`;
+  const idx = fileUrl.indexOf(marker);
+  if (idx === -1) return;
 
-  if (!sb) return;
-  const { data } = await sb.from('profile_settings').select('*').eq('id', 1).maybeSingle();
-  if (data) {
-    profileData = {
-      name: data.name || profileData.name,
-      bio: data.bio || profileData.bio,
-      avatar: data.avatar || profileData.avatar,
-      banner: data.banner || '',
-      socials: Array.isArray(data.socials) ? data.socials : []
+  const filePath = decodeURIComponent(fileUrl.substring(idx + marker.length).split('?')[0]);
+  if (!filePath) return;
+
+  await supabaseClient.storage.from(STORAGE_BUCKET).remove([filePath]);
+}
+
+async function cleanupPendingUploads(keepUrls = []) {
+  const keepSet = new Set((Array.isArray(keepUrls) ? keepUrls : [keepUrls]).filter(Boolean));
+  for (const tempUrl of pendingUploadedUrls) {
+    if (!keepSet.has(tempUrl)) {
+      await deleteOldStorageFile(tempUrl);
+    }
+  }
+  pendingUploadedUrls = [];
+}
+
+// ==========================================
+// 2C. PROFILE SETTINGS, BANNER & SOCIAL LINKS
+// ==========================================
+function detectSocialIcon(url) {
+  const lower = (url || '').toLowerCase();
+  if (lower.includes('instagram.com')) return 'logo-instagram';
+  if (lower.includes('twitter.com') || lower.includes('x.com')) return 'logo-twitter';
+  if (lower.includes('github.com')) return 'logo-github';
+  if (lower.includes('youtube.com') || lower.includes('youtu.be')) return 'logo-youtube';
+  if (lower.includes('tiktok.com')) return 'logo-tiktok';
+  if (lower.includes('discord.gg') || lower.includes('discord.com')) return 'logo-discord';
+  if (lower.includes('twitch.tv')) return 'logo-twitch';
+  if (lower.includes('linkedin.com')) return 'logo-linkedin';
+  if (lower.includes('reddit.com')) return 'logo-reddit';
+  if (lower.includes('facebook.com')) return 'logo-facebook';
+  if (lower.includes('spotify.com')) return 'musical-notes-outline';
+  if (lower.includes('steamcommunity.com') || lower.includes('store.steampowered.com')) return 'logo-steam';
+  if (lower.includes('letterboxd.com')) return 'film-outline';
+  if (lower.includes('myanimelist.net') || lower.includes('anilist.co')) return 'tv-outline';
+  return 'link-outline';
+}
+
+async function fetchProfileSettings() {
+  const { data, error } = await supabaseClient
+    .from('profile_settings')
+    .select('*')
+    .eq('id', 1)
+    .single();
+
+  if (error) {
+    console.warn('Profile fetch warning:', error.message);
+  }
+
+  if (!error && data) {
+    currentProfile = {
+      name: data.name || '',
+      bio: data.bio || '',
+      avatar_url: data.avatar_url || '',
+      banner_url: data.banner_url || '',
+      social_links: Array.isArray(data.social_links) ? data.social_links : [],
+      is_library_private: Boolean(data.is_library_private)
     };
-    localStorage.setItem('archive_profile_data', JSON.stringify(profileData));
-    renderProfileHeader();
   }
+  isProfileLoaded = true;
+  applyProfileToUI();
 }
 
-function addSocialEditorRow(label = '', url = '') {
+function applyProfileToUI() {
+  setElText('profile-name-text', currentProfile.name);
+  setElText('profile-bio-text', currentProfile.bio);
+  setElText('sticky-name-text', currentProfile.name);
+
+  if (currentProfile.name) {
+    document.title = `${currentProfile.name} — Archive`;
+    setElText('footer-brand-name', currentProfile.name.toUpperCase());
+  }
+
+  const headerCard = document.getElementById('profile-header-card');
+  const bannerWrap = document.getElementById('profile-banner-wrap');
+  const bannerImg = document.getElementById('profile-banner-img');
+
+  if (headerCard && bannerWrap && bannerImg) {
+    if (currentProfile.banner_url) {
+      const cleanBanner = normalizeImageUrl(currentProfile.banner_url);
+      bannerImg.onerror = () => {
+        bannerWrap.style.display = 'none';
+        headerCard.classList.remove('has-banner');
+      };
+      bannerImg.src = cleanBanner;
+      bannerWrap.style.display = 'block';
+      headerCard.classList.add('has-banner');
+    } else {
+      bannerImg.src = '';
+      bannerWrap.style.display = 'none';
+      headerCard.classList.remove('has-banner');
+    }
+  }
+
+  const avatarEl = document.getElementById('profile-avatar-img');
+  const stickyAvatarEl = document.getElementById('sticky-avatar-img');
+  const faviconEl = document.getElementById('favicon-link');
+
+  if (avatarEl) {
+    if (currentProfile.avatar_url) {
+      const cleanUrl = normalizeImageUrl(currentProfile.avatar_url);
+      avatarEl.onerror = () => {
+        avatarEl.src = 'https://placehold.co/200x200/1e1e1f/ffffff?text=?';
+      };
+      avatarEl.src = cleanUrl;
+      if (stickyAvatarEl) stickyAvatarEl.src = cleanUrl;
+      if (faviconEl) faviconEl.href = cleanUrl;
+    } else {
+      avatarEl.src = TRANSPARENT_PIXEL;
+      if (stickyAvatarEl) stickyAvatarEl.src = TRANSPARENT_PIXEL;
+    }
+  }
+
+  const socialsBar = document.getElementById('profile-socials-bar');
+  if (socialsBar) {
+    const validLinks = (currentProfile.social_links || []).filter(s => s && s.url);
+    if (validLinks.length > 0) {
+      socialsBar.style.display = 'flex';
+      socialsBar.innerHTML = validLinks.map(s => {
+        const href = s.url.startsWith('http') ? s.url : `https://${s.url}`;
+        const label = escapeHtml(s.label || s.url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]);
+        const iconName = detectSocialIcon(href);
+        return `
+          <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="social-chip">
+            <ion-icon name="${iconName}"></ion-icon>
+            <span>${label}</span>
+          </a>
+        `;
+      }).join('');
+    } else {
+      socialsBar.style.display = 'none';
+      socialsBar.innerHTML = '';
+    }
+  }
+
+  updateLibraryTabVisibility();
+  updateAdminActionButtons();
+  renderBlogPosts();
+}
+
+window.addSocialLinkRow = function (label = '', url = '') {
   const container = document.getElementById('social-links-editor');
+  if (!container) return;
+
   const row = document.createElement('div');
   row.className = 'social-edit-row';
   row.innerHTML = `
-    <input type="text" class="form-input social-label-input" placeholder="Platform" value="${escapeHtml(label)}">
+    <input type="text" class="form-input social-label-input" placeholder="Label (e.g. GitHub)" value="${escapeHtml(label)}">
     <input type="url" class="form-input social-url-input" placeholder="https://..." value="${escapeHtml(url)}">
-    <button type="button" class="social-remove-btn" title="Remove"><ion-icon name="trash-outline"></ion-icon></button>
+    <button type="button" class="social-remove-btn" onclick="this.parentElement.remove()" title="Remove">
+      <ion-icon name="trash-outline"></ion-icon>
+    </button>
   `;
-  row.querySelector('.social-remove-btn').addEventListener('click', () => row.remove());
   container.appendChild(row);
-}
+};
 
-document.getElementById('edit-profile-btn')?.addEventListener('click', () => {
-  document.getElementById('profile-name-input').value = profileData.name || '';
-  document.getElementById('profile-bio-input').value = profileData.bio || '';
-  document.getElementById('profile-avatar-input').value = profileData.avatar || '';
-  document.getElementById('profile-banner-input').value = profileData.banner || '';
-  document.getElementById('profile-upload-status').textContent = '';
+window.openProfileModal = function () {
+  pendingUploadedUrls = [];
+  document.getElementById('edit-profile-name').value = currentProfile.name;
+  document.getElementById('edit-profile-bio').value = currentProfile.bio;
+  document.getElementById('edit-profile-avatar').value = currentProfile.avatar_url;
+  document.getElementById('edit-profile-banner').value = currentProfile.banner_url;
+  setElText('profile-upload-status', '');
+  setElText('banner-upload-status', '');
 
   const editor = document.getElementById('social-links-editor');
-  editor.innerHTML = '';
-  (profileData.socials || []).forEach(s => addSocialEditorRow(s.label, s.url));
-  openModal('profile-modal');
-});
-
-document.getElementById('add-social-row-btn')?.addEventListener('click', () => addSocialEditorRow());
-
-document.getElementById('profile-avatar-file')?.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const status = document.getElementById('profile-upload-status');
-  status.textContent = 'Uploading avatar...';
-  const url = await compressAndUploadImage(file, 'avatars');
-  if (url) {
-    document.getElementById('profile-avatar-input').value = url;
-    status.textContent = 'Avatar uploaded!';
-  } else {
-    status.textContent = '';
+  if (editor) {
+    editor.innerHTML = '';
+    (currentProfile.social_links || []).forEach(link => {
+      addSocialLinkRow(link.label || '', link.url || '');
+    });
   }
-});
 
-document.getElementById('profile-banner-file')?.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
+  document.getElementById('profile-modal').classList.add('active');
+};
+
+window.closeProfileModal = async function () {
+  document.getElementById('profile-modal').classList.remove('active');
+  await cleanupPendingUploads([]);
+};
+
+window.clearBannerInput = function () {
+  document.getElementById('edit-profile-banner').value = '';
+  setElText('banner-upload-status', 'Banner removed (click Save Profile).');
+};
+
+window.handleBannerImageUpload = async function (event) {
+  const file = event.target.files ? event.target.files[0] : null;
+  event.target.value = '';
   if (!file) return;
-  const status = document.getElementById('profile-upload-status');
-  status.textContent = 'Uploading banner...';
-  const url = await compressAndUploadImage(file, 'banners');
-  if (url) {
-    document.getElementById('profile-banner-input').value = url;
-    status.textContent = 'Banner uploaded!';
-  } else {
-    status.textContent = '';
-  }
-});
 
-document.getElementById('profile-form')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const socials = [];
-  document.querySelectorAll('#social-links-editor .social-edit-row').forEach(row => {
-    const label = row.querySelector('.social-label-input').value.trim();
-    const url = row.querySelector('.social-url-input').value.trim();
-    if (label && url) socials.push({ label, url });
+  setElText('banner-upload-status', 'Uploading banner...');
+  try {
+    const publicUrl = await uploadImageToSupabase(file, 'banners');
+    document.getElementById('edit-profile-banner').value = publicUrl;
+    setElText('banner-upload-status', 'Banner uploaded! Click Save Profile.');
+    showToast('Banner uploaded', 'success');
+  } catch (err) {
+    setElText('banner-upload-status', `Upload failed: ${err.message}`);
+    showToast(err.message, 'error');
+  }
+};
+
+window.handleProfileImageUpload = async function (event) {
+  const file = event.target.files ? event.target.files[0] : null;
+  event.target.value = '';
+  if (!file) return;
+
+  setElText('profile-upload-status', 'Uploading avatar...');
+  try {
+    const publicUrl = await uploadImageToSupabase(file, 'avatars');
+    document.getElementById('edit-profile-avatar').value = publicUrl;
+    setElText('profile-upload-status', 'Avatar uploaded! Click Save Profile.');
+    showToast('Avatar uploaded', 'success');
+  } catch (err) {
+    setElText('profile-upload-status', `Upload failed: ${err.message}`);
+    showToast(err.message, 'error');
+  }
+};
+
+const profileForm = document.getElementById('profile-form');
+if (profileForm) {
+  profileForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const oldAvatar = currentProfile.avatar_url;
+    const oldBanner = currentProfile.banner_url;
+    const newAvatar = document.getElementById('edit-profile-avatar').value.trim();
+    const newBanner = document.getElementById('edit-profile-banner').value.trim();
+
+    const socialRows = document.querySelectorAll('#social-links-editor .social-edit-row');
+    const collectedLinks = [];
+    socialRows.forEach(row => {
+      const labelEl = row.querySelector('.social-label-input');
+      const urlEl = row.querySelector('.social-url-input');
+      const label = labelEl ? labelEl.value.trim() : '';
+      const url = urlEl ? urlEl.value.trim() : '';
+      if (url) {
+        collectedLinks.push({ label, url });
+      }
+    });
+
+    const updatedProfile = {
+      id: 1,
+      name: document.getElementById('edit-profile-name').value.trim(),
+      bio: document.getElementById('edit-profile-bio').value.trim(),
+      avatar_url: newAvatar,
+      banner_url: newBanner,
+      social_links: collectedLinks,
+      is_library_private: Boolean(currentProfile.is_library_private),
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabaseClient
+      .from('profile_settings')
+      .upsert([updatedProfile]);
+
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      await cleanupPendingUploads([newAvatar, newBanner]);
+      if (oldAvatar && oldAvatar !== newAvatar) {
+        await deleteOldStorageFile(oldAvatar);
+      }
+      if (oldBanner && oldBanner !== newBanner) {
+        await deleteOldStorageFile(oldBanner);
+      }
+      currentProfile = updatedProfile;
+      applyProfileToUI();
+      document.getElementById('profile-modal').classList.remove('active');
+      showToast('Profile updated', 'success');
+    }
   });
+}
 
-  profileData = {
-    name: document.getElementById('profile-name-input').value.trim() || 'Personal Archive',
-    bio: document.getElementById('profile-bio-input').value.trim(),
-    avatar: document.getElementById('profile-avatar-input').value.trim() || './assets/images/my-avatar.png',
-    banner: document.getElementById('profile-banner-input').value.trim(),
-    socials
+// ==========================================
+// 3. MULTI-CATEGORY, ADDITIONAL ENTRIES & SMART STATUS HELPERS
+// ==========================================
+const CATEGORY_LABELS = {
+  tv_show: 'TV Show',
+  movie: 'Movie',
+  comic: 'Comic',
+  novel: 'Novel',
+  game: 'Game',
+  music: 'Music'
+};
+
+const DEFAULT_UNITS_BY_CAT = {
+  tv_show: 'eps',
+  movie: 'movie',
+  comic: 'ch',
+  novel: 'vol',
+  game: 'item',
+  music: 'track'
+};
+
+const UNIT_SHORT_LABELS = {
+  eps: 'Eps',
+  ch: 'Ch',
+  movie: 'Movie',
+  vol: 'Vol',
+  pages: 'Pages',
+  track: 'Track',
+  item: 'Item'
+};
+
+function getLegacyCategory(item) {
+  const rawCat = (item.category || '').toLowerCase().trim();
+  if (rawCat === 'series' || rawCat === 'tv_show') return 'tv_show';
+  if (rawCat === 'other') {
+    if (item.sub_category === 'light_novel') return 'novel';
+    if (item.sub_category === 'game') return 'game';
+  }
+  return rawCat || 'tv_show';
+}
+
+function getItemTracks(item) {
+  if (Array.isArray(item.tracks) && item.tracks.length > 0) {
+    return item.tracks.map(t => ({
+      category: t.category || getLegacyCategory(item),
+      status: (t.status || item.status || 'planned').toLowerCase().trim(),
+      progress: Number(t.progress) || 0,
+      total_units: (t.total_units !== null && t.total_units !== undefined && t.total_units !== '') ? Number(t.total_units) : null,
+      unit_label: t.unit_label || DEFAULT_UNITS_BY_CAT[t.category] || 'eps'
+    }));
+  }
+
+  const cat = getLegacyCategory(item);
+  return [{
+    category: cat,
+    status: (item.status || 'planned').toLowerCase().trim(),
+    progress: Number(item.progress) || 0,
+    total_units: (item.total_units !== null && item.total_units !== undefined && item.total_units !== '') ? Number(item.total_units) : null,
+    unit_label: item.unit_label || DEFAULT_UNITS_BY_CAT[cat] || 'eps'
+  }];
+}
+
+function getItemSeasons(item) {
+  if (!Array.isArray(item.seasons)) return [];
+  const fallbackCat = getLegacyCategory(item);
+  return item.seasons.map(s => {
+    const unit = s.unit_label || 'eps';
+    const inferredCat = s.category || (unit === 'movie' ? 'movie' : (unit === 'ch' ? 'comic' : (unit === 'vol' || unit === 'pages' ? 'novel' : (unit === 'track' ? 'music' : fallbackCat))));
+    return {
+      name: s.name || '',
+      category: inferredCat,
+      status: (s.status || 'planned').toLowerCase().trim(),
+      progress: Number(s.progress) || 0,
+      total_units: (s.total_units !== null && s.total_units !== undefined && s.total_units !== '') ? Number(s.total_units) : null,
+      unit_label: unit
+    };
+  });
+}
+
+function getAllItemUnits(item) {
+  return [...getItemTracks(item), ...getItemSeasons(item)];
+}
+
+function getItemCategories(item) {
+  const allUnits = getAllItemUnits(item);
+  const cats = new Set(allUnits.map(t => t.category));
+  if (Array.isArray(item.categories)) {
+    item.categories.forEach(c => { if (c) cats.add(c); });
+  }
+  return Array.from(cats);
+}
+
+function getItemTotalUnitsValue(item) {
+  const allUnits = getAllItemUnits(item);
+  const sumTotal = allUnits.reduce((sum, t) => sum + (Number(t.total_units) || 0), 0);
+  if (sumTotal > 0) return sumTotal;
+  return allUnits.reduce((sum, t) => sum + (Number(t.progress) || 0), 0);
+}
+
+function computeSyncedStatus(unitsList) {
+  const statuses = unitsList.map(t => (t.status || 'planned').toLowerCase().trim());
+
+  if (statuses.includes('ongoing')) {
+    return { key: 'ongoing', label: 'Ongoing' };
+  }
+  if (statuses.length > 0 && statuses.every(s => s === 'completed')) {
+    return { key: 'completed', label: 'Completed' };
+  }
+  if (statuses.includes('dropped')) {
+    return { key: 'dropped', label: 'Dropped' };
+  }
+  return { key: 'planned', label: 'Planned' };
+}
+
+function computeCombinedProgress(unitsList, syncedStatusKey) {
+  const totalProgress = unitsList.reduce((sum, t) => sum + (Number(t.progress) || 0), 0);
+  const allHaveTotal = unitsList.every(t => t.total_units !== null && Number(t.total_units) > 0);
+  const totalUnits = allHaveTotal
+    ? unitsList.reduce((sum, t) => sum + Number(t.total_units), 0)
+    : null;
+
+  const text = totalUnits !== null ? `${totalProgress}/${totalUnits}` : `${totalProgress}/?`;
+
+  let percent = 0;
+  if (syncedStatusKey === 'completed') {
+    percent = 100;
+  } else if (totalUnits !== null && totalUnits > 0) {
+    percent = Math.min(100, Math.max(0, Math.round((totalProgress / totalUnits) * 100)));
+  } else if (syncedStatusKey === 'planned') {
+    percent = 100;
+  } else {
+    percent = totalProgress > 0 ? 45 : 0;
+  }
+
+  return {
+    text,
+    percent,
+    isPlannedEmpty: syncedStatusKey === 'planned' && totalProgress === 0
+  };
+}
+
+function formatEntryBadgeLabel(extraPartsCount) {
+  const totalEntries = extraPartsCount + 1;
+  return totalEntries === 1 ? '1 Entry' : `${totalEntries} Entries`;
+}
+
+// ==========================================
+// 3B. LOAD MEDIA DATA & AUTO-CALCULATE STATS
+// ==========================================
+async function fetchMediaLogs() {
+  const { data, error } = await supabaseClient
+    .from('media_logs')
+    .select('*')
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    const grid = document.getElementById('media-grid');
+    if (grid) grid.innerHTML = `<p class="empty-state">Failed to load data: ${escapeHtml(error.message)}</p>`;
+    return;
+  }
+
+  allMediaLogs = data || [];
+  updateStatsUI();
+  renderMediaGrid();
+}
+
+function updateStatsUI() {
+  const catStats = {
+    tv_show: { total: 0, done: 0 },
+    movie: { total: 0, done: 0 },
+    comic: { total: 0, done: 0 },
+    novel: { total: 0, done: 0 },
+    game: { total: 0, done: 0 },
+    music: { total: 0, done: 0 }
   };
 
-  localStorage.setItem('archive_profile_data', JSON.stringify(profileData));
-  renderProfileHeader();
+  const unitCounts = {
+    eps: 0,
+    ch: 0,
+    pages: 0,
+    vol: 0,
+    movie: 0,
+    track: 0,
+    item: 0
+  };
 
-  if (sb) {
-    await sb.from('profile_settings').upsert({
-      id: 1,
-      name: profileData.name,
-      bio: profileData.bio,
-      avatar: profileData.avatar,
-      banner: profileData.banner,
-      socials: profileData.socials
+  let totalCompleted = 0;
+
+  allMediaLogs.forEach(item => {
+    const allUnits = getAllItemUnits(item);
+    const synced = computeSyncedStatus(allUnits);
+    if (synced.key === 'completed') totalCompleted += 1;
+
+    allUnits.forEach(u => {
+      if (catStats[u.category]) {
+        catStats[u.category].total += 1;
+        if (u.status === 'completed') catStats[u.category].done += 1;
+      }
+
+      const unitKey = u.unit_label || DEFAULT_UNITS_BY_CAT[u.category] || 'item';
+      const progNum = Number(u.progress) || 0;
+      if (unitCounts[unitKey] !== undefined) {
+        unitCounts[unitKey] += progNum;
+      } else {
+        unitCounts.item += progNum;
+      }
     });
-  }
-
-  closeModal('profile-modal');
-  showToast('Profile updated');
-});
-
-/*-----------------------------------*\
-  #PERSONAL NOTES / MICRO-BLOG
-\*-----------------------------------*/
-
-function formatNoteContentWithLinks(text) {
-  const escaped = escapeHtml(text);
-  const urlRegex = /(https?:\/\/[^\s<]+)/g;
-  return escaped.replace(urlRegex, (url) => {
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="inline-note-link">${url}</a>`;
   });
+
+  const totalEntries = allMediaLogs.length;
+  const completionRate = totalEntries > 0 ? Math.round((totalCompleted / totalEntries) * 100) : 0;
+
+  const ratedItems = allMediaLogs.filter(i => i.rating !== null && i.rating !== undefined && i.rating !== '');
+  const avgRating = ratedItems.length
+    ? (ratedItems.reduce((sum, i) => sum + Number(i.rating), 0) / ratedItems.length).toFixed(2)
+    : '0.0';
+
+  setElText('total-entries-label', `${totalEntries} Entries`);
+
+  setElText('stat-cat-tv', catStats.tv_show.total.toLocaleString('en-US'));
+  setElText('stat-cat-tv-sub', `${catStats.tv_show.done} Completed`);
+
+  setElText('stat-cat-movie', catStats.movie.total.toLocaleString('en-US'));
+  setElText('stat-cat-movie-sub', `${catStats.movie.done} Completed`);
+
+  setElText('stat-cat-comic', catStats.comic.total.toLocaleString('en-US'));
+  setElText('stat-cat-comic-sub', `${catStats.comic.done} Completed`);
+
+  setElText('stat-cat-novel', catStats.novel.total.toLocaleString('en-US'));
+  setElText('stat-cat-novel-sub', `${catStats.novel.done} Completed`);
+
+  setElText('stat-cat-game', catStats.game.total.toLocaleString('en-US'));
+  setElText('stat-cat-game-sub', `${catStats.game.done} Completed`);
+
+  setElText('stat-cat-music', catStats.music.total.toLocaleString('en-US'));
+  setElText('stat-cat-music-sub', `${catStats.music.done} Completed`);
+
+  setElText('stat-unit-eps', unitCounts.eps.toLocaleString('en-US'));
+  setElText('stat-unit-ch', unitCounts.ch.toLocaleString('en-US'));
+  setElText('stat-unit-pages', unitCounts.pages.toLocaleString('en-US'));
+  setElText('stat-unit-vol', unitCounts.vol.toLocaleString('en-US'));
+  setElText('stat-unit-movie', unitCounts.movie.toLocaleString('en-US'));
+  setElText('stat-unit-track', unitCounts.track.toLocaleString('en-US'));
+  setElText('stat-unit-item', unitCounts.item.toLocaleString('en-US'));
+
+  setElText('stat-completed-total', totalCompleted.toLocaleString('en-US'));
+  setElText('stat-completion-rate', `${completionRate}% Rate`);
+
+  setElText('stat-avg-rating', avgRating);
+  setElText('stat-rated-count', `${ratedItems.length} Rated`);
 }
 
-function extractFirstUrl(text) {
-  if (!text) return null;
-  const match = text.match(/(https?:\/\/[^\s]+)/);
-  return match ? match[1] : null;
+// ==========================================
+// 4. FILTER (CUSTOM RANGES), SORT (2-WAY), PAGINATION & RENDER MEDIA
+// ==========================================
+function resetPaginationAndRender() {
+  visibleMediaLimit = itemsPerPage;
+  updateFilterActiveIndicator();
+  renderMediaGrid();
 }
 
-function renderNotesFeed() {
-  const container = document.getElementById('blog-feed-container');
-  if (!container) return;
+function updateFilterActiveIndicator() {
+  const statusVal = document.getElementById('filter-status')?.value || 'all';
+  const rMin = document.getElementById('filter-rating-min')?.value || '';
+  const rMax = document.getElementById('filter-rating-max')?.value || '';
+  const unratedOnly = document.getElementById('filter-unrated-only')?.checked || false;
+  const uMin = document.getElementById('filter-units-min')?.value || '';
+  const uMax = document.getElementById('filter-units-max')?.value || '';
 
-  if (allNotes.length === 0) {
-    container.innerHTML = '<div class="empty-state">No notes posted yet.</div>';
-    return;
-  }
-
-  container.innerHTML = allNotes.map(note => {
-    const timeStr = new Date(note.created_at).toLocaleString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-    const firstUrl = extractFirstUrl(note.content);
-    let domain = '';
-    if (firstUrl) {
-      try { domain = new URL(firstUrl).hostname.replace(/^www\./, ''); } catch (_) {}
-    }
-
-    return `
-      <article class="blog-post-card">
-        <div class="blog-post-header">
-          <div class="blog-post-author">
-            <img src="${escapeHtml(profileData.avatar || './assets/images/my-avatar.png')}" alt="Avatar" class="blog-post-avatar">
-            <div class="blog-post-meta">
-              <span class="blog-post-name">${escapeHtml(profileData.name || 'Personal Archive')}</span>
-              <span class="blog-post-time">${timeStr}</span>
-            </div>
-          </div>
-          ${isAdmin ? `
-            <div class="blog-post-actions">
-              <button type="button" class="blog-icon-btn" onclick="editNote('${note.id}')" title="Edit Note">
-                <ion-icon name="create-outline"></ion-icon>
-              </button>
-              <button type="button" class="blog-icon-btn delete" onclick="deleteNote('${note.id}')" title="Delete Note">
-                <ion-icon name="trash-outline"></ion-icon>
-              </button>
-            </div>
-          ` : ''}
-        </div>
-        ${note.content ? `<div class="blog-post-text">${formatNoteContentWithLinks(note.content)}</div>` : ''}
-        ${firstUrl && domain ? `
-          <a href="${escapeHtml(firstUrl)}" target="_blank" rel="noopener noreferrer" class="link-preview-card">
-            <div class="link-preview-icon"><ion-icon name="globe-outline"></ion-icon></div>
-            <div class="link-preview-info">
-              <span class="link-preview-domain">${escapeHtml(domain)}</span>
-              <span class="link-preview-title">${escapeHtml(firstUrl)}</span>
-            </div>
-            <ion-icon name="open-outline"></ion-icon>
-          </a>
-        ` : ''}
-        ${note.image_url ? `
-          <div class="blog-post-image-wrap">
-            <img src="${escapeHtml(note.image_url)}" alt="Attachment" loading="lazy">
-          </div>
-        ` : ''}
-      </article>
-    `;
-  }).join('');
-}
-
-async function loadNotes() {
-  if (!sb) {
-    allNotes = JSON.parse(localStorage.getItem('archive_notes_local') || '[]');
-    renderNotesFeed();
-    return;
-  }
-
-  const { data, error } = await sb
-    .from('notes')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (!error && data) {
-    allNotes = data;
-    renderNotesFeed();
+  const isFiltered = statusVal !== 'all' || rMin !== '' || rMax !== '' || unratedOnly || uMin !== '' || uMax !== '';
+  const dot = document.getElementById('filter-active-dot');
+  if (dot) {
+    dot.style.display = isFiltered ? 'inline-block' : 'none';
   }
 }
 
-document.getElementById('new-note-btn')?.addEventListener('click', () => {
-  document.getElementById('note-modal-title').textContent = 'New Note';
-  document.getElementById('note-id').value = '';
-  document.getElementById('note-content-input').value = '';
-  document.getElementById('note-image-input').value = '';
-  document.getElementById('note-upload-status').textContent = '';
-  openModal('note-modal');
-});
+window.resetLibraryFilters = function () {
+  const statusEl = document.getElementById('filter-status');
+  const rMinEl = document.getElementById('filter-rating-min');
+  const rMaxEl = document.getElementById('filter-rating-max');
+  const unratedEl = document.getElementById('filter-unrated-only');
+  const uMinEl = document.getElementById('filter-units-min');
+  const uMaxEl = document.getElementById('filter-units-max');
 
-window.editNote = function(id) {
-  const note = allNotes.find(n => String(n.id) === String(id));
-  if (!note) return;
-  document.getElementById('note-modal-title').textContent = 'Edit Note';
-  document.getElementById('note-id').value = note.id;
-  document.getElementById('note-content-input').value = note.content || '';
-  document.getElementById('note-image-input').value = note.image_url || '';
-  document.getElementById('note-upload-status').textContent = '';
-  openModal('note-modal');
+  if (statusEl) statusEl.value = 'all';
+  if (rMinEl) { rMinEl.value = ''; rMinEl.disabled = false; }
+  if (rMaxEl) { rMaxEl.value = ''; rMaxEl.disabled = false; }
+  if (unratedEl) unratedEl.checked = false;
+  if (uMinEl) uMinEl.value = '';
+  if (uMaxEl) uMaxEl.value = '';
+
+  resetPaginationAndRender();
 };
 
-window.deleteNote = async function(id) {
-  if (!confirm('Delete this note?')) return;
-  if (sb) {
-    await sb.from('notes').delete().eq('id', id);
-    await loadNotes();
+function updateSortUIControls() {
+  const fieldEl = document.getElementById('sort-library-field');
+  if (fieldEl) fieldEl.value = currentSortField;
+
+  const descBtn = document.getElementById('btn-sort-desc');
+  const ascBtn = document.getElementById('btn-sort-asc');
+  const labelEl = document.getElementById('sort-btn-label');
+
+  if (descBtn) descBtn.classList.toggle('active', currentSortDir === 'desc');
+  if (ascBtn) ascBtn.classList.toggle('active', currentSortDir === 'asc');
+
+  if (currentSortField === 'rating') {
+    if (descBtn) descBtn.textContent = 'Best';
+    if (ascBtn) ascBtn.textContent = 'Worst';
+    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Rating (Best)' : 'Rating (Worst)';
+  } else if (currentSortField === 'units') {
+    if (descBtn) descBtn.textContent = 'Longest';
+    if (ascBtn) ascBtn.textContent = 'Shortest';
+    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Count (Longest)' : 'Count (Shortest)';
+  } else if (currentSortField === 'title') {
+    if (descBtn) descBtn.textContent = 'Z → A';
+    if (ascBtn) ascBtn.textContent = 'A → Z';
+    if (labelEl) labelEl.textContent = currentSortDir === 'asc' ? 'Title (A→Z)' : 'Title (Z→A)';
   } else {
-    allNotes = allNotes.filter(n => String(n.id) !== String(id));
-    localStorage.setItem('archive_notes_local', JSON.stringify(allNotes));
-    renderNotesFeed();
+    if (descBtn) descBtn.textContent = 'Newest';
+    if (ascBtn) ascBtn.textContent = 'Oldest';
+    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Updated (New)' : 'Updated (Old)';
   }
-  showToast('Note deleted');
-};
-
-document.getElementById('note-image-file')?.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const status = document.getElementById('note-upload-status');
-  status.textContent = 'Uploading photo...';
-  const url = await compressAndUploadImage(file, 'notes');
-  if (url) {
-    document.getElementById('note-image-input').value = url;
-    status.textContent = 'Photo attached!';
-  } else {
-    status.textContent = '';
-  }
-});
-
-document.getElementById('note-form')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const id = document.getElementById('note-id').value;
-  const content = document.getElementById('note-content-input').value.trim();
-  const image_url = document.getElementById('note-image-input').value.trim();
-
-  if (!content && !image_url) return showToast('Write something or attach an image', true);
-
-  if (sb) {
-    if (id) {
-      await sb.from('notes').update({ content, image_url }).eq('id', id);
-    } else {
-      await sb.from('notes').insert([{ content, image_url }]);
-    }
-    await loadNotes();
-  } else {
-    if (id) {
-      const idx = allNotes.findIndex(n => String(n.id) === String(id));
-      if (idx > -1) allNotes[idx] = { ...allNotes[idx], content, image_url };
-    } else {
-      allNotes.unshift({ id: Date.now(), content, image_url, created_at: new Date().toISOString() });
-    }
-    localStorage.setItem('archive_notes_local', JSON.stringify(allNotes));
-    renderNotesFeed();
-  }
-
-  closeModal('note-modal');
-  showToast(id ? 'Note updated' : 'Note posted');
-});
-
-/*-----------------------------------*\
-  #MEDIA LIBRARY & BENTO STATISTICS
-\*-----------------------------------*/
-
-function updateLibraryStats() {
-  const counts = { tv: 0, movie: 0, comic: 0, novel: 0, game: 0, music: 0 };
-  let tvEps = 0, movieDone = 0, comicCh = 0, novelCh = 0, gameDone = 0, musicTracks = 0;
-  let totalEps = 0, totalMovies = 0, totalCh = 0, totalVol = 0, totalGames = 0, totalTracks = 0;
-  let completedCount = 0, ratingSum = 0, ratedCount = 0;
-
-  allEntries.forEach(item => {
-    const cat = item.category || 'tv';
-    if (counts[cat] !== undefined) counts[cat]++;
-
-    const prog = Number(item.progress) || 0;
-    const vols = Number(item.volumes) || 0;
-    const rating = Number(item.rating) || 0;
-
-    if (item.status === 'completed') completedCount++;
-    if (rating > 0) {
-      ratingSum += rating;
-      ratedCount++;
-    }
-
-    if (cat === 'tv') { tvEps += prog; totalEps += prog; }
-    if (cat === 'movie') { if (item.status === 'completed') movieDone++; totalMovies += (prog || (item.status === 'completed' ? 1 : 0)); }
-    if (cat === 'comic') { comicCh += prog; totalCh += prog; totalVol += vols; }
-    if (cat === 'novel') { novelCh += prog; totalCh += prog; totalVol += vols; }
-    if (cat === 'game') { if (item.status === 'completed') gameDone++; totalGames++; }
-    if (cat === 'music') { musicTracks += prog; totalTracks += prog; }
-
-    if (Array.isArray(item.extra_tracks)) {
-      item.extra_tracks.forEach(tr => {
-        const tProg = Number(tr.progress) || 0;
-        if (tr.category === 'tv') totalEps += tProg;
-        if (tr.category === 'comic' || tr.category === 'novel') totalCh += tProg;
-        if (tr.category === 'music') totalTracks += tProg;
-      });
-    }
-  });
-
-  const totalEntries = allEntries.length;
-  document.getElementById('stats-quick-pill').textContent = `${totalEntries} Entries`;
-  document.getElementById('stat-tv-count').textContent = counts.tv;
-  document.getElementById('stat-tv-eps').textContent = `${tvEps} eps`;
-  document.getElementById('stat-movie-count').textContent = counts.movie;
-  document.getElementById('stat-movie-sub').textContent = `${movieDone} watched`;
-  document.getElementById('stat-comic-count').textContent = counts.comic;
-  document.getElementById('stat-comic-ch').textContent = `${comicCh} ch`;
-  document.getElementById('stat-novel-count').textContent = counts.novel;
-  document.getElementById('stat-novel-ch').textContent = `${novelCh} ch`;
-  document.getElementById('stat-game-count').textContent = counts.game;
-  document.getElementById('stat-game-sub').textContent = `${gameDone} completed`;
-  document.getElementById('stat-music-count').textContent = counts.music;
-  document.getElementById('stat-music-tracks').textContent = `${musicTracks} tracks`;
-
-  document.getElementById('unit-total-entries').textContent = totalEntries;
-  document.getElementById('unit-total-eps').textContent = totalEps;
-  document.getElementById('unit-total-movies').textContent = totalMovies;
-  document.getElementById('unit-total-ch').textContent = totalCh;
-  document.getElementById('unit-total-vol').textContent = totalVol;
-  document.getElementById('unit-total-games').textContent = totalGames;
-  document.getElementById('unit-total-tracks').textContent = totalTracks;
-
-  const rate = totalEntries > 0 ? Math.round((completedCount / totalEntries) * 100) : 0;
-  const avg = ratedCount > 0 ? (ratingSum / ratedCount).toFixed(1) : '0.0';
-
-  document.getElementById('stat-completed-count').textContent = completedCount;
-  document.getElementById('stat-completion-rate').textContent = `${rate}% rate`;
-  document.getElementById('stat-avg-rating').textContent = avg;
-  document.getElementById('stat-rated-sub').textContent = `${ratedCount} rated entries`;
 }
 
-document.getElementById('stats-toggle-bar')?.addEventListener('click', () => {
-  const panel = document.getElementById('collapsible-stats-panel');
-  const label = document.getElementById('stats-toggle-label');
-  const icon = document.getElementById('stats-toggle-icon');
-  const isOpen = panel.style.display !== 'none';
+window.onSortOptionChange = function () {
+  const fieldEl = document.getElementById('sort-library-field');
+  const fieldVal = fieldEl ? fieldEl.value : 'rating';
+  currentSortField = fieldVal;
+  currentSortDir = fieldVal === 'title' ? 'asc' : 'desc';
+  updateSortUIControls();
+  resetPaginationAndRender();
+};
 
-  panel.style.display = isOpen ? 'none' : 'flex';
-  label.textContent = isOpen ? 'Show Details' : 'Hide Details';
-  icon.setAttribute('name', isOpen ? 'chevron-down-outline' : 'chevron-up-outline');
-});
+window.setSortDirection = function (dir) {
+  currentSortDir = dir;
+  updateSortUIControls();
+  resetPaginationAndRender();
+};
 
-function getFilteredAndSortedMedia() {
-  const query = (document.getElementById('library-search')?.value || '').toLowerCase().trim();
-
-  const filtered = allEntries.filter(item => {
-    const matchCat = selectedCategory === 'all'
-      || item.category === selectedCategory
-      || (Array.isArray(item.extra_tracks) && item.extra_tracks.some(t => t.category === selectedCategory));
-
-    const matchStatus = selectedStatus === 'all' || item.status === selectedStatus;
-    const r = Number(item.rating) || 0;
-    const matchMin = ratingMin === null || r >= ratingMin;
-    const matchMax = ratingMax === null || r <= ratingMax;
-    const matchRewatch = !rewatchedOnly || (Number(item.repeat_count) || 0) > 0;
-    const matchSearch = !query
-      || (item.title || '').toLowerCase().includes(query)
-      || (item.notes || '').toLowerCase().includes(query);
-
-    return matchCat && matchStatus && matchMin && matchMax && matchRewatch && matchSearch;
+function setupFilterListeners() {
+  document.querySelectorAll('#view-library .cat-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#view-library .cat-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentCategory = btn.dataset.category;
+      resetPaginationAndRender();
+    });
   });
 
-  filtered.sort((a, b) => {
-    let cmp = 0;
-    if (sortField === 'title') {
-      cmp = (a.title || '').localeCompare(b.title || '');
-    } else if (sortField === 'rating') {
-      cmp = (Number(a.rating) || 0) - (Number(b.rating) || 0);
-    } else if (sortField === 'status') {
-      cmp = (a.status || '').localeCompare(b.status || '');
-    } else if (sortField === 'progress') {
-      cmp = (Number(a.progress) || 0) - (Number(b.progress) || 0);
-    } else {
-      cmp = new Date(a.updated_at || a.created_at || 0) - new Date(b.updated_at || b.created_at || 0);
-    }
-    return sortDir === 'asc' ? cmp : -cmp;
-  });
+  const searchInput = document.getElementById('search-library');
+  const statusSelect = document.getElementById('filter-status');
+  const rMinInput = document.getElementById('filter-rating-min');
+  const rMaxInput = document.getElementById('filter-rating-max');
+  const unratedCheck = document.getElementById('filter-unrated-only');
+  const uMinInput = document.getElementById('filter-units-min');
+  const uMaxInput = document.getElementById('filter-units-max');
 
-  return filtered;
+  if (searchInput) searchInput.addEventListener('input', resetPaginationAndRender);
+  if (statusSelect) statusSelect.addEventListener('change', resetPaginationAndRender);
+  if (rMinInput) rMinInput.addEventListener('input', resetPaginationAndRender);
+  if (rMaxInput) rMaxInput.addEventListener('input', resetPaginationAndRender);
+  if (uMinInput) uMinInput.addEventListener('input', resetPaginationAndRender);
+  if (uMaxInput) uMaxInput.addEventListener('input', resetPaginationAndRender);
+
+  if (unratedCheck) {
+    unratedCheck.addEventListener('change', () => {
+      const isChecked = unratedCheck.checked;
+      if (rMinInput) rMinInput.disabled = isChecked;
+      if (rMaxInput) rMaxInput.disabled = isChecked;
+      resetPaginationAndRender();
+    });
+  }
+}
+
+function normalizeImageUrl(url) {
+  if (!url) return '';
+  return url.trim().replace(/^http:\/\//i, 'https://');
+}
+
+function formatStatusDate(isoString) {
+  if (!isoString) return '—';
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+}
+
+function matchesCustomFilters(item) {
+  const rMinRaw = document.getElementById('filter-rating-min')?.value ?? '';
+  const rMaxRaw = document.getElementById('filter-rating-max')?.value ?? '';
+  const unratedOnly = document.getElementById('filter-unrated-only')?.checked ?? false;
+  const uMinRaw = document.getElementById('filter-units-min')?.value ?? '';
+  const uMaxRaw = document.getElementById('filter-units-max')?.value ?? '';
+
+  const hasRating = item.rating !== null && item.rating !== undefined && item.rating !== '';
+  const rVal = hasRating ? Number(item.rating) : null;
+
+  if (unratedOnly) {
+    if (hasRating) return false;
+  } else if (rMinRaw !== '' || rMaxRaw !== '') {
+    if (!hasRating || Number.isNaN(rVal)) return false;
+    if (rMinRaw !== '' && rVal < parseFloat(rMinRaw)) return false;
+    if (rMaxRaw !== '' && rVal > parseFloat(rMaxRaw)) return false;
+  }
+
+  if (uMinRaw !== '' || uMaxRaw !== '') {
+    const totalUnits = getItemTotalUnitsValue(item);
+    if (uMinRaw !== '' && totalUnits < parseInt(uMinRaw, 10)) return false;
+    if (uMaxRaw !== '' && totalUnits > parseInt(uMaxRaw, 10)) return false;
+  }
+
+  return true;
 }
 
 function renderMediaGrid() {
   const grid = document.getElementById('media-grid');
-  const loadMoreWrap = document.getElementById('load-more-wrap');
   if (!grid) return;
 
-  grid.classList.toggle('list-view', viewMode === 'list');
-  const items = getFilteredAndSortedMedia();
+  const loadMoreWrap = document.getElementById('load-more-wrap');
+  const loadMoreText = document.getElementById('load-more-text');
 
-  if (items.length === 0) {
-    grid.innerHTML = '<div class="empty-state">No media entries match your current filter.</div>';
+  const searchEl = document.getElementById('search-library');
+  const statusEl = document.getElementById('filter-status');
+
+  const query = searchEl ? searchEl.value.toLowerCase().trim() : '';
+  const statusFilter = statusEl ? statusEl.value : 'all';
+
+  grid.classList.toggle('list-view', libraryViewMode === 'list');
+
+  let filtered = allMediaLogs.filter(item => {
+    const cats = getItemCategories(item);
+    const allUnits = getAllItemUnits(item);
+    const seasons = getItemSeasons(item);
+    const synced = computeSyncedStatus(allUnits);
+
+    const matchCat = currentCategory === 'all' || cats.includes(currentCategory);
+    const matchStatus = statusFilter === 'all' || synced.key === statusFilter || allUnits.some(t => t.status === statusFilter);
+    const matchRange = matchesCustomFilters(item);
+    const matchTitle = (item.title || '').toLowerCase().includes(query);
+    const matchSeason = seasons.some(s => (s.name || '').toLowerCase().includes(query));
+    const matchQuery = !query || matchTitle || matchSeason;
+
+    return matchCat && matchStatus && matchRange && matchQuery;
+  });
+
+  filtered.sort((a, b) => {
+    if (currentSortField === 'rating') {
+      const aHas = a.rating !== null && a.rating !== undefined && a.rating !== '';
+      const bHas = b.rating !== null && b.rating !== undefined && b.rating !== '';
+      if (!aHas && !bHas) return 0;
+      if (!aHas) return 1;
+      if (!bHas) return -1;
+
+      const diff = Number(a.rating) - Number(b.rating);
+      return currentSortDir === 'desc' ? -diff : diff;
+    }
+
+    if (currentSortField === 'units') {
+      const uA = getItemTotalUnitsValue(a);
+      const uB = getItemTotalUnitsValue(b);
+      return currentSortDir === 'desc' ? (uB - uA) : (uA - uB);
+    }
+
+    if (currentSortField === 'title') {
+      const cmp = (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' });
+      return currentSortDir === 'asc' ? cmp : -cmp;
+    }
+
+    const timeA = new Date(a.updated_at || a.created_at || 0).getTime();
+    const timeB = new Date(b.updated_at || b.created_at || 0).getTime();
+    return currentSortDir === 'desc' ? (timeB - timeA) : (timeA - timeB);
+  });
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `<p class="empty-state">No media found matching these filters.</p>`;
     if (loadMoreWrap) loadMoreWrap.style.display = 'none';
     return;
   }
 
-  const limit = itemsPerPage === 'all' ? items.length : itemsPerPage * currentPageMultiplier;
-  const visibleItems = items.slice(0, limit);
+  const displayedItems = visibleMediaLimit === Infinity ? filtered : filtered.slice(0, visibleMediaLimit);
+  const remainingCount = filtered.length - displayedItems.length;
 
   if (loadMoreWrap) {
-    if (visibleItems.length < items.length) {
+    if (remainingCount > 0) {
       loadMoreWrap.style.display = 'flex';
-      document.getElementById('load-more-label').textContent = `Load More (${items.length - visibleItems.length} remaining)`;
+      if (loadMoreText) loadMoreText.textContent = `Load More (${remainingCount} remaining)`;
     } else {
       loadMoreWrap.style.display = 'none';
     }
   }
 
-  if (viewMode === 'list') {
-    grid.innerHTML = visibleItems.map(item => {
-      const prog = Number(item.progress) || 0;
-      const total = Number(item.total) || 0;
-      const unit = CATEGORY_UNITS[item.category] || '';
-      const progText = total > 0 ? `${prog}/${total} ${unit}` : `${prog} ${unit}`;
-      const rating = Number(item.rating) > 0 ? `★ ${Number(item.rating).toFixed(1)}` : '—';
+  if (libraryViewMode === 'list') {
+    grid.innerHTML = displayedItems.map(item => {
+      const safeId = escapeHtml(String(item.id));
+      const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/120x180/1e1e1f/888888?text=?';
+      const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
+      const allUnits = getAllItemUnits(item);
+      const cats = getItemCategories(item);
+      const seasons = getItemSeasons(item);
+      const synced = computeSyncedStatus(allUnits);
+      const combined = computeCombinedProgress(allUnits, synced.key);
+      const repeatCount = Number(item.repeat_count) || 0;
+      const statusDateText = formatStatusDate(item.updated_at || item.created_at);
+
+      const catLabels = cats.map(c => CATEGORY_LABELS[c] || c).join(' / ');
+      const seasonTag = seasons.length > 0 ? `<span>• ${formatEntryBadgeLabel(seasons.length)}</span>` : '';
+      const repeatHtml = repeatCount > 0 ? `<span class="list-repeat-tag">• ↻ ${repeatCount}x</span>` : '';
+
+      const editBtnHtml = isAdminLoggedIn ? `
+        <button type="button" class="list-edit-btn" onclick="event.stopPropagation(); openEditModal('${safeId}')" title="Edit Entry">
+          <ion-icon name="create-outline"></ion-icon>
+        </button>
+      ` : '';
 
       return `
-        <div class="media-list-row" onclick="openDetailModal('${item.id}')">
-          <img src="${escapeHtml(item.image_url || TRANSPARENT_PIXEL)}" alt="" class="list-thumb" loading="lazy">
+        <div class="media-list-row" onclick="openMediaDetailModal('${safeId}')">
+          <img class="list-thumb" src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/120x180/1e1e1f/888888?text=?'">
           <div class="list-main-info">
-            <div class="list-title">${escapeHtml(item.title)}</div>
+            <div class="list-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
             <div class="list-sub-meta">
-              <span class="list-cat-tag">${CATEGORY_LABELS[item.category] || item.category}</span>
+              <span class="list-cat-tag">${escapeHtml(catLabels)}</span>
               <span>•</span>
-              <span class="status-pill ${item.status}">${item.status}</span>
-              <span>•</span>
-              <span>${progText}</span>
-              ${Number(item.repeat_count) > 0 ? `<span class="list-repeat-tag">• ↻ ${item.repeat_count}x</span>` : ''}
+              <span>${statusDateText}</span>
+              ${seasonTag}
+              ${repeatHtml}
             </div>
           </div>
           <div class="list-right-meta">
-            <span class="list-rating-pill">${rating}</span>
-            ${isAdmin ? `
-              <button type="button" class="list-edit-btn" onclick="event.stopPropagation(); openEditMediaModal('${item.id}')" title="Edit">
-                <ion-icon name="create-outline"></ion-icon>
-              </button>
-            ` : ''}
+            <span class="status-pill ${synced.key} list-hide-mobile">${escapeHtml(synced.label)}</span>
+            <span class="progress-pill ${synced.key}">${combined.text}</span>
+            <span class="list-rating-pill">${ratingText}</span>
+            ${editBtnHtml}
           </div>
         </div>
       `;
@@ -819,744 +1320,1323 @@ function renderMediaGrid() {
     return;
   }
 
-  grid.innerHTML = visibleItems.map(item => {
-    const prog = Number(item.progress) || 0;
-    const total = Number(item.total) || 0;
-    const unit = CATEGORY_UNITS[item.category] || '';
-    const progText = total > 0 ? `${prog}/${total}` : `${prog} ${unit}`;
+  grid.innerHTML = displayedItems.map(item => {
+    const safeId = escapeHtml(String(item.id));
+    const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
+    const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
+    const repeatCount = Number(item.repeat_count) || 0;
+    const allUnits = getAllItemUnits(item);
+    const cats = getItemCategories(item);
+    const seasons = getItemSeasons(item);
+    const synced = computeSyncedStatus(allUnits);
+    const combined = computeCombinedProgress(allUnits, synced.key);
 
-    let pct = 0;
-    if (item.status === 'completed') pct = 100;
-    else if (total > 0) pct = Math.min(100, Math.round((prog / total) * 100));
-    else if (prog > 0) pct = 50;
+    const catBadgesHtml = cats.map(c => `<span class="badge-cat">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('');
+    const extraBarClass = combined.isPlannedEmpty ? 'planned-empty' : '';
+    const statusDateText = formatStatusDate(item.updated_at || item.created_at);
 
-    const extraSeasonsCount = Array.isArray(item.seasons) ? item.seasons.length : 0;
-    const dateLabel = item.finish_date
-      ? `Finished ${formatDateDisplay(item.finish_date)}`
-      : item.start_date
-        ? `Started ${formatDateDisplay(item.start_date)}`
-        : `Updated ${formatDateDisplay(item.updated_at || item.created_at)}`;
+    const repeatBadgeHtml = repeatCount > 0
+      ? `<span class="badge-repeat" title="Rewatch / Reread count">↻ ${repeatCount}x</span>`
+      : '';
+
+    const seasonsBadgeHtml = seasons.length > 0
+      ? `<span class="badge-seasons">${formatEntryBadgeLabel(seasons.length)}</span>`
+      : '';
+
+    const coverEditHtml = isAdminLoggedIn ? `
+      <button type="button" class="cover-edit-btn" onclick="event.stopPropagation(); openEditModal('${safeId}')" title="Edit Entry">
+        <ion-icon name="create-outline"></ion-icon>
+      </button>
+    ` : '';
 
     return `
-      <article class="media-card" onclick="openDetailModal('${item.id}')">
+      <div class="media-card" onclick="openMediaDetailModal('${safeId}')">
         <div class="media-cover-wrap">
-          <img src="${escapeHtml(item.image_url || TRANSPARENT_PIXEL)}" alt="${escapeHtml(item.title)}" loading="lazy">
+          <img src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=No+Cover'">
           <div class="cover-left-badges">
-            <div class="badge-cat-row">
-              <span class="badge-cat">${CATEGORY_LABELS[item.category] || item.category}</span>
-              ${(item.extra_tracks || []).map(tr => `<span class="badge-cat">+${CATEGORY_LABELS[tr.category] || tr.category}</span>`).join('')}
-            </div>
-            ${Number(item.rating) > 0 ? `<span class="badge-rating">★ ${Number(item.rating).toFixed(1)}</span>` : ''}
-            ${Number(item.repeat_count) > 0 ? `<span class="badge-repeat">↻ ${item.repeat_count}x</span>` : ''}
+            <div class="badge-cat-row">${catBadgesHtml}</div>
+            <span class="badge-rating">${ratingText}</span>
+            ${repeatBadgeHtml}
           </div>
-          ${extraSeasonsCount > 0 ? `<span class="badge-seasons">+${extraSeasonsCount} more</span>` : ''}
-          ${isAdmin ? `
-            <button type="button" class="cover-edit-btn" onclick="event.stopPropagation(); openEditMediaModal('${item.id}')" title="Edit Entry">
-              <ion-icon name="create-outline"></ion-icon>
-            </button>
-          ` : ''}
+          ${seasonsBadgeHtml}
+          ${coverEditHtml}
         </div>
-
         <div class="media-body">
-          <h3 class="media-title">${escapeHtml(item.title)}</h3>
+          <h3 class="media-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h3>
           <div class="media-bottom-stack">
             <div class="media-meta-row">
-              <span class="status-pill ${item.status}">${item.status}</span>
-              <span class="progress-pill ${item.status}">${progText}</span>
+              <span class="status-pill ${synced.key}">${escapeHtml(synced.label)}</span>
+              <span class="progress-pill ${synced.key}">${combined.text}</span>
             </div>
             <div class="progress-track">
-              <div class="progress-fill ${item.status}" style="width: ${pct}%;"></div>
+              <div class="progress-fill ${synced.key} ${extraBarClass}" style="width: ${combined.percent}%"></div>
             </div>
             <div class="media-footer-row">
-              <span class="status-date-item">
+              <span class="status-date-item" title="Last status update">
                 <ion-icon name="calendar-outline"></ion-icon>
-                <span>${dateLabel}</span>
+                <span>${statusDateText}</span>
               </span>
             </div>
           </div>
         </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ==========================================
+// 4B. MEDIA DETAIL MODAL
+// ==========================================
+window.openMediaDetailModal = function (id) {
+  const item = allMediaLogs.find(m => String(m.id) === String(id));
+  if (!item) return;
+
+  const safeId = escapeHtml(String(item.id));
+  const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
+  const tracks = getItemTracks(item);
+  const seasons = getItemSeasons(item);
+  const allUnits = [...tracks, ...seasons];
+  const cats = getItemCategories(item);
+  const synced = computeSyncedStatus(allUnits);
+  const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : 'Unrated';
+  const repeatCount = Number(item.repeat_count) || 0;
+
+  setElText('detail-modal-title', item.title);
+
+  const tracksHtml = tracks.map(t => {
+    const hasTotal = t.total_units !== null && t.total_units > 0;
+    const unitShort = UNIT_SHORT_LABELS[t.unit_label] || t.unit_label || '';
+    const progStr = hasTotal ? `${t.progress} / ${t.total_units} ${unitShort}` : `${t.progress} / ? ${unitShort}`;
+    return `
+      <div class="detail-row-item">
+        <div>
+          <strong style="color: var(--white-1);">${escapeHtml(CATEGORY_LABELS[t.category] || t.category)}</strong>
+          <span style="color: var(--light-gray-70); margin-left: 8px;">${progStr}</span>
+        </div>
+        <span class="status-pill ${t.status}">${t.status}</span>
+      </div>
+    `;
+  }).join('');
+
+  const seasonsHtml = seasons.length > 0 ? `
+    <div>
+      <div class="detail-section-title">Entries & Parts (${seasons.length + 1} Total)</div>
+      <div class="detail-list">
+        ${seasons.map(s => {
+          const sStatus = (s.status || 'planned').toLowerCase().trim();
+          const sCatLabel = CATEGORY_LABELS[s.category] || s.category || 'TV Show';
+          const sUnit = UNIT_SHORT_LABELS[s.unit_label] || s.unit_label || 'Eps';
+          const sProg = (s.total_units && Number(s.total_units) > 0)
+            ? `${s.progress || 0}/${s.total_units} ${sUnit}`
+            : `${s.progress || 0}/? ${sUnit}`;
+          const sRating = (item.rating !== null && item.rating !== undefined)
+            ? ` · ★ ${Number(item.rating).toFixed(1)}`
+            : '';
+          return `
+            <div class="detail-row-item">
+              <div style="min-width: 0;">
+                <div style="font-weight: 600; color: var(--white-1);">${escapeHtml(s.name || 'Part')}</div>
+                <div style="font-size: 11px; color: var(--light-gray-70);">${escapeHtml(sCatLabel)} · ${sProg}${sRating}</div>
+              </div>
+              <span class="status-pill ${sStatus}">${sStatus}</span>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  ` : '';
+
+  const editActionHtml = isAdminLoggedIn ? `
+    <div class="modal-submit-row">
+      <button type="button" class="form-btn primary-submit" onclick="closeMediaDetailModal(); openEditModal('${safeId}');">
+        <ion-icon name="create-outline"></ion-icon>
+        <span>Edit Entry</span>
+      </button>
+    </div>
+  ` : '';
+
+  document.getElementById('media-detail-body').innerHTML = `
+    <div class="detail-hero">
+      <img class="detail-poster" src="${cover}" alt="${escapeHtml(item.title)}" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=No+Cover'">
+      <div class="detail-meta-col">
+        <div class="badge-cat-row">
+          ${cats.map(c => `<span class="badge-cat">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('')}
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+          <span class="status-pill ${synced.key}">${escapeHtml(synced.label)}</span>
+          <span class="badge-rating">${ratingText}</span>
+          ${repeatCount > 0 ? `<span class="badge-repeat">↻ ${repeatCount}x</span>` : ''}
+        </div>
+        <div style="font-size: 11px; color: var(--light-gray-70);">
+          Updated ${formatStatusDate(item.updated_at || item.created_at)}
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="detail-section-title">Progress Tracks</div>
+      <div class="detail-list">${tracksHtml}</div>
+    </div>
+
+    ${seasonsHtml}
+    ${editActionHtml}
+  `;
+
+  document.getElementById('media-detail-modal').classList.add('active');
+};
+
+window.closeMediaDetailModal = function () {
+  document.getElementById('media-detail-modal').classList.remove('active');
+};
+
+// ==========================================
+// 5. ADD / EDIT MODAL
+// ==========================================
+window.addMediaTrackRow = function (track = null) {
+  const container = document.getElementById('media-tracks-editor');
+  if (!container) return;
+
+  const cat = (track && track.category) ? track.category : 'tv_show';
+  const status = (track && track.status) ? track.status : 'completed';
+  const progress = (track && track.progress !== undefined) ? track.progress : 0;
+  const total = (track && track.total_units !== undefined) ? track.total_units : '';
+  const unit = (track && track.unit_label) ? track.unit_label : (DEFAULT_UNITS_BY_CAT[cat] || 'eps');
+
+  const card = document.createElement('div');
+  card.className = 'track-edit-card';
+  card.innerHTML = `
+    <div class="track-edit-top">
+      <select class="form-input track-cat-select" onchange="onTrackCategoryChange(this)">
+        <option value="tv_show" ${cat === 'tv_show' ? 'selected' : ''}>TV Show</option>
+        <option value="movie" ${cat === 'movie' ? 'selected' : ''}>Movie</option>
+        <option value="comic" ${cat === 'comic' ? 'selected' : ''}>Comic</option>
+        <option value="novel" ${cat === 'novel' ? 'selected' : ''}>Novel</option>
+        <option value="game" ${cat === 'game' ? 'selected' : ''}>Game</option>
+        <option value="music" ${cat === 'music' ? 'selected' : ''}>Music</option>
+      </select>
+      <button type="button" class="social-remove-btn" onclick="removeMediaTrackRow(this)" title="Remove Category">
+        <ion-icon name="trash-outline"></ion-icon>
+      </button>
+    </div>
+    <div class="track-edit-grid">
+      <select class="form-input track-status-select" onchange="onTrackStatusOrTotalChange(this)">
+        <option value="completed" ${status === 'completed' ? 'selected' : ''}>Completed</option>
+        <option value="ongoing" ${status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
+        <option value="planned" ${status === 'planned' ? 'selected' : ''}>Planned</option>
+        <option value="dropped" ${status === 'dropped' ? 'selected' : ''}>Dropped</option>
+      </select>
+      <div class="progress-input-row">
+        <input type="number" class="form-input track-progress-input" min="0" value="${progress}" placeholder="Count">
+        <button type="button" class="step-plus-btn" onclick="stepTrackProgress(this)" title="+1">+1</button>
+      </div>
+      <input type="number" class="form-input track-total-input" min="0" value="${total !== null ? total : ''}" placeholder="Total" oninput="onTrackStatusOrTotalChange(this)">
+      <select class="form-input track-unit-select">
+        <option value="eps" ${unit === 'eps' ? 'selected' : ''}>Episode</option>
+        <option value="movie" ${unit === 'movie' ? 'selected' : ''}>Movie</option>
+        <option value="ch" ${unit === 'ch' ? 'selected' : ''}>Chapter</option>
+        <option value="vol" ${unit === 'vol' ? 'selected' : ''}>Volume</option>
+        <option value="pages" ${unit === 'pages' ? 'selected' : ''}>Pages</option>
+        <option value="track" ${unit === 'track' ? 'selected' : ''}>Track</option>
+        <option value="item" ${unit === 'item' ? 'selected' : ''}>Item</option>
+      </select>
+    </div>
+  `;
+  container.appendChild(card);
+};
+
+window.removeMediaTrackRow = function (btn) {
+  const container = document.getElementById('media-tracks-editor');
+  if (container && container.children.length <= 1) {
+    showToast('At least 1 category track is required', 'info');
+    return;
+  }
+  const card = btn.closest('.track-edit-card');
+  if (card) card.remove();
+};
+
+window.onTrackCategoryChange = function (selectEl) {
+  const card = selectEl.closest('.track-edit-card');
+  const unitSelect = card ? card.querySelector('.track-unit-select') : null;
+  if (unitSelect && DEFAULT_UNITS_BY_CAT[selectEl.value]) {
+    unitSelect.value = DEFAULT_UNITS_BY_CAT[selectEl.value];
+  }
+};
+
+window.onTrackStatusOrTotalChange = function (el) {
+  const card = el.closest('.track-edit-card');
+  if (!card) return;
+  const statusEl = card.querySelector('.track-status-select');
+  const totalEl = card.querySelector('.track-total-input');
+  const progInput = card.querySelector('.track-progress-input');
+
+  const status = statusEl ? statusEl.value : '';
+  const totalVal = totalEl ? parseInt(totalEl.value, 10) : NaN;
+
+  if (status === 'completed' && totalVal > 0 && progInput) {
+    progInput.value = totalVal;
+  }
+};
+
+window.stepTrackProgress = function (btn) {
+  const card = btn.closest('.track-edit-card');
+  if (!card) return;
+  const progInput = card.querySelector('.track-progress-input');
+  const totalEl = card.querySelector('.track-total-input');
+  const statusSelect = card.querySelector('.track-status-select');
+
+  if (!progInput) return;
+  const totalVal = totalEl ? parseInt(totalEl.value, 10) : NaN;
+  const nextVal = (parseInt(progInput.value, 10) || 0) + 1;
+  progInput.value = nextVal;
+
+  if (totalVal > 0 && nextVal >= totalVal && statusSelect) {
+    statusSelect.value = 'completed';
+  }
+};
+
+window.addSeasonItemRow = function (season = null) {
+  const container = document.getElementById('media-seasons-editor');
+  if (!container) return;
+
+  const firstTrackCat = document.querySelector('#media-tracks-editor .track-cat-select')?.value || 'tv_show';
+  const name = (season && season.name) ? season.name : '';
+  const cat = (season && season.category) ? season.category : firstTrackCat;
+  const status = (season && season.status) ? season.status : 'completed';
+  const progress = (season && season.progress !== undefined) ? season.progress : 0;
+  const total = (season && season.total_units !== undefined && season.total_units !== null) ? season.total_units : '';
+  const unit = (season && season.unit_label) ? season.unit_label : (DEFAULT_UNITS_BY_CAT[cat] || 'eps');
+
+  const card = document.createElement('div');
+  card.className = 'season-edit-card';
+  card.innerHTML = `
+    <div class="season-edit-top">
+      <select class="form-input season-cat-select" style="max-width: 118px;" onchange="onSeasonCategoryChange(this)">
+        <option value="tv_show" ${cat === 'tv_show' ? 'selected' : ''}>TV Show</option>
+        <option value="movie" ${cat === 'movie' ? 'selected' : ''}>Movie</option>
+        <option value="comic" ${cat === 'comic' ? 'selected' : ''}>Comic</option>
+        <option value="novel" ${cat === 'novel' ? 'selected' : ''}>Novel</option>
+        <option value="game" ${cat === 'game' ? 'selected' : ''}>Game</option>
+        <option value="music" ${cat === 'music' ? 'selected' : ''}>Music</option>
+      </select>
+      <input type="text" class="form-input season-name-input" placeholder="e.g. OVA / Season 2 / Special" value="${escapeHtml(name)}">
+      <button type="button" class="social-remove-btn" onclick="this.closest('.season-edit-card').remove()" title="Remove Entry">
+        <ion-icon name="trash-outline"></ion-icon>
+      </button>
+    </div>
+    <div class="season-edit-grid">
+      <select class="form-input season-status-select" onchange="onSeasonStatusOrTotalChange(this)">
+        <option value="completed" ${status === 'completed' ? 'selected' : ''}>Completed</option>
+        <option value="ongoing" ${status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
+        <option value="planned" ${status === 'planned' ? 'selected' : ''}>Planned</option>
+        <option value="dropped" ${status === 'dropped' ? 'selected' : ''}>Dropped</option>
+      </select>
+      <div class="progress-input-row">
+        <input type="number" class="form-input season-progress-input" min="0" value="${progress}" placeholder="Count">
+        <button type="button" class="step-plus-btn" onclick="stepSeasonProgress(this)" title="+1">+1</button>
+      </div>
+      <input type="number" class="form-input season-total-input" min="0" value="${total}" placeholder="Total" oninput="onSeasonStatusOrTotalChange(this)">
+      <select class="form-input season-unit-select">
+        <option value="eps" ${unit === 'eps' ? 'selected' : ''}>Episode</option>
+        <option value="movie" ${unit === 'movie' ? 'selected' : ''}>Movie</option>
+        <option value="ch" ${unit === 'ch' ? 'selected' : ''}>Chapter</option>
+        <option value="vol" ${unit === 'vol' ? 'selected' : ''}>Volume</option>
+        <option value="pages" ${unit === 'pages' ? 'selected' : ''}>Pages</option>
+        <option value="track" ${unit === 'track' ? 'selected' : ''}>Track</option>
+        <option value="item" ${unit === 'item' ? 'selected' : ''}>Item</option>
+      </select>
+    </div>
+  `;
+  container.appendChild(card);
+};
+
+window.onSeasonCategoryChange = function (selectEl) {
+  const card = selectEl.closest('.season-edit-card');
+  const unitSelect = card ? card.querySelector('.season-unit-select') : null;
+  if (unitSelect && DEFAULT_UNITS_BY_CAT[selectEl.value]) {
+    unitSelect.value = DEFAULT_UNITS_BY_CAT[selectEl.value];
+  }
+};
+
+window.onSeasonStatusOrTotalChange = function (el) {
+  const card = el.closest('.season-edit-card');
+  if (!card) return;
+  const statusEl = card.querySelector('.season-status-select');
+  const totalEl = card.querySelector('.season-total-input');
+  const progInput = card.querySelector('.season-progress-input');
+
+  const status = statusEl ? statusEl.value : '';
+  const totalVal = totalEl ? parseInt(totalEl.value, 10) : NaN;
+
+  if (status === 'completed' && totalVal > 0 && progInput) {
+    progInput.value = totalVal;
+  }
+};
+
+window.stepSeasonProgress = function (btn) {
+  const card = btn.closest('.season-edit-card');
+  if (!card) return;
+  const progInput = card.querySelector('.season-progress-input');
+  const totalEl = card.querySelector('.season-total-input');
+  const statusSelect = card.querySelector('.season-status-select');
+
+  if (!progInput) return;
+  const totalVal = totalEl ? parseInt(totalEl.value, 10) : NaN;
+  const nextVal = (parseInt(progInput.value, 10) || 0) + 1;
+  progInput.value = nextVal;
+
+  if (totalVal > 0 && nextVal >= totalVal && statusSelect) {
+    statusSelect.value = 'completed';
+  }
+};
+
+window.openMediaModal = function () {
+  pendingUploadedUrls = [];
+  document.getElementById('media-modal-title').textContent = 'Add Media';
+  document.getElementById('media-form').reset();
+  document.getElementById('media-id').value = '';
+  document.getElementById('media-repeat').value = 0;
+  document.getElementById('btn-modal-delete').style.display = 'none';
+  document.getElementById('api-search-results').style.display = 'none';
+  setElText('cover-upload-status', '');
+
+  const tracksEditor = document.getElementById('media-tracks-editor');
+  if (tracksEditor) {
+    tracksEditor.innerHTML = '';
+    addMediaTrackRow({ category: 'tv_show', status: 'completed', progress: 0, total_units: '', unit_label: 'eps' });
+  }
+
+  const seasonsEditor = document.getElementById('media-seasons-editor');
+  if (seasonsEditor) seasonsEditor.innerHTML = '';
+
+  document.getElementById('media-modal').classList.add('active');
+};
+
+window.openEditModal = function (id) {
+  const item = allMediaLogs.find(m => String(m.id) === String(id));
+  if (!item) {
+    showToast('Media entry not found', 'error');
+    return;
+  }
+
+  pendingUploadedUrls = [];
+  document.getElementById('media-modal-title').textContent = 'Edit Media';
+  document.getElementById('media-id').value = item.id;
+  document.getElementById('btn-modal-delete').style.display = 'inline-flex';
+
+  document.getElementById('media-title').value = item.title || '';
+  document.getElementById('media-cover').value = item.cover_url || '';
+  document.getElementById('media-rating').value = (item.rating !== null && item.rating !== undefined) ? item.rating : '';
+  document.getElementById('media-repeat').value = Number(item.repeat_count) || 0;
+  document.getElementById('api-search-results').style.display = 'none';
+  setElText('cover-upload-status', '');
+
+  const tracksEditor = document.getElementById('media-tracks-editor');
+  if (tracksEditor) {
+    tracksEditor.innerHTML = '';
+    const tracks = getItemTracks(item);
+    tracks.forEach(t => addMediaTrackRow(t));
+    const apiCatSelect = document.getElementById('api-search-cat');
+    if (apiCatSelect && tracks[0]) apiCatSelect.value = tracks[0].category || 'tv_show';
+  }
+
+  const seasonsEditor = document.getElementById('media-seasons-editor');
+  if (seasonsEditor) {
+    seasonsEditor.innerHTML = '';
+    getItemSeasons(item).forEach(s => addSeasonItemRow(s));
+  }
+
+  document.getElementById('media-modal').classList.add('active');
+};
+
+window.closeMediaModal = async function () {
+  document.getElementById('media-modal').classList.remove('active');
+  await cleanupPendingUploads([]);
+};
+
+window.handleMediaCoverUpload = async function (event) {
+  const file = event.target.files ? event.target.files[0] : null;
+  event.target.value = '';
+  if (!file) return;
+
+  setElText('cover-upload-status', 'Uploading cover...');
+  try {
+    const publicUrl = await uploadImageToSupabase(file, 'covers');
+    document.getElementById('media-cover').value = publicUrl;
+    setElText('cover-upload-status', 'Cover uploaded successfully!');
+    showToast('Cover uploaded', 'success');
+  } catch (err) {
+    setElText('cover-upload-status', `Upload failed: ${err.message}`);
+    showToast(err.message, 'error');
+  }
+};
+
+window.stepModalRepeat = function () {
+  const repInput = document.getElementById('media-repeat');
+  const nextVal = (parseInt(repInput.value, 10) || 0) + 1;
+  repInput.value = nextVal;
+};
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 4500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchAniListMedia(query, isNovel = false) {
+  const gql = `
+    query ($search: String) {
+      Page(perPage: 6) {
+        media(search: $search, type: MANGA, ${isNovel ? 'format: NOVEL' : 'format_not: NOVEL'}) {
+          title { english romaji }
+          coverImage { large medium }
+          chapters
+          volumes
+          countryOfOrigin
+        }
+      }
+    }
+  `;
+  const res = await fetchWithTimeout('https://graphql.anilist.co', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ query: gql, variables: { search: query } })
+  });
+  const json = await res.json();
+  const mediaList = (json.data && json.data.Page && json.data.Page.media) ? json.data.Page.media : [];
+  return mediaList.map(m => {
+    const originMap = { JP: 'Manga', KR: 'Manhwa', CN: 'Manhua' };
+    const label = isNovel ? 'Novel' : (originMap[m.countryOfOrigin] || 'Comic');
+    const coverImg = m.coverImage ? (m.coverImage.large || m.coverImage.medium || '') : '';
+    return {
+      title: m.title.english || m.title.romaji,
+      cover: normalizeImageUrl(coverImg),
+      total: isNovel ? (m.volumes || m.chapters || null) : (m.chapters || null),
+      unit: isNovel ? (m.volumes ? 'vol' : 'ch') : 'ch',
+      meta: `${label} · ${isNovel ? (m.volumes || '?') + ' Volume' : (m.chapters || '?') + ' Chapter'}`
+    };
+  });
+}
+
+function deduplicateResults(list) {
+  const seen = new Set();
+  return list.filter(item => {
+    const key = item.title.toLowerCase().trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+window.searchExternalAPI = async function () {
+  const query = document.getElementById('api-search-input').value.trim();
+  const cat = document.getElementById('api-search-cat').value;
+  const resultsBox = document.getElementById('api-search-results');
+
+  if (!query) return;
+  resultsBox.style.display = 'block';
+  resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">Searching...</p>`;
+
+  let items = [];
+
+  if (cat === 'tv_show') {
+    const [jikanRes, tvmazeRes, tmdbRes] = await Promise.allSettled([
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=5&sfw=true`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || []).map(a => ({
+          title: a.title_english || a.title,
+          cover: normalizeImageUrl((a.images && a.images.jpg && (a.images.jpg.large_image_url || a.images.jpg.image_url)) || ''),
+          total: a.episodes || null,
+          unit: 'eps',
+          meta: `Anime TV · ${a.episodes || '?'} Episode`
+        }));
+      })(),
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        return (data || []).slice(0, 5).map(entry => ({
+          tvmazeId: entry.show.id,
+          title: entry.show.name,
+          cover: normalizeImageUrl((entry.show.image && (entry.show.image.original || entry.show.image.medium)) || ''),
+          total: null,
+          unit: 'eps',
+          meta: `TV Show · ${entry.show.premiered ? entry.show.premiered.slice(0, 4) : 'Show'}`
+        }));
+      })(),
+      (async () => {
+        if (!TMDB_API_KEY) return [];
+        const res = await fetchWithTimeout(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.results || []).slice(0, 5).map(t => ({
+          tmdbId: t.id,
+          title: t.name,
+          cover: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : '',
+          total: null,
+          unit: 'eps',
+          meta: `TV Show · ${t.first_air_date ? t.first_air_date.slice(0, 4) : 'TMDB'}`
+        }));
+      })()
+    ]);
+
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    if (tvmazeRes.status === 'fulfilled') items.push(...tvmazeRes.value);
+    if (tmdbRes.status === 'fulfilled') items.push(...tmdbRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'movie') {
+    const [jikanRes, itunesRes, tmdbRes] = await Promise.allSettled([
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=movie&limit=5&sfw=true`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || []).map(a => ({
+          title: a.title_english || a.title,
+          cover: normalizeImageUrl((a.images && a.images.jpg && (a.images.jpg.large_image_url || a.images.jpg.image_url)) || ''),
+          total: 1,
+          unit: 'movie',
+          meta: `Anime Movie · ${a.year || 'Film'}`
+        }));
+      })(),
+      (async () => {
+        const res = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=movie&limit=5`);
+        const data = await res.json();
+        return (data.results || []).map(m => ({
+          title: m.trackName,
+          cover: normalizeImageUrl(m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : ''),
+          total: 1,
+          unit: 'movie',
+          meta: `Movie · ${m.releaseDate ? m.releaseDate.slice(0, 4) : 'Film'}`
+        }));
+      })(),
+      (async () => {
+        if (!TMDB_API_KEY) return [];
+        const res = await fetchWithTimeout(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.results || []).slice(0, 5).map(m => ({
+          title: m.title,
+          cover: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : '',
+          total: 1,
+          unit: 'movie',
+          meta: `Movie · ${m.release_date ? m.release_date.slice(0, 4) : 'TMDB'}`
+        }));
+      })()
+    ]);
+
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    if (itunesRes.status === 'fulfilled') items.push(...itunesRes.value);
+    if (tmdbRes.status === 'fulfilled') items.push(...tmdbRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'comic') {
+    const [jikanRes, aniRes] = await Promise.allSettled([
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=6&sfw=true`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || [])
+          .filter(m => m.type !== 'Light Novel' && m.type !== 'Novel')
+          .map(m => ({
+            title: m.title_english || m.title,
+            cover: normalizeImageUrl((m.images && m.images.jpg && (m.images.jpg.large_image_url || m.images.jpg.image_url)) || ''),
+            total: m.chapters || null,
+            unit: 'ch',
+            meta: `${m.type} · ${m.chapters || '?'} Chapter`
+          }));
+      })(),
+      fetchAniListMedia(query, false)
+    ]);
+
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'novel') {
+    const [openLibRes, jikanRes, aniRes] = await Promise.allSettled([
+      (async () => {
+        const res = await fetchWithTimeout(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=6`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.docs || []).map(b => {
+          const author = b.author_name ? b.author_name[0] : 'Book';
+          const pages = b.number_of_pages_median || null;
+          return {
+            title: b.title,
+            cover: b.cover_i ? `https://covers.openlibrary.org/b/id/${b.cover_i}-L.jpg` : '',
+            total: pages,
+            unit: pages ? 'pages' : 'vol',
+            meta: `Novel (${author}) · ${pages ? pages + ' Pages' : 'Book'}`
+          };
+        });
+      })(),
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&type=lightnovel&limit=4&sfw=true`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || []).map(ln => ({
+          title: ln.title_english || ln.title,
+          cover: normalizeImageUrl((ln.images && ln.images.jpg && (ln.images.jpg.large_image_url || ln.images.jpg.image_url)) || ''),
+          total: ln.volumes || ln.chapters || null,
+          unit: ln.volumes ? 'vol' : 'ch',
+          meta: `Light Novel · ${ln.volumes || '?'} Volume`
+        }));
+      })(),
+      fetchAniListMedia(query, true)
+    ]);
+
+    if (openLibRes.status === 'fulfilled') items.push(...openLibRes.value);
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'game') {
+    const [wikiGameRes, vndbRes, rawgRes] = await Promise.allSettled([
+      (async () => {
+        const searchRes = await fetchWithTimeout(
+          `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=en&format=json&origin=*&limit=8`
+        );
+        if (!searchRes.ok) return [];
+        const searchData = await searchRes.json();
+        const candidates = (searchData.search || []).filter(item => {
+          const desc = (item.description || '').toLowerCase();
+          return desc.includes('video game') || desc.includes('game');
+        });
+        if (candidates.length === 0) return [];
+
+        const ids = candidates.map(c => c.id).join('|');
+        const entityRes = await fetchWithTimeout(
+          `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${ids}&props=claims|sitelinks|labels|descriptions&languages=en&format=json&origin=*`
+        );
+        const entityData = await entityRes.json();
+        const entities = entityData.entities || {};
+
+        const results = await Promise.all(
+          candidates.map(async c => {
+            const ent = entities[c.id];
+            if (!ent) return null;
+            const title = (ent.labels && ent.labels.en && ent.labels.en.value) || c.label;
+            const desc = (ent.descriptions && ent.descriptions.en && ent.descriptions.en.value) || 'Video Game';
+            let cover = '';
+            const p18 = ent.claims && ent.claims.P18 && ent.claims.P18[0] && ent.claims.P18[0].mainsnak && ent.claims.P18[0].mainsnak.datavalue && ent.claims.P18[0].mainsnak.datavalue.value;
+            if (p18) cover = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(p18)}?width=500`;
+            const enWikiTitle = ent.sitelinks && ent.sitelinks.enwiki && ent.sitelinks.enwiki.title;
+            if (!cover && enWikiTitle) {
+              try {
+                const wpRes = await fetchWithTimeout(
+                  `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(enWikiTitle)}&prop=pageimages&pithumbsize=500&format=json&origin=*`
+                );
+                const wpData = await wpRes.json();
+                const pagesObj = (wpData.query && wpData.query.pages) ? wpData.query.pages : {};
+                const pageObj = Object.values(pagesObj)[0];
+                if (pageObj && pageObj.thumbnail && pageObj.thumbnail.source) cover = normalizeImageUrl(pageObj.thumbnail.source);
+              } catch (_) {}
+            }
+            return { title, cover, total: 1, unit: 'item', meta: desc.charAt(0).toUpperCase() + desc.slice(1) };
+          })
+        );
+        return results.filter(Boolean);
+      })(),
+      (async () => {
+        const res = await fetchWithTimeout('https://api.vndb.org/kana/vn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filters: ['search', '=', query],
+            fields: 'title, image.url, released',
+            results: 5
+          })
+        });
+        const data = await res.json();
+        return (data.results || []).map(g => ({
+          title: g.title,
+          cover: normalizeImageUrl(g.image ? g.image.url : ''),
+          total: 1,
+          unit: 'item',
+          meta: `Visual Novel · ${g.released || ''}`
+        }));
+      })(),
+      (async () => {
+        if (!RAWG_API_KEY) return [];
+        const res = await fetchWithTimeout(`https://api.rawg.io/api/games?key=${RAWG_API_KEY}&search=${encodeURIComponent(query)}&page_size=5`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.results || []).map(g => ({
+          title: g.name,
+          cover: normalizeImageUrl(g.background_image || ''),
+          total: 1,
+          unit: 'item',
+          meta: `Game · ${g.released ? g.released.slice(0, 4) : ''}`
+        }));
+      })()
+    ]);
+
+    if (wikiGameRes.status === 'fulfilled') items.push(...wikiGameRes.value);
+    if (vndbRes.status === 'fulfilled') items.push(...vndbRes.value);
+    if (rawgRes.status === 'fulfilled') items.push(...rawgRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'music') {
+    try {
+      const res = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=album&limit=8`);
+      const data = await res.json();
+      items = (data.results || []).map(m => ({
+        title: `${m.collectionName} — ${m.artistName}`,
+        cover: normalizeImageUrl(m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : ''),
+        total: m.trackCount || 1,
+        unit: 'track',
+        meta: `Album · ${m.trackCount || '?'} Tracks · ${m.releaseDate ? m.releaseDate.slice(0, 4) : ''}`
+      }));
+      items = deduplicateResults(items);
+    } catch (e) {
+      console.error('Music search error:', e);
+    }
+  }
+
+  lastApiResults = items;
+
+  if (items.length === 0) {
+    resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">No results found. Please fill in the fields manually below.</p>`;
+    return;
+  }
+
+  resultsBox.innerHTML = items.map((it, idx) => `
+    <div class="api-result-item" onclick="applyApiResult(${idx})">
+      <img src="${it.cover || 'https://placehold.co/60x90/1e1e1f/888?text=?'}" alt="" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/60x90/1e1e1f/888?text=?'">
+      <div class="api-result-info">
+        <h4>${escapeHtml(it.title)}</h4>
+        <p>${escapeHtml(it.meta)}</p>
+      </div>
+    </div>
+  `).join('');
+};
+
+window.applyApiResult = async function (idx) {
+  const item = lastApiResults[idx];
+  const searchedCat = document.getElementById('api-search-cat').value;
+  if (!item) return;
+
+  if (!document.getElementById('media-title').value.trim()) {
+    document.getElementById('media-title').value = item.title;
+  }
+  if (!document.getElementById('media-cover').value.trim() && item.cover) {
+    document.getElementById('media-cover').value = item.cover;
+  }
+
+  const trackCards = Array.from(document.querySelectorAll('#media-tracks-editor .track-edit-card'));
+  let targetCard = trackCards.find(c => {
+    const sel = c.querySelector('.track-cat-select');
+    return sel && sel.value === searchedCat;
+  }) || trackCards[0];
+
+  if (targetCard) {
+    targetCard.querySelector('.track-cat-select').value = searchedCat;
+    if (item.total) targetCard.querySelector('.track-total-input').value = item.total;
+    if (item.unit) targetCard.querySelector('.track-unit-select').value = item.unit;
+    onTrackStatusOrTotalChange(targetCard.querySelector('.track-total-input'));
+  }
+
+  document.getElementById('api-search-results').style.display = 'none';
+
+  if (item.tvmazeId && targetCard) {
+    try {
+      const epRes = await fetchWithTimeout(`https://api.tvmaze.com/shows/${item.tvmazeId}/episodes`);
+      const epData = await epRes.json();
+      if (Array.isArray(epData) && epData.length > 0) {
+        targetCard.querySelector('.track-total-input').value = epData.length;
+        onTrackStatusOrTotalChange(targetCard.querySelector('.track-total-input'));
+      }
+    } catch (_) {}
+  }
+
+  if (item.tmdbId && TMDB_API_KEY && targetCard) {
+    try {
+      const detailRes = await fetchWithTimeout(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}`);
+      const detailData = await detailRes.json();
+      if (detailData.number_of_episodes) {
+        targetCard.querySelector('.track-total-input').value = detailData.number_of_episodes;
+        onTrackStatusOrTotalChange(targetCard.querySelector('.track-total-input'));
+      }
+    } catch (_) {}
+  }
+};
+
+// ==========================================
+// 6. SUPABASE MEDIA CRUD + AUTO-CLEANUP
+// ==========================================
+const mediaForm = document.getElementById('media-form');
+if (mediaForm) {
+  mediaForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const id = document.getElementById('media-id').value;
+    const existingItem = id ? allMediaLogs.find(m => String(m.id) === String(id)) : null;
+    const oldCover = existingItem ? existingItem.cover_url : null;
+    const newCover = normalizeImageUrl(document.getElementById('media-cover').value) || null;
+
+    const trackCards = document.querySelectorAll('#media-tracks-editor .track-edit-card');
+    const tracks = [];
+    trackCards.forEach(card => {
+      const cat = card.querySelector('.track-cat-select').value;
+      const status = card.querySelector('.track-status-select').value;
+      const totalRaw = card.querySelector('.track-total-input').value;
+      const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
+      let progressVal = parseInt(card.querySelector('.track-progress-input').value, 10) || 0;
+      const unitLabel = card.querySelector('.track-unit-select').value;
+
+      if (status === 'completed' && totalUnits && totalUnits > 0) {
+        progressVal = totalUnits;
+      }
+
+      tracks.push({
+        category: cat,
+        status,
+        progress: progressVal,
+        total_units: totalUnits,
+        unit_label: unitLabel
+      });
+    });
+
+    if (tracks.length === 0) {
+      showToast('Please add at least 1 category track', 'error');
+      return;
+    }
+
+    const ratingRaw = document.getElementById('media-rating').value;
+    const inheritedRating = ratingRaw !== '' ? parseFloat(ratingRaw) : null;
+
+    const seasonCards = document.querySelectorAll('#media-seasons-editor .season-edit-card');
+    const seasons = [];
+    seasonCards.forEach(card => {
+      const name = card.querySelector('.season-name-input').value.trim();
+      if (!name) return;
+      const cat = card.querySelector('.season-cat-select')?.value || tracks[0].category;
+      const status = card.querySelector('.season-status-select').value;
+      const totalRaw = card.querySelector('.season-total-input').value;
+      const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
+      let progressVal = parseInt(card.querySelector('.season-progress-input').value, 10) || 0;
+      const unitLabel = card.querySelector('.season-unit-select')?.value || 'eps';
+
+      if (status === 'completed' && totalUnits && totalUnits > 0) {
+        progressVal = totalUnits;
+      }
+
+      seasons.push({
+        name,
+        category: cat,
+        status,
+        progress: progressVal,
+        total_units: totalUnits,
+        unit_label: unitLabel,
+        rating: inheritedRating
+      });
+    });
+
+    const allCombinedUnits = [...tracks, ...seasons];
+    const categories = Array.from(new Set(allCombinedUnits.map(t => t.category)));
+    const primaryTrack = tracks[0];
+    const syncedStatus = computeSyncedStatus(allCombinedUnits);
+    const repeatVal = Math.max(0, parseInt(document.getElementById('media-repeat').value, 10) || 0);
+
+    const payload = {
+      title: document.getElementById('media-title').value.trim(),
+      category: primaryTrack.category,
+      categories,
+      tracks,
+      seasons,
+      sub_category: null,
+      cover_url: newCover,
+      status: syncedStatus.key,
+      progress: primaryTrack.progress,
+      total_units: primaryTrack.total_units,
+      unit_label: primaryTrack.unit_label,
+      rating: inheritedRating,
+      repeat_count: repeatVal,
+      updated_at: new Date().toISOString()
+    };
+
+    let error;
+    if (id) {
+      ({ error } = await supabaseClient.from('media_logs').update(payload).eq('id', id));
+    } else {
+      ({ error } = await supabaseClient.from('media_logs').insert([payload]));
+    }
+
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      await cleanupPendingUploads([newCover]);
+      if (oldCover && oldCover !== newCover) {
+        await deleteOldStorageFile(oldCover);
+      }
+      document.getElementById('media-modal').classList.remove('active');
+      await fetchMediaLogs();
+      showToast(id ? 'Media entry updated' : 'Media entry added', 'success');
+    }
+  });
+}
+
+window.deleteCurrentModalMedia = async function () {
+  const id = document.getElementById('media-id').value;
+  if (!id) return;
+
+  const existingItem = allMediaLogs.find(m => String(m.id) === String(id));
+
+  const confirm = await Swal.fire({
+    text: 'Remove this entry from your library?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ff5f5f',
+    confirmButtonText: 'Delete',
+    cancelButtonText: 'Cancel',
+    background: '#1e1e1f',
+    color: '#fff'
+  });
+
+  if (confirm.isConfirmed) {
+    const { error } = await supabaseClient.from('media_logs').delete().eq('id', id);
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      await cleanupPendingUploads([]);
+      if (existingItem && existingItem.cover_url) {
+        await deleteOldStorageFile(existingItem.cover_url);
+      }
+      document.getElementById('media-modal').classList.remove('active');
+      await fetchMediaLogs();
+      showToast('Entry deleted', 'info');
+    }
+  }
+};
+
+// ==========================================
+// 7. PERSONAL NOTES / POSTS + AUTOMATIC LINK PREVIEW CARD
+// ==========================================
+function formatPostDateTime(createdIso, updatedIso) {
+  if (!createdIso) return '';
+  const created = new Date(createdIso);
+  if (Number.isNaN(created.getTime())) return '';
+
+  const dateStr = created.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+  const timeStr = created.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+
+  const isEdited = updatedIso && Math.abs(new Date(updatedIso) - created) > 10000;
+  return `${dateStr} · ${timeStr}${isEdited ? ' (edited)' : ''}`;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text == null ? '' : String(text);
+  return div.innerHTML;
+}
+
+function extractFirstUrl(text) {
+  const match = (text || '').match(/https?:\/\/[^\s<>"']+/i);
+  return match ? match[0] : null;
+}
+
+function formatTextWithLinks(rawText) {
+  const escaped = escapeHtml(rawText || '');
+  return escaped.replace(/(https?:\/\/[^\s<>"']+)/gi, (url) => {
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="inline-note-link">${url}</a>`;
+  });
+}
+
+function buildLinkPreviewCard(url) {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    const domain = parsed.hostname.replace(/^www\./, '');
+    const iconName = detectSocialIcon(url);
+    const pathClean = decodeURIComponent(parsed.pathname).replace(/^\/|\/$/g, '').replace(/[-_]/g, ' ');
+    const displayTitle = pathClean ? `${domain} — ${pathClean}` : url;
+
+    return `
+      <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="link-preview-card">
+        <div class="link-preview-icon">
+          <ion-icon name="${iconName}"></ion-icon>
+        </div>
+        <div class="link-preview-info">
+          <span class="link-preview-domain">${escapeHtml(domain)}</span>
+          <span class="link-preview-title">${escapeHtml(displayTitle)}</span>
+        </div>
+        <ion-icon name="open-outline" style="color: var(--light-gray-70); font-size: 16px; flex-shrink: 0;"></ion-icon>
+      </a>
+    `;
+  } catch (_) {
+    return '';
+  }
+}
+
+async function fetchBlogPosts() {
+  const { data, error } = await supabaseClient
+    .from('blog_posts')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    const listEl = document.getElementById('blog-feed-list');
+    if (listEl) listEl.innerHTML = `<p class="empty-state">Failed to load posts: ${escapeHtml(error.message)}</p>`;
+    return;
+  }
+
+  allBlogPosts = data || [];
+  renderBlogPosts();
+}
+
+function renderBlogPosts() {
+  const listEl = document.getElementById('blog-feed-list');
+  if (!listEl) return;
+
+  if (allBlogPosts.length === 0) {
+    listEl.innerHTML = `<p class="empty-state">No notes yet.</p>`;
+    return;
+  }
+
+  const avatarSrc = normalizeImageUrl(currentProfile.avatar_url) || TRANSPARENT_PIXEL;
+  const authorName = escapeHtml(currentProfile.name || '');
+
+  listEl.innerHTML = allBlogPosts.map(post => {
+    const safePostId = escapeHtml(String(post.id));
+    const postImg = normalizeImageUrl(post.image_url);
+    const timeLabel = formatPostDateTime(post.created_at, post.updated_at);
+    const detectedUrl = extractFirstUrl(post.content);
+    const linkPreviewHtml = detectedUrl ? buildLinkPreviewCard(detectedUrl) : '';
+
+    const adminControls = isAdminLoggedIn ? `
+      <div class="blog-post-actions">
+        <button type="button" class="blog-icon-btn" onclick="openEditPostModal('${safePostId}')" title="Edit Post">
+          <ion-icon name="create-outline"></ion-icon>
+        </button>
+        <button type="button" class="blog-icon-btn delete" onclick="deleteBlogPost('${safePostId}')" title="Delete Post">
+          <ion-icon name="trash-outline"></ion-icon>
+        </button>
+      </div>
+    ` : '';
+
+    const imageBlock = postImg ? `
+      <div class="blog-post-image-wrap">
+        <img src="${postImg}" alt="Post attachment" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'">
+      </div>
+    ` : '';
+
+    return `
+      <article class="blog-post-card">
+        <div class="blog-post-header">
+          <div class="blog-post-author">
+            <img class="blog-post-avatar" src="${avatarSrc}" alt="" onerror="this.src='${TRANSPARENT_PIXEL}'">
+            <div class="blog-post-meta">
+              <span class="blog-post-name">${authorName}</span>
+              <span class="blog-post-time">${timeLabel}</span>
+            </div>
+          </div>
+          ${adminControls}
+        </div>
+        <div class="blog-post-text">${formatTextWithLinks(post.content)}</div>
+        ${linkPreviewHtml}
+        ${imageBlock}
       </article>
     `;
   }).join('');
 }
 
-async function loadMediaLibrary() {
-  if (!sb) {
-    allEntries = JSON.parse(localStorage.getItem('archive_media_local') || '[]');
-    updateLibraryStats();
-    renderMediaGrid();
-    return;
-  }
-
-  const { data, error } = await sb
-    .from('media_logs')
-    .select('*')
-    .order('updated_at', { ascending: false });
-
-  if (!error && data) {
-    allEntries = data;
-    updateLibraryStats();
-    renderMediaGrid();
-  }
-}
-
-/*-----------------------------------*\
-  #DETAIL MODAL PREVIEW
-\*-----------------------------------*/
-
-window.openDetailModal = function(id) {
-  const item = allEntries.find(e => String(e.id) === String(id));
-  if (!item) return;
-
-  document.getElementById('detail-modal-title').textContent = item.title;
-  const body = document.getElementById('detail-modal-body');
-  const unit = CATEGORY_UNITS[item.category] || '';
-  const progText = Number(item.total) > 0 ? `${item.progress} / ${item.total} ${unit}` : `${item.progress} ${unit}`;
-
-  body.innerHTML = `
-    <div class="detail-hero">
-      <img src="${escapeHtml(item.image_url || TRANSPARENT_PIXEL)}" alt="" class="detail-poster">
-      <div class="detail-meta-col">
-        <div class="badge-cat-row">
-          <span class="badge-cat">${CATEGORY_LABELS[item.category] || item.category}</span>
-          <span class="status-pill ${item.status}">${item.status}</span>
-          ${Number(item.rating) > 0 ? `<span class="badge-rating">★ ${Number(item.rating).toFixed(1)} / 10</span>` : ''}
-        </div>
-        <div style="font-size: 13px; color: var(--light-gray);">
-          <strong>Progress:</strong> ${progText}
-          ${Number(item.volumes) > 0 ? ` • <strong>Volumes:</strong> ${item.volumes}` : ''}
-          ${Number(item.repeat_count) > 0 ? ` • <strong>Repeat:</strong> ${item.repeat_count}x` : ''}
-        </div>
-        ${item.start_date || item.finish_date ? `
-          <div style="font-size: 12px; color: var(--light-gray-70);">
-            ${item.start_date ? `Started: ${formatDateDisplay(item.start_date)}` : ''}
-            ${item.start_date && item.finish_date ? ' • ' : ''}
-            ${item.finish_date ? `Finished: ${formatDateDisplay(item.finish_date)}` : ''}
-          </div>
-        ` : ''}
-      </div>
-    </div>
-
-    ${Array.isArray(item.extra_tracks) && item.extra_tracks.length > 0 ? `
-      <div>
-        <div class="detail-section-title">Cross-Category Progress</div>
-        <div class="detail-list">
-          ${item.extra_tracks.map(tr => `
-            <div class="detail-row-item">
-              <span><strong>${CATEGORY_LABELS[tr.category] || tr.category}</strong> (${tr.status})</span>
-              <span>${tr.progress}${tr.total > 0 ? '/' + tr.total : ''} ${CATEGORY_UNITS[tr.category] || ''}</span>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    ` : ''}
-
-    ${Array.isArray(item.seasons) && item.seasons.length > 0 ? `
-      <div>
-        <div class="detail-section-title">Additional Seasons / Entries</div>
-        <div class="detail-list">
-          ${item.seasons.map(s => `
-            <div class="detail-row-item">
-              <span><strong>${escapeHtml(s.name || 'Season')}</strong> (${s.status})</span>
-              <span>${s.progress}${s.total > 0 ? '/' + s.total : ''} • ★ ${s.rating || 0}</span>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    ` : ''}
-
-    ${item.notes ? `
-      <div>
-        <div class="detail-section-title">Personal Notes</div>
-        <div style="background: var(--onyx); border: 1px solid var(--jet); border-radius: 12px; padding: 12px; font-size: 13px; line-height: 1.6; color: var(--light-gray); white-space: pre-wrap;">${escapeHtml(item.notes)}</div>
-      </div>
-    ` : ''}
-
-    ${isAdmin ? `
-      <div class="modal-submit-row">
-        <button type="button" class="form-btn primary-submit" onclick="closeModal('detail-modal'); openEditMediaModal('${item.id}')">Edit Entry</button>
-      </div>
-    ` : ''}
-  `;
-
-  openModal('detail-modal');
+window.openPostModal = function () {
+  pendingUploadedUrls = [];
+  document.getElementById('post-modal-title').textContent = 'New Post';
+  document.getElementById('post-form').reset();
+  document.getElementById('post-id').value = '';
+  setElText('post-upload-status', '');
+  document.getElementById('post-modal').classList.add('active');
 };
 
-/*-----------------------------------*\
-  #ADD / EDIT MEDIA FORM & AUTO-FILL API
-\*-----------------------------------*/
+window.openEditPostModal = function (id) {
+  const post = allBlogPosts.find(p => String(p.id) === String(id));
+  if (!post) return;
 
-function updateCategoryFormLabels(cat) {
-  const progLbl = document.getElementById('progress-label');
-  const totalLbl = document.getElementById('total-label');
-  const volLbl = document.getElementById('volumes-label');
-
-  if (cat === 'tv') {
-    progLbl.textContent = 'Episodes Watched';
-    totalLbl.textContent = 'Total Episodes (0 = Ongoing)';
-    volLbl.textContent = 'Seasons / Parts (Optional)';
-  } else if (cat === 'movie') {
-    progLbl.textContent = 'Movies Watched';
-    totalLbl.textContent = 'Total Movies (1 = Single)';
-    volLbl.textContent = 'Part / Series (Optional)';
-  } else if (cat === 'comic' || cat === 'novel') {
-    progLbl.textContent = 'Chapters Read';
-    totalLbl.textContent = 'Total Chapters (0 = Ongoing)';
-    volLbl.textContent = 'Volumes Read (Optional)';
-  } else if (cat === 'game') {
-    progLbl.textContent = 'Hours / Missions';
-    totalLbl.textContent = 'Target Hours / Total (Optional)';
-    volLbl.textContent = 'DLCs Completed (Optional)';
-  } else if (cat === 'music') {
-    progLbl.textContent = 'Tracks Listened';
-    totalLbl.textContent = 'Total Tracks';
-    volLbl.textContent = 'Albums / Discs (Optional)';
-  }
-}
-
-document.getElementById('entry-category')?.addEventListener('change', (e) => {
-  updateCategoryFormLabels(e.target.value);
-});
-
-document.getElementById('step-progress-btn')?.addEventListener('click', () => {
-  const input = document.getElementById('entry-progress');
-  input.value = (parseInt(input.value, 10) || 0) + 1;
-});
-
-function addExtraTrackCard(data = {}) {
-  const list = document.getElementById('tracks-editor-list');
-  const card = document.createElement('div');
-  card.className = 'track-edit-card';
-  card.innerHTML = `
-    <div class="track-edit-top">
-      <select class="form-input tr-cat">
-        <option value="comic" ${data.category === 'comic' ? 'selected' : ''}>Comic</option>
-        <option value="novel" ${data.category === 'novel' ? 'selected' : ''}>Novel</option>
-        <option value="tv" ${data.category === 'tv' ? 'selected' : ''}>TV Show</option>
-        <option value="movie" ${data.category === 'movie' ? 'selected' : ''}>Movie</option>
-        <option value="game" ${data.category === 'game' ? 'selected' : ''}>Game</option>
-        <option value="music" ${data.category === 'music' ? 'selected' : ''}>Music</option>
-      </select>
-      <select class="form-input tr-status">
-        <option value="ongoing" ${data.status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
-        <option value="completed" ${data.status === 'completed' ? 'selected' : ''}>Completed</option>
-        <option value="planned" ${data.status === 'planned' ? 'selected' : ''}>Planned</option>
-        <option value="dropped" ${data.status === 'dropped' ? 'selected' : ''}>Dropped</option>
-      </select>
-      <button type="button" class="social-remove-btn"><ion-icon name="trash-outline"></ion-icon></button>
-    </div>
-    <div class="form-row">
-      <input type="number" class="form-input tr-prog" min="0" placeholder="Progress" value="${data.progress || 0}">
-      <input type="number" class="form-input tr-total" min="0" placeholder="Total" value="${data.total || 0}">
-    </div>
-  `;
-  card.querySelector('.social-remove-btn').addEventListener('click', () => card.remove());
-  list.appendChild(card);
-}
-
-function addSeasonCard(data = {}) {
-  const list = document.getElementById('seasons-editor-list');
-  const card = document.createElement('div');
-  card.className = 'season-edit-card';
-  card.innerHTML = `
-    <div class="season-edit-top">
-      <input type="text" class="form-input sn-name" placeholder="Season / Sequel Name" value="${escapeHtml(data.name || '')}">
-      <button type="button" class="social-remove-btn"><ion-icon name="trash-outline"></ion-icon></button>
-    </div>
-    <div class="season-edit-grid">
-      <select class="form-input sn-status">
-        <option value="completed" ${data.status === 'completed' ? 'selected' : ''}>Completed</option>
-        <option value="ongoing" ${data.status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
-        <option value="planned" ${data.status === 'planned' ? 'selected' : ''}>Planned</option>
-        <option value="dropped" ${data.status === 'dropped' ? 'selected' : ''}>Dropped</option>
-      </select>
-      <input type="number" class="form-input sn-prog" min="0" placeholder="Prog" value="${data.progress || 0}">
-      <input type="number" class="form-input sn-total" min="0" placeholder="Total" value="${data.total || 0}">
-      <input type="number" class="form-input sn-rating" step="0.1" min="0" max="10" placeholder="Rating" value="${data.rating || 0}">
-    </div>
-  `;
-  card.querySelector('.social-remove-btn').addEventListener('click', () => card.remove());
-  list.appendChild(card);
-}
-
-document.getElementById('add-track-btn')?.addEventListener('click', () => addExtraTrackCard());
-document.getElementById('add-season-btn')?.addEventListener('click', () => addSeasonCard());
-
-document.getElementById('open-add-modal-btn')?.addEventListener('click', () => {
-  document.getElementById('media-modal-title').textContent = 'Add New Entry';
-  document.getElementById('media-form').reset();
-  document.getElementById('entry-id').value = '';
-  document.getElementById('delete-entry-btn').style.display = 'none';
-  document.getElementById('tracks-editor-list').innerHTML = '';
-  document.getElementById('seasons-editor-list').innerHTML = '';
-  document.getElementById('api-results-list').style.display = 'none';
-  updateCategoryFormLabels('tv');
-  openModal('media-modal');
-});
-
-window.openEditMediaModal = function(id) {
-  const item = allEntries.find(e => String(e.id) === String(id));
-  if (!item) return;
-
-  document.getElementById('media-modal-title').textContent = 'Edit Entry';
-  document.getElementById('entry-id').value = item.id;
-  document.getElementById('entry-title').value = item.title || '';
-  document.getElementById('entry-category').value = item.category || 'tv';
-  document.getElementById('entry-status').value = item.status || 'ongoing';
-  document.getElementById('entry-progress').value = item.progress || 0;
-  document.getElementById('entry-total').value = item.total || 0;
-  document.getElementById('entry-volumes').value = item.volumes || 0;
-  document.getElementById('entry-repeat').value = item.repeat_count || 0;
-  document.getElementById('entry-rating').value = item.rating || 0;
-  document.getElementById('entry-start-date').value = item.start_date || '';
-  document.getElementById('entry-finish-date').value = item.finish_date || '';
-  document.getElementById('entry-image').value = item.image_url || '';
-  document.getElementById('entry-notes').value = item.notes || '';
-  document.getElementById('delete-entry-btn').style.display = 'inline-block';
-  document.getElementById('api-results-list').style.display = 'none';
-
-  updateCategoryFormLabels(item.category || 'tv');
-
-  const trList = document.getElementById('tracks-editor-list');
-  trList.innerHTML = '';
-  (item.extra_tracks || []).forEach(tr => addExtraTrackCard(tr));
-
-  const snList = document.getElementById('seasons-editor-list');
-  snList.innerHTML = '';
-  (item.seasons || []).forEach(sn => addSeasonCard(sn));
-
-  openModal('media-modal');
+  pendingUploadedUrls = [];
+  document.getElementById('post-modal-title').textContent = 'Edit Post';
+  document.getElementById('post-id').value = post.id;
+  document.getElementById('post-content').value = post.content || '';
+  document.getElementById('post-image').value = post.image_url || '';
+  setElText('post-upload-status', '');
+  document.getElementById('post-modal').classList.add('active');
 };
 
-document.getElementById('entry-image-file')?.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
+window.closePostModal = async function () {
+  document.getElementById('post-modal').classList.remove('active');
+  await cleanupPendingUploads([]);
+};
+
+window.clearPostImageInput = function () {
+  document.getElementById('post-image').value = '';
+  setElText('post-upload-status', 'Photo removed (click Publish to save).');
+};
+
+window.handlePostImageUpload = async function (event) {
+  const file = event.target.files ? event.target.files[0] : null;
+  event.target.value = '';
   if (!file) return;
-  showToast('Uploading cover image...');
-  const url = await compressAndUploadImage(file, 'covers');
-  if (url) {
-    document.getElementById('entry-image').value = url;
-    showToast('Cover uploaded');
-  }
-});
 
-document.getElementById('media-form')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-
-  const extra_tracks = [];
-  document.querySelectorAll('#tracks-editor-list .track-edit-card').forEach(card => {
-    extra_tracks.push({
-      category: card.querySelector('.tr-cat').value,
-      status: card.querySelector('.tr-status').value,
-      progress: parseInt(card.querySelector('.tr-prog').value, 10) || 0,
-      total: parseInt(card.querySelector('.tr-total').value, 10) || 0
-    });
-  });
-
-  const seasons = [];
-  document.querySelectorAll('#seasons-editor-list .season-edit-card').forEach(card => {
-    const name = card.querySelector('.sn-name').value.trim();
-    if (name) {
-      seasons.push({
-        name,
-        status: card.querySelector('.sn-status').value,
-        progress: parseInt(card.querySelector('.sn-prog').value, 10) || 0,
-        total: parseInt(card.querySelector('.sn-total').value, 10) || 0,
-        rating: parseFloat(card.querySelector('.sn-rating').value) || 0
-      });
-    }
-  });
-
-  const id = document.getElementById('entry-id').value;
-  const payload = {
-    title: document.getElementById('entry-title').value.trim(),
-    category: document.getElementById('entry-category').value,
-    status: document.getElementById('entry-status').value,
-    progress: parseInt(document.getElementById('entry-progress').value, 10) || 0,
-    total: parseInt(document.getElementById('entry-total').value, 10) || 0,
-    volumes: parseInt(document.getElementById('entry-volumes').value, 10) || 0,
-    repeat_count: parseInt(document.getElementById('entry-repeat').value, 10) || 0,
-    rating: parseFloat(document.getElementById('entry-rating').value) || 0,
-    start_date: document.getElementById('entry-start-date').value || null,
-    finish_date: document.getElementById('entry-finish-date').value || null,
-    image_url: document.getElementById('entry-image').value.trim(),
-    notes: document.getElementById('entry-notes').value.trim(),
-    extra_tracks,
-    seasons,
-    updated_at: new Date().toISOString()
-  };
-
-  if (sb) {
-    if (id) {
-      await sb.from('media_logs').update(payload).eq('id', id);
-    } else {
-      await sb.from('media_logs').insert([payload]);
-    }
-    await loadMediaLibrary();
-  } else {
-    if (id) {
-      const idx = allEntries.findIndex(item => String(item.id) === String(id));
-      if (idx > -1) allEntries[idx] = { ...allEntries[idx], ...payload };
-    } else {
-      allEntries.unshift({ id: Date.now(), created_at: new Date().toISOString(), ...payload });
-    }
-    localStorage.setItem('archive_media_local', JSON.stringify(allEntries));
-    updateLibraryStats();
-    renderMediaGrid();
-  }
-
-  closeModal('media-modal');
-  showToast(id ? 'Entry updated' : 'Entry added');
-});
-
-document.getElementById('delete-entry-btn')?.addEventListener('click', async () => {
-  const id = document.getElementById('entry-id').value;
-  if (!id || !confirm('Delete this library entry?')) return;
-
-  if (sb) {
-    await sb.from('media_logs').delete().eq('id', id);
-    await loadMediaLibrary();
-  } else {
-    allEntries = allEntries.filter(item => String(item.id) !== String(id));
-    localStorage.setItem('archive_media_local', JSON.stringify(allEntries));
-    updateLibraryStats();
-    renderMediaGrid();
-  }
-
-  closeModal('media-modal');
-  showToast('Entry deleted');
-});
-
-// Auto-Fill Metadata Search (TMDB + Jikan + iTunes + RAWG/CheapShark)
-document.getElementById('api-search-btn')?.addEventListener('click', async () => {
-  const q = document.getElementById('api-search-input').value.trim();
-  const cat = document.getElementById('entry-category').value;
-  const resultsBox = document.getElementById('api-results-list');
-  if (!q) return;
-
-  resultsBox.style.display = 'block';
-  resultsBox.innerHTML = '<div style="font-size:12px; color:var(--light-gray-70); padding:6px;">Searching...</div>';
-
+  setElText('post-upload-status', 'Uploading photo...');
   try {
-    let results = [];
-    if (cat === 'tv') {
-      if (TMDB_API_KEY) {
-        const res = await fetch(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(q)}`);
-        const data = await res.json();
-        results = (data.results || []).slice(0, 6).map(d => ({
-          title: d.name,
-          image: d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : '',
-          sub: `${d.first_air_date ? d.first_air_date.slice(0, 4) : ''} • TV Show`,
-          total: 0
-        }));
-      } else {
-        const res = await fetch(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
-        results = data.slice(0, 6).map(d => ({
-          title: d.show.name,
-          image: d.show.image?.medium || '',
-          sub: `${d.show.premiered ? d.show.premiered.slice(0, 4) : ''} • TV`,
-          total: 0
-        }));
-      }
-    } else if (cat === 'movie') {
-      if (TMDB_API_KEY) {
-        const res = await fetch(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(q)}`);
-        const data = await res.json();
-        results = (data.results || []).slice(0, 6).map(d => ({
-          title: d.title,
-          image: d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : '',
-          sub: `${d.release_date ? d.release_date.slice(0, 4) : ''} • Movie`,
-          total: 1
-        }));
-      } else {
-        const res = await fetch(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
-        results = data.slice(0, 6).map(d => ({
-          title: d.show.name,
-          image: d.show.image?.medium || '',
-          sub: 'Movie',
-          total: 1
-        }));
-      }
-    } else if (cat === 'comic' || cat === 'novel') {
-      const res = await fetch(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(q)}&limit=6`);
-      const data = await res.json();
-      results = (data.data || []).map(m => ({
-        title: m.title_english || m.title,
-        image: m.images?.jpg?.image_url || '',
-        sub: `${m.type || 'Manga'} • ${m.chapters || '?'} ch`,
-        total: m.chapters || 0
-      }));
-    } else if (cat === 'music') {
-      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=6`);
-      const data = await res.json();
-      results = (data.results || []).map(a => ({
-        title: `${a.collectionName} — ${a.artistName}`,
-        image: (a.artworkUrl100 || '').replace('100x100', '400x400'),
-        sub: `${a.trackCount || 0} tracks • ${a.releaseDate ? a.releaseDate.slice(0, 4) : ''}`,
-        total: a.trackCount || 0
-      }));
-    } else if (cat === 'game') {
-      if (RAWG_API_KEY) {
-        const res = await fetch(`https://api.rawg.io/api/games?key=${RAWG_API_KEY}&search=${encodeURIComponent(q)}&page_size=6`);
-        const data = await res.json();
-        results = (data.results || []).map(g => ({
-          title: g.name,
-          image: g.background_image || '',
-          sub: `${g.released ? g.released.slice(0, 4) : ''} • Game`,
-          total: 0
-        }));
-      } else {
-        const res = await fetch(`https://www.cheapshark.com/api/1.0/games?title=${encodeURIComponent(q)}&limit=6`);
-        const data = await res.json();
-        results = (data || []).map(g => ({
-          title: g.external,
-          image: g.thumb || '',
-          sub: 'Game',
-          total: 0
-        }));
-      }
+    const publicUrl = await uploadImageToSupabase(file, 'posts');
+    document.getElementById('post-image').value = publicUrl;
+    setElText('post-upload-status', 'Photo uploaded!');
+    showToast('Photo uploaded', 'success');
+  } catch (err) {
+    setElText('post-upload-status', `Upload failed: ${err.message}`);
+    showToast(err.message, 'error');
+  }
+};
+
+const postForm = document.getElementById('post-form');
+if (postForm) {
+  postForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const id = document.getElementById('post-id').value;
+    const existingPost = id ? allBlogPosts.find(p => String(p.id) === String(id)) : null;
+    const oldImage = existingPost ? existingPost.image_url : null;
+    const newImage = normalizeImageUrl(document.getElementById('post-image').value) || null;
+    const contentVal = document.getElementById('post-content').value.trim();
+
+    if (!contentVal) return;
+
+    const nowIso = new Date().toISOString();
+    const payload = {
+      content: contentVal,
+      image_url: newImage,
+      updated_at: nowIso
+    };
+
+    let error;
+    if (id) {
+      ({ error } = await supabaseClient.from('blog_posts').update(payload).eq('id', id));
+    } else {
+      payload.created_at = nowIso;
+      ({ error } = await supabaseClient.from('blog_posts').insert([payload]));
     }
 
-    if (results.length === 0) {
-      resultsBox.innerHTML = '<div style="font-size:12px; color:var(--light-gray-70); padding:6px;">No results found.</div>';
-      return;
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      await cleanupPendingUploads([newImage]);
+      if (oldImage && oldImage !== newImage) {
+        await deleteOldStorageFile(oldImage);
+      }
+      document.getElementById('post-modal').classList.remove('active');
+      await fetchBlogPosts();
+      showToast(id ? 'Post updated' : 'Post published', 'success');
     }
+  });
+}
 
-    resultsBox.innerHTML = results.map((r, i) => `
-      <div class="api-result-item" data-idx="${i}">
-        <img src="${escapeHtml(r.image || TRANSPARENT_PIXEL)}" alt="">
-        <div class="api-result-info">
-          <h4>${escapeHtml(r.title)}</h4>
-          <p>${escapeHtml(r.sub)}</p>
-        </div>
-      </div>
-    `).join('');
+window.deleteBlogPost = async function (id) {
+  const existingPost = allBlogPosts.find(p => String(p.id) === String(id));
 
-    resultsBox.querySelectorAll('.api-result-item').forEach(el => {
-      el.addEventListener('click', () => {
-        const picked = results[parseInt(el.dataset.idx, 10)];
-        document.getElementById('entry-title').value = picked.title;
-        if (picked.image) document.getElementById('entry-image').value = picked.image;
-        if (picked.total > 0) document.getElementById('entry-total').value = picked.total;
-        resultsBox.style.display = 'none';
-      });
+  const confirm = await Swal.fire({
+    text: 'Delete this post permanently?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ff5f5f',
+    confirmButtonText: 'Delete',
+    cancelButtonText: 'Cancel',
+    background: '#1e1e1f',
+    color: '#fff'
+  });
+
+  if (confirm.isConfirmed) {
+    const { error } = await supabaseClient.from('blog_posts').delete().eq('id', id);
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      if (existingPost && existingPost.image_url) {
+        await deleteOldStorageFile(existingPost.image_url);
+      }
+      await fetchBlogPosts();
+      showToast('Post deleted', 'info');
+    }
+  }
+};
+
+// ==========================================
+// 8. AUTO WEB NEWS FEED (RSS TO JSON)
+// ==========================================
+function setupNewsListeners() {
+  document.querySelectorAll('#news-topic-tabs .cat-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#news-topic-tabs .cat-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentNewsTopic = btn.dataset.topic || 'all';
+      renderNewsGrid();
     });
-  } catch (_) {
-    resultsBox.innerHTML = '<div style="font-size:12px; color:#ff7b7b; padding:6px;">Search failed.</div>';
+  });
+
+  const newsSearchInput = document.getElementById('news-search-input');
+  if (newsSearchInput) {
+    newsSearchInput.addEventListener('input', (e) => {
+      newsSearchQuery = e.target.value.toLowerCase().trim();
+      renderNewsGrid();
+    });
   }
-});
-
-/*-----------------------------------*\
-  #TOOLBAR CONTROLS, POPOVERS & EXPORT
-\*-----------------------------------*/
-
-document.querySelectorAll('#category-tabs .cat-tab').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#category-tabs .cat-tab').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    selectedCategory = btn.dataset.category;
-    currentPageMultiplier = 1;
-    renderMediaGrid();
-  });
-});
-
-document.getElementById('library-search')?.addEventListener('input', () => {
-  currentPageMultiplier = 1;
-  renderMediaGrid();
-});
-
-function togglePopover(menuId) {
-  const menu = document.getElementById(menuId);
-  const wasOpen = menu.classList.contains('open');
-  document.querySelectorAll('.toolbar-popover-menu').forEach(m => m.classList.remove('open'));
-  if (!wasOpen) menu.classList.add('open');
 }
 
-document.getElementById('filter-popover-btn')?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  togglePopover('filter-popover-menu');
-});
-
-document.getElementById('sort-popover-btn')?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  togglePopover('sort-popover-menu');
-});
-
-document.getElementById('page-popover-btn')?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  togglePopover('page-popover-menu');
-});
-
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('.popover-wrapper')) {
-    document.querySelectorAll('.toolbar-popover-menu').forEach(m => m.classList.remove('open'));
-  }
-});
-
-function syncFilterDot() {
-  const active = selectedStatus !== 'all' || ratingMin !== null || ratingMax !== null || rewatchedOnly;
-  const dot = document.getElementById('filter-active-dot');
-  if (dot) dot.style.display = active ? 'inline-block' : 'none';
+function stripNewsHtml(html) {
+  const div = document.createElement('div');
+  div.innerHTML = html || '';
+  return (div.textContent || div.innerText || '').trim();
 }
 
-document.getElementById('status-filter')?.addEventListener('change', (e) => {
-  selectedStatus = e.target.value;
-  syncFilterDot();
-  renderMediaGrid();
-});
-
-document.getElementById('rating-min-filter')?.addEventListener('input', (e) => {
-  ratingMin = e.target.value !== '' ? parseFloat(e.target.value) : null;
-  syncFilterDot();
-  renderMediaGrid();
-});
-
-document.getElementById('rating-max-filter')?.addEventListener('input', (e) => {
-  ratingMax = e.target.value !== '' ? parseFloat(e.target.value) : null;
-  syncFilterDot();
-  renderMediaGrid();
-});
-
-document.getElementById('rewatched-only-filter')?.addEventListener('change', (e) => {
-  rewatchedOnly = e.target.checked;
-  syncFilterDot();
-  renderMediaGrid();
-});
-
-document.getElementById('reset-filters-btn')?.addEventListener('click', () => {
-  selectedStatus = 'all';
-  ratingMin = null;
-  ratingMax = null;
-  rewatchedOnly = false;
-  document.getElementById('status-filter').value = 'all';
-  document.getElementById('rating-min-filter').value = '';
-  document.getElementById('rating-max-filter').value = '';
-  document.getElementById('rewatched-only-filter').checked = false;
-  syncFilterDot();
-  renderMediaGrid();
-});
-
-document.getElementById('sort-field-select')?.addEventListener('change', (e) => {
-  sortField = e.target.value;
-  renderMediaGrid();
-});
-
-document.querySelectorAll('.sort-dir-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.sort-dir-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    sortDir = btn.dataset.dir;
-    renderMediaGrid();
-  });
-});
-
-document.querySelectorAll('.page-option-item').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.page-option-item').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    const val = btn.dataset.limit;
-    itemsPerPage = val === 'all' ? 'all' : parseInt(val, 10);
-    document.getElementById('page-limit-label').textContent = val === 'all' ? 'All' : `${val} / page`;
-    currentPageMultiplier = 1;
-    document.getElementById('page-popover-menu').classList.remove('open');
-    renderMediaGrid();
-  });
-});
-
-document.getElementById('load-more-btn')?.addEventListener('click', () => {
-  currentPageMultiplier++;
-  renderMediaGrid();
-});
-
-document.getElementById('random-pick-btn')?.addEventListener('click', () => {
-  const pool = getFilteredAndSortedMedia();
-  if (pool.length === 0) return showToast('No entries available to pick', true);
-  const randomItem = pool[Math.floor(Math.random() * pool.length)];
-  openDetailModal(randomItem.id);
-});
-
-document.getElementById('view-grid-btn')?.addEventListener('click', () => {
-  viewMode = 'grid';
-  document.getElementById('view-grid-btn').classList.add('active');
-  document.getElementById('view-list-btn').classList.remove('active');
-  renderMediaGrid();
-});
-
-document.getElementById('view-list-btn')?.addEventListener('click', () => {
-  viewMode = 'list';
-  document.getElementById('view-list-btn').classList.add('active');
-  document.getElementById('view-grid-btn').classList.remove('active');
-  renderMediaGrid();
-});
-
-document.getElementById('export-library-btn')?.addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(allEntries, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `library-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('Library exported as JSON');
-});
-
-/*-----------------------------------*\
-  #AUTO WEB NEWS FEED (RSS TO JSON)
-\*-----------------------------------*/
-
-function saveRssSources() {
-  localStorage.setItem('archive_rss_sources', JSON.stringify(rssSources));
-}
-
-function stripHtmlTags(html) {
-  const tmp = document.createElement('div');
-  tmp.innerHTML = html || '';
-  return (tmp.textContent || tmp.innerText || '').trim();
-}
-
-function extractImageFromItem(item) {
+function extractNewsImage(item) {
   if (item.thumbnail && item.thumbnail.startsWith('http')) return item.thumbnail;
   if (item.enclosure && item.enclosure.link && item.enclosure.link.startsWith('http')) return item.enclosure.link;
   const match = (item.description || item.content || '').match(/<img[^>]+src="([^">]+)"/i);
   return match ? match[1] : '';
 }
 
-async function fetchAllNews(forceRefresh = false) {
-  const grid = document.getElementById('news-grid');
+window.fetchAllNews = async function (forceRefresh = false) {
+  const grid = document.getElementById('news-feed-grid');
   if (!grid) return;
 
   const cacheKey = 'archive_news_cache_v1';
   if (!forceRefresh) {
-    const cached = sessionStorage.getItem(cacheKey);
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        if (Date.now() - parsed.timestamp < 10 * 60 * 1000 && parsed.items.length > 0) {
-          allNewsItems = parsed.items;
-          renderNewsGrid();
-          return;
-        }
-      } catch (_) {}
-    }
+    try {
+      const cached = JSON.parse(sessionStorage.getItem(cacheKey) || 'null');
+      if (cached && (Date.now() - cached.ts < 10 * 60 * 1000) && Array.isArray(cached.items) && cached.items.length > 0) {
+        allNewsItems = cached.items;
+        renderNewsGrid();
+        return;
+      }
+    } catch (_) {}
   }
 
-  grid.innerHTML = '<div class="empty-state">Fetching latest news from web feeds...</div>';
+  grid.innerHTML = `<p class="empty-state" style="grid-column: 1 / -1;">Fetching latest news...</p>`;
 
-  const requests = rssSources.map(async (src) => {
+  const requests = DEFAULT_RSS_SOURCES.map(async (src) => {
     try {
-      const endpoint = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(src.url)}`;
-      const res = await fetch(endpoint);
+      const res = await fetchWithTimeout(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(src.url)}`, {}, 6000);
       const data = await res.json();
       if (data.status !== 'ok' || !Array.isArray(data.items)) return [];
 
       return data.items.slice(0, 8).map(item => ({
-        title: stripHtmlTags(item.title),
+        title: stripNewsHtml(item.title),
         link: item.link,
-        pubDate: item.pubDate,
         timestamp: new Date(item.pubDate).getTime() || Date.now(),
-        snippet: stripHtmlTags(item.description).slice(0, 180),
-        image: extractImageFromItem(item),
+        snippet: stripNewsHtml(item.description).slice(0, 150),
+        image: normalizeImageUrl(extractNewsImage(item)),
         source: src.name,
         topic: src.topic
       }));
@@ -1566,33 +2646,28 @@ async function fetchAllNews(forceRefresh = false) {
   });
 
   const results = await Promise.all(requests);
-  allNewsItems = results
-    .flat()
-    .sort((a, b) => b.timestamp - a.timestamp);
+  allNewsItems = results.flat().sort((a, b) => b.timestamp - a.timestamp);
 
   if (allNewsItems.length > 0) {
-    sessionStorage.setItem(cacheKey, JSON.stringify({
-      timestamp: Date.now(),
-      items: allNewsItems
-    }));
+    sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), items: allNewsItems }));
+    if (forceRefresh) showToast('News updated', 'success');
   }
 
   renderNewsGrid();
-}
+};
 
 function renderNewsGrid() {
-  const grid = document.getElementById('news-grid');
+  const grid = document.getElementById('news-feed-grid');
   if (!grid) return;
 
   const filtered = allNewsItems.filter(item => {
     const matchTopic = currentNewsTopic === 'all' || item.topic === currentNewsTopic;
-    const q = newsSearchQuery.toLowerCase();
-    const matchQuery = !q || item.title.toLowerCase().includes(q) || item.source.toLowerCase().includes(q);
+    const matchQuery = !newsSearchQuery || item.title.toLowerCase().includes(newsSearchQuery) || item.source.toLowerCase().includes(newsSearchQuery);
     return matchTopic && matchQuery;
   });
 
   if (filtered.length === 0) {
-    grid.innerHTML = '<div class="empty-state">No news headlines found for this filter.</div>';
+    grid.innerHTML = `<p class="empty-state" style="grid-column: 1 / -1;">No news found.</p>`;
     return;
   }
 
@@ -1602,116 +2677,21 @@ function renderNewsGrid() {
     });
 
     return `
-      <a href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer" class="news-card">
+      <a href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer" class="blog-post-card" style="display: flex; flex-direction: column; overflow: hidden; text-decoration: none; padding: 0;">
         ${item.image ? `
-          <div class="news-thumb-wrap">
-            <img src="${escapeHtml(item.image)}" alt="" loading="lazy" onerror="this.parentElement.style.display='none'">
+          <div style="width: 100%; height: 150px; overflow: hidden; background: var(--onyx);">
+            <img src="${escapeHtml(item.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.parentElement.style.display='none'">
           </div>
         ` : ''}
-        <div class="news-body">
-          <div class="news-meta-top">
-            <span class="news-source-badge">${escapeHtml(item.source)}</span>
-            <span class="news-date-text">${dateStr}</span>
+        <div style="padding: 14px; display: flex; flex-direction: column; gap: 6px; flex: 1;">
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--light-gray-70);">
+            <span class="badge-cat">${escapeHtml(item.source)}</span>
+            <span>${dateStr}</span>
           </div>
-          <h3 class="news-title">${escapeHtml(item.title)}</h3>
-          ${item.snippet ? `<p class="news-snippet">${escapeHtml(item.snippet)}...</p>` : ''}
+          <h3 style="font-size: 14px; font-weight: 600; color: var(--white-1); line-height: 1.4;">${escapeHtml(item.title)}</h3>
+          ${item.snippet ? `<p style="font-size: 12px; color: var(--light-gray-70); line-height: 1.5; margin-top: auto;">${escapeHtml(item.snippet)}...</p>` : ''}
         </div>
       </a>
     `;
   }).join('');
 }
-
-function renderRssSourcesManager() {
-  const list = document.getElementById('rss-sources-list');
-  if (!list) return;
-
-  list.innerHTML = rssSources.map((src, idx) => `
-    <div class="detail-row-item">
-      <div style="min-width:0; flex:1;">
-        <strong style="color:var(--white-1); display:block;">${escapeHtml(src.name)} <span style="opacity:0.6; font-weight:400;">(${src.topic})</span></strong>
-        <span style="font-size:11px; color:var(--light-gray-70); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(src.url)}</span>
-      </div>
-      <button type="button" class="social-remove-btn" data-remove-rss="${idx}" title="Remove">
-        <ion-icon name="trash-outline"></ion-icon>
-      </button>
-    </div>
-  `).join('');
-
-  list.querySelectorAll('[data-remove-rss]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const idx = parseInt(btn.dataset.removeRss, 10);
-      rssSources.splice(idx, 1);
-      saveRssSources();
-      renderRssSourcesManager();
-      fetchAllNews(true);
-    });
-  });
-}
-
-document.querySelectorAll('#news-topic-tabs .cat-tab').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#news-topic-tabs .cat-tab').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentNewsTopic = btn.dataset.topic;
-    renderNewsGrid();
-  });
-});
-
-document.getElementById('news-search-input')?.addEventListener('input', (e) => {
-  newsSearchQuery = e.target.value;
-  renderNewsGrid();
-});
-
-document.getElementById('refresh-news-btn')?.addEventListener('click', () => {
-  fetchAllNews(true);
-  showToast('News feed refreshed');
-});
-
-document.getElementById('manage-rss-btn')?.addEventListener('click', () => {
-  renderRssSourcesManager();
-  openModal('rss-modal');
-});
-
-document.getElementById('add-rss-btn')?.addEventListener('click', () => {
-  const name = document.getElementById('rss-name-input').value.trim();
-  const topic = document.getElementById('rss-topic-input').value;
-  const url = document.getElementById('rss-url-input').value.trim();
-  if (!name || !url) return showToast('Enter source name and RSS URL', true);
-
-  rssSources.push({ name, topic, url });
-  saveRssSources();
-  document.getElementById('rss-name-input').value = '';
-  document.getElementById('rss-url-input').value = '';
-  renderRssSourcesManager();
-  fetchAllNews(true);
-  showToast('RSS source added');
-});
-
-document.getElementById('reset-rss-btn')?.addEventListener('click', () => {
-  rssSources = [...DEFAULT_RSS_SOURCES];
-  saveRssSources();
-  renderRssSourcesManager();
-  fetchAllNews(true);
-  showToast('Reset to default news sources');
-});
-
-/*-----------------------------------*\
-  #MODAL CLOSE HANDLERS & INIT
-\*-----------------------------------*/
-
-document.querySelectorAll('.close-modal-btn').forEach(btn => {
-  btn.addEventListener('click', () => closeModal(btn.dataset.close));
-});
-
-document.querySelectorAll('.modal-overlay').forEach(overlay => {
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) overlay.classList.remove('active');
-  });
-});
-
-document.addEventListener('DOMContentLoaded', async () => {
-  await loadProfile();
-  await checkAuthSession();
-  await loadNotes();
-  await loadMediaLibrary();
-});
