@@ -10,15 +10,11 @@ const RAWG_API_KEY = '';
 const STORAGE_BUCKET = 'media-assets';
 const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
-const GROQ_KEY_STORAGE = 'archive_groq_api_key';
-const GROQ_MODEL = 'llama-3.1-8b-instant';
-
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Application State
 let allMediaLogs = [];
 let allBlogPosts = [];
-let aiChatMessages = [];
 let lastApiResults = [];
 let pendingUploadedUrls = [];
 let currentCategory = 'all';
@@ -29,7 +25,6 @@ let visibleMediaLimit = 8;
 let isStatsExpanded = false;
 let isAdminLoggedIn = false;
 let isProfileLoaded = false;
-let isAiSending = false;
 
 // Sort State (Default: Rating Best)
 let currentSortField = 'rating';
@@ -85,15 +80,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupScrollListeners();
     setupOutsidePopoverCloser();
     setupFilterListeners();
-    setupAiListeners();
     updateSortUIControls();
 
     await checkAdminSession();
     await fetchProfileSettings();
     await Promise.all([fetchBlogPosts(), fetchMediaLogs()]);
-    if (isAdminLoggedIn) {
-      await fetchAiChatHistory();
-    }
   } catch (err) {
     console.error('Initialization error:', err);
     showToast('Init error: ' + err.message, 'error', 5000);
@@ -137,7 +128,7 @@ function setupOutsidePopoverCloser() {
   document.addEventListener('click', (e) => {
     const filterWrap = document.getElementById('filter-popover-wrap');
     const sortWrap = document.getElementById('sort-popover-wrap');
-    const pagesWrap = document.getElementById('page-popover-wrap');
+    const pagesWrap = document.getElementById('pages-popover-wrap');
 
     const insideFilter = filterWrap && filterWrap.contains(e.target);
     const insideSort = sortWrap && sortWrap.contains(e.target);
@@ -198,9 +189,6 @@ window.switchMainView = function (viewName) {
   if (viewName === 'library' && currentProfile.is_library_private && !isAdminLoggedIn) {
     viewName = 'blog';
   }
-  if (viewName === 'ai' && !isAdminLoggedIn) {
-    viewName = 'blog';
-  }
 
   currentMainView = viewName;
 
@@ -214,25 +202,30 @@ window.switchMainView = function (viewName) {
 
   const libView = document.getElementById('view-library');
   const blogView = document.getElementById('view-blog');
-  const aiView = document.getElementById('view-ai');
+  const aiView = document.getElementById('view-ai-chat');
 
-  [libView, blogView, aiView].forEach(v => {
-    if (v) {
-      v.classList.remove('active-view');
-      v.style.display = 'none';
+  if (libView && blogView && aiView) {
+    libView.classList.remove('active-view');
+    blogView.classList.remove('active-view');
+    aiView.classList.remove('active-view');
+
+    libView.style.display = 'none';
+    blogView.style.display = 'none';
+    aiView.style.display = 'none';
+
+    if (viewName === 'library') {
+      libView.style.display = 'block';
+      void libView.offsetWidth;
+      libView.classList.add('active-view');
+    } else if (viewName === 'ai-chat') {
+      aiView.style.display = 'block';
+      void aiView.offsetWidth;
+      aiView.classList.add('active-view');
+    } else {
+      blogView.style.display = 'block';
+      void blogView.offsetWidth;
+      blogView.classList.add('active-view');
     }
-  });
-
-  const targetView = viewName === 'library' ? libView : (viewName === 'ai' ? aiView : blogView);
-  if (targetView) {
-    targetView.style.display = 'block';
-    void targetView.offsetWidth;
-    targetView.classList.add('active-view');
-  }
-
-  if (viewName === 'ai') {
-    updateAiContextCounters();
-    scrollAiToBottom();
   }
 
   updateAdminActionButtons();
@@ -338,7 +331,7 @@ function updateAdminActionButtons() {
   const privacyIcon = document.getElementById('library-privacy-icon');
   const privacyText = document.getElementById('library-privacy-text');
 
-  if (!isAdminLoggedIn) {
+  if (!isAdminLoggedIn || currentMainView === 'ai-chat') {
     if (addMediaBtn) addMediaBtn.style.display = 'none';
     if (addPostBtn) addPostBtn.style.display = 'none';
     if (privacyBtn) privacyBtn.style.display = 'none';
@@ -368,22 +361,15 @@ function updateAdminUI() {
   const editProfileBtn = document.getElementById('btn-edit-profile');
   const lockIcon = document.getElementById('admin-lock-icon');
   const btnText = document.getElementById('admin-btn-text');
-  const mainAiBtn = document.getElementById('main-tab-ai');
-  const miniAiBtn = document.getElementById('mini-tab-ai');
 
   if (isAdminLoggedIn) {
     if (editProfileBtn) editProfileBtn.style.display = 'inline-flex';
     if (lockIcon) lockIcon.setAttribute('name', 'log-out-outline');
     if (btnText) btnText.textContent = 'Logout';
-    if (mainAiBtn) mainAiBtn.style.display = 'inline-flex';
-    if (miniAiBtn) miniAiBtn.style.display = 'inline-flex';
   } else {
     if (editProfileBtn) editProfileBtn.style.display = 'none';
     if (lockIcon) lockIcon.setAttribute('name', 'lock-closed-outline');
     if (btnText) btnText.textContent = 'Admin';
-    if (mainAiBtn) mainAiBtn.style.display = 'none';
-    if (miniAiBtn) miniAiBtn.style.display = 'none';
-    if (currentMainView === 'ai') switchMainView('blog');
   }
 
   updateLibraryTabVisibility();
@@ -406,7 +392,6 @@ window.handleAdminAuthClick = async function () {
     if (confirm.isConfirmed) {
       await supabaseClient.auth.signOut();
       isAdminLoggedIn = false;
-      aiChatMessages = [];
       updateAdminUI();
       showToast('Logged out from Admin mode', 'info');
     }
@@ -433,7 +418,6 @@ if (loginForm) {
       isAdminLoggedIn = true;
       closeLoginModal();
       updateAdminUI();
-      await fetchAiChatHistory();
       showToast('Admin login successful', 'success');
     }
   });
@@ -946,7 +930,6 @@ async function fetchMediaLogs() {
   allMediaLogs = data || [];
   updateStatsUI();
   renderMediaGrid();
-  updateAiContextCounters();
 }
 
 function updateStatsUI() {
@@ -1002,6 +985,7 @@ function updateStatsUI() {
 
   setElText('total-entries-label', `${totalEntries} Entries`);
 
+  // Group 1: Categories
   setElText('stat-cat-tv', catStats.tv_show.total.toLocaleString('en-US'));
   setElText('stat-cat-tv-sub', `${catStats.tv_show.done} Completed`);
 
@@ -1020,6 +1004,7 @@ function updateStatsUI() {
   setElText('stat-cat-music', catStats.music.total.toLocaleString('en-US'));
   setElText('stat-cat-music-sub', `${catStats.music.done} Completed`);
 
+  // Group 2: Total Counts by Unit
   setElText('stat-unit-eps', unitCounts.eps.toLocaleString('en-US'));
   setElText('stat-unit-ch', unitCounts.ch.toLocaleString('en-US'));
   setElText('stat-unit-pages', unitCounts.pages.toLocaleString('en-US'));
@@ -1028,6 +1013,7 @@ function updateStatsUI() {
   setElText('stat-unit-track', unitCounts.track.toLocaleString('en-US'));
   setElText('stat-unit-item', unitCounts.item.toLocaleString('en-US'));
 
+  // Group 3 (Bottom): Total Completed & Mean Rating
   setElText('stat-completed-total', totalCompleted.toLocaleString('en-US'));
   setElText('stat-completion-rate', `${completionRate}% Rate`);
 
@@ -1123,9 +1109,9 @@ window.setSortDirection = function (dir) {
 };
 
 function setupFilterListeners() {
-  document.querySelectorAll('#view-library .cat-tab').forEach(btn => {
+  document.querySelectorAll('.cat-tab').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('#view-library .cat-tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       currentCategory = btn.dataset.category;
       resetPaginationAndRender();
@@ -2400,7 +2386,6 @@ async function fetchBlogPosts() {
 
   allBlogPosts = data || [];
   renderBlogPosts();
-  updateAiContextCounters();
 }
 
 function renderBlogPosts() {
@@ -2579,358 +2564,110 @@ window.deleteBlogPost = async function (id) {
 };
 
 // ==========================================
-// 8. ADMIN GROQ AI ASSISTANT (ARCHIVE CONTEXT + SUPABASE HISTORY)
+// 8. AI CHAT INTEGRATION (GROQ API)
 // ==========================================
-function setupAiListeners() {
-  const savedKey = localStorage.getItem(GROQ_KEY_STORAGE) || '';
-  const keyInput = document.getElementById('groq-api-key-input');
-  if (keyInput && savedKey) {
-    keyInput.value = savedKey;
+const GROQ_API_KEY = 'KODE_API_GROQ_ANDA_DI_SINI'; // Ganti dengan API key Groq Anda
+const GROQ_MODEL = 'llama-3.1-8b-instant'; // Model stabil yang direkomendasikan
+
+let aiChatHistory = [
+  {
+    role: 'system',
+    content: 'Anda adalah asisten AI yang cerdas, ramah, dan membantu. Anda WAJIB menjawab seluruh pertanyaan dan percakapan pengguna dalam Bahasa Indonesia yang baik dan natural, terlepas dari bahasa apa yang digunakan pengguna.'
   }
+];
 
-  const aiForm = document.getElementById('ai-chat-form');
-  const promptInput = document.getElementById('ai-prompt-input');
-
-  if (promptInput) {
-    promptInput.addEventListener('input', () => {
-      promptInput.style.height = 'auto';
-      promptInput.style.height = Math.min(promptInput.scrollHeight, 120) + 'px';
-    });
-
-    promptInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        if (aiForm && !isAiSending) {
-          aiForm.dispatchEvent(new Event('submit'));
-        }
-      }
-    });
+window.handleAiKeydown = function (event) {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    sendAiMessage();
   }
-
-  if (aiForm) {
-    aiForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      if (isAiSending) return;
-      const text = promptInput ? promptInput.value.trim() : '';
-      if (!text) return;
-
-      if (promptInput) {
-        promptInput.value = '';
-        promptInput.style.height = 'auto';
-      }
-      await sendAiMessage(text);
-    });
-  }
-}
-
-window.toggleAiSettingsBox = function () {
-  const panel = document.getElementById('ai-settings-panel');
-  if (!panel) return;
-  const isHidden = panel.style.display === 'none';
-  panel.style.display = isHidden ? 'flex' : 'none';
 };
 
-window.saveGroqApiKey = function () {
-  const keyInput = document.getElementById('groq-api-key-input');
-  const val = keyInput ? keyInput.value.trim() : '';
-  if (!val) {
-    localStorage.removeItem(GROQ_KEY_STORAGE);
-    showToast('Groq API Key removed', 'info');
-    return;
-  }
-  localStorage.setItem(GROQ_KEY_STORAGE, val);
-  const panel = document.getElementById('ai-settings-panel');
-  if (panel) panel.style.display = 'none';
-  showToast('Groq API Key saved', 'success');
-};
-
-function updateAiContextCounters() {
-  setElText('ai-ctx-library-count', `${allMediaLogs.length} Library entries`);
-  setElText('ai-ctx-notes-count', `${allBlogPosts.length} Personal notes`);
-}
-
-function buildArchiveSystemContext() {
-  const includeCtx = document.getElementById('ai-include-context')?.checked ?? true;
-  const ownerName = currentProfile.name || 'Admin';
-
-  let basePrompt = `Kamu adalah asisten AI pribadi yang cerdas, ramah, dan membantu milik ${ownerName}. Kamu bebas menjawab pertanyaan apa saja (coding, ide tulisan, diskusi umum, terjemahan, rekomendasi, dll). Jawab dengan bahasa yang sesuai dengan pertanyaan pengguna (default Bahasa Indonesia yang natural dan ringkas).`;
-
-  if (!includeCtx) return basePrompt;
-
-  const librarySummary = allMediaLogs.slice(0, 60).map(item => {
-    const cats = getItemCategories(item).map(c => CATEGORY_LABELS[c] || c).join('/');
-    const units = getAllItemUnits(item);
-    const synced = computeSyncedStatus(units);
-    const prog = computeCombinedProgress(units, synced.key);
-    const ratingStr = (item.rating !== null && item.rating !== undefined) ? `Rating: ${item.rating}/10` : 'Unrated';
-    return `- ${item.title} [${cats}] | Status: ${synced.label} (${prog.text}) | ${ratingStr}`;
-  }).join('\n');
-
-  const notesSummary = allBlogPosts.slice(0, 20).map(post => {
-    const dateStr = formatStatusDate(post.created_at);
-    const cleanText = (post.content || '').replace(/\s+/g, ' ').slice(0, 240);
-    return `- (${dateStr}): ${cleanText}`;
-  }).join('\n');
-
-  return `${basePrompt}
-
-Berikut adalah data arsip pribadi milik ${ownerName} sebagai konteks jika ditanyakan atau relevan:
-
-=== LIBRARY (${allMediaLogs.length} total entri, menampilkan hingga 60 terbaru) ===
-${librarySummary || '(Belum ada entri di Library)'}
-
-=== PERSONAL NOTES (${allBlogPosts.length} total catatan, menampilkan hingga 20 terbaru) ===
-${notesSummary || '(Belum ada catatan di Notes)'}`;
-}
-
-function formatAiMarkdown(raw) {
-  let html = escapeHtml(raw || '');
-
-  // Code blocks ```...```
-  html = html.replace(/```([\s\S]*?)```/g, (_, code) => {
-    return `<pre><code>${code.trim()}</code></pre>`;
-  });
-
-  // Inline code `...`
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-  // Bold **...**
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-
-  // Line breaks
-  html = html.replace(/\n/g, '<br>');
-
-  return html;
-}
-
-function scrollAiToBottom() {
-  const listEl = document.getElementById('ai-messages-list');
-  if (listEl) {
-    listEl.scrollTop = listEl.scrollHeight;
-  }
-}
-
-async function fetchAiChatHistory() {
-  if (!isAdminLoggedIn) return;
-
-  const { data, error } = await supabaseClient
-    .from('ai_chat_history')
-    .select('*')
-    .order('created_at', { ascending: true })
-    .limit(100);
-
-  if (error) {
-    console.warn('AI history load warning:', error.message);
-    renderAiMessages();
-    return;
-  }
-
-  aiChatMessages = data || [];
-  renderAiMessages();
-}
-
-function renderAiMessages(showTyping = false) {
-  const listEl = document.getElementById('ai-messages-list');
-  if (!listEl) return;
-
-  if (aiChatMessages.length === 0 && !showTyping) {
-    listEl.innerHTML = `
-      <div class="ai-empty-welcome">
-        <ion-icon name="sparkles-outline"></ion-icon>
-        <h4>Halo, ${escapeHtml(currentProfile.name || 'Admin')}!</h4>
-        <p>Tanyakan apa saja secara bebas, atau minta bantuan analisis & rekomendasi dari <strong>${allMediaLogs.length} Library</strong> dan <strong>${allBlogPosts.length} Notes</strong> milikmu.</p>
+window.clearAiChatHistory = function () {
+  aiChatHistory = [aiChatHistory[0]];
+  const container = document.getElementById('ai-chat-messages');
+  if (container) {
+    container.innerHTML = `
+      <div class="ai-message assistant">
+        <div class="ai-bubble">Percakapan telah dibersihkan. Ada yang bisa saya bantu lagi?</div>
       </div>
     `;
-    return;
   }
-
-  const bubblesHtml = aiChatMessages.map((msg, idx) => {
-    const isUser = msg.role === 'user';
-    const timeStr = msg.created_at
-      ? new Date(msg.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
-      : '';
-
-    const saveToNoteHtml = !isUser ? `
-      <button type="button" class="ai-save-note-btn" onclick="saveAiReplyToNotes(${idx})" title="Simpan ke tab Notes">
-        <ion-icon name="bookmark-outline"></ion-icon>
-        <span>Save to Notes</span>
-      </button>
-    ` : '';
-
-    return `
-      <div class="ai-msg-row ${isUser ? 'user' : 'model'}">
-        <div class="ai-msg-bubble">
-          ${isUser ? escapeHtml(msg.content).replace(/\n/g, '<br>') : formatAiMarkdown(msg.content)}
-        </div>
-        <div class="ai-msg-footer">
-          <span>${timeStr}</span>
-          ${saveToNoteHtml}
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  const typingHtml = showTyping ? `
-    <div class="ai-msg-row model">
-      <div class="ai-msg-bubble">
-        <div class="ai-typing-dots"><span></span><span></span><span></span></div>
-      </div>
-    </div>
-  ` : '';
-
-  listEl.innerHTML = bubblesHtml + typingHtml;
-  scrollAiToBottom();
-}
-
-window.sendQuickAiPrompt = function (promptText) {
-  if (isAiSending) return;
-  sendAiMessage(promptText);
+  showToast('Chat history cleared', 'info');
 };
 
-async function sendAiMessage(userText) {
-  if (!isAdminLoggedIn) return;
+window.sendAiMessage = async function () {
+  const inputEl = document.getElementById('ai-chat-input');
+  const container = document.getElementById('ai-chat-messages');
+  if (!inputEl || !container) return;
 
-  const apiKey = (localStorage.getItem(GROQ_KEY_STORAGE) || '').trim();
-  if (!apiKey) {
-    const panel = document.getElementById('ai-settings-panel');
-    if (panel) panel.style.display = 'flex';
-    showToast('Masukkan Groq API Key terlebih dahulu', 'info');
+  const userText = inputEl.value.trim();
+  if (!userText) return;
+
+  if (GROQ_API_KEY === 'KODE_API_GROQ_ANDA_DI_SINI' || !GROQ_API_KEY) {
+    showToast('Harap masukkan Groq API Key Anda di file script.js', 'error', 5000);
     return;
   }
 
-  isAiSending = true;
-  const sendBtn = document.getElementById('btn-send-ai');
-  if (sendBtn) sendBtn.disabled = true;
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
 
-  const nowIso = new Date().toISOString();
-  const userMsg = { role: 'user', content: userText, created_at: nowIso };
-  aiChatMessages.push(userMsg);
-  renderAiMessages(true);
+  const userMsgDiv = document.createElement('div');
+  userMsgDiv.className = 'ai-message user';
+  userMsgDiv.innerHTML = `<div class="ai-bubble">${escapeHtml(userText)}</div>`;
+  container.appendChild(userMsgDiv);
+  container.scrollTop = container.scrollHeight;
 
-  await supabaseClient.from('ai_chat_history').insert([{
-    role: 'user',
-    content: userText,
-    created_at: nowIso
-  }]);
+  aiChatHistory.push({ role: 'user', content: userText });
+
+  const typingDiv = document.createElement('div');
+  typingDiv.className = 'ai-message assistant typing';
+  typingDiv.innerHTML = `<div class="ai-bubble">Sedang mengetik...</div>`;
+  container.appendChild(typingDiv);
+  container.scrollTop = container.scrollHeight;
 
   try {
-    const recentHistory = aiChatMessages.slice(-16).map(m => ({
-      role: m.role === 'user' ? 'user' : 'assistant',
-      content: m.content
-    }));
-
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        messages: [
-          { role: 'system', content: buildArchiveSystemContext() },
-          ...recentHistory
-        ],
+        model: GROQ_MODEL,
+        messages: aiChatHistory,
         temperature: 0.7,
         max_tokens: 2048
       })
     });
 
-    const data = await response.json();
+    typingDiv.remove();
 
     if (!response.ok) {
-      const errMsg = (data && data.error && data.error.message) ? data.error.message : 'Gagal menghubungi Groq API';
-      throw new Error(errMsg);
+      const errJson = await response.json().catch(() => ({}));
+      throw new Error(errJson.error?.message || `HTTP error! status: ${response.status}`);
     }
 
-    const aiReplyText = data?.choices?.[0]?.message?.content || 'Tidak ada respons dari AI.';
-    const replyIso = new Date().toISOString();
+    const data = await response.json();
+    const assistantReply = data.choices && data.choices[0] && data.choices[0].message
+      ? data.choices[0].message.content
+      : 'Maaf, saya tidak dapat memproses respons saat ini.';
 
-    aiChatMessages.push({
-      role: 'model',
-      content: aiReplyText,
-      created_at: replyIso
-    });
+    aiChatHistory.push({ role: 'assistant', content: assistantReply });
 
-    await supabaseClient.from('ai_chat_history').insert([{
-      role: 'model',
-      content: aiReplyText,
-      created_at: replyIso
-    }]);
+    const assistantMsgDiv = document.createElement('div');
+    assistantMsgDiv.className = 'ai-message assistant';
+    assistantMsgDiv.innerHTML = `<div class="ai-bubble">${escapeHtml(assistantReply)}</div>`;
+    container.appendChild(assistantMsgDiv);
+    container.scrollTop = container.scrollHeight;
 
   } catch (err) {
-    console.error('Groq API Error:', err);
-    showToast(err.message, 'error', 4000);
-    aiChatMessages.push({
-      role: 'model',
-      content: `⚠️ Error: ${err.message}`,
-      created_at: new Date().toISOString()
-    });
-  } finally {
-    isAiSending = false;
-    if (sendBtn) sendBtn.disabled = false;
-    renderAiMessages(false);
-  }
-}
-
-window.saveAiReplyToNotes = async function (msgIndex) {
-  const msg = aiChatMessages[msgIndex];
-  if (!msg || !msg.content) return;
-
-  const confirm = await Swal.fire({
-    text: 'Simpan balasan AI ini sebagai postingan baru di Notes?',
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: 'Save to Notes',
-    cancelButtonText: 'Cancel',
-    background: '#1e1e1f',
-    color: '#fff'
-  });
-
-  if (!confirm.isConfirmed) return;
-
-  const nowIso = new Date().toISOString();
-  const { error } = await supabaseClient.from('blog_posts').insert([{
-    content: msg.content,
-    image_url: null,
-    created_at: nowIso,
-    updated_at: nowIso
-  }]);
-
-  if (error) {
-    showToast(error.message, 'error');
-  } else {
-    await fetchBlogPosts();
-    showToast('Saved to Notes!', 'success');
-  }
-};
-
-window.clearAiChatHistory = async function () {
-  if (!isAdminLoggedIn) return;
-
-  const confirm = await Swal.fire({
-    text: 'Hapus seluruh riwayat chat AI secara permanen?',
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#ff5f5f',
-    confirmButtonText: 'Hapus Riwayat',
-    cancelButtonText: 'Batal',
-    background: '#1e1e1f',
-    color: '#fff'
-  });
-
-  if (!confirm.isConfirmed) return;
-
-  const { error } = await supabaseClient
-    .from('ai_chat_history')
-    .delete()
-    .not('id', 'is', null);
-
-  if (error) {
-    showToast(error.message, 'error');
-  } else {
-    aiChatMessages = [];
-    renderAiMessages();
-    showToast('Riwayat chat berhasil dihapus', 'info');
+    typingDiv.remove();
+    const errorMsgDiv = document.createElement('div');
+    errorMsgDiv.className = 'ai-message assistant';
+    errorMsgDiv.innerHTML = `<div class="ai-bubble" style="color: #ff7b7b;">Terjadi kesalahan koneksi ke Groq API: ${escapeHtml(err.message)}</div>`;
+    container.appendChild(errorMsgDiv);
+    container.scrollTop = container.scrollHeight;
+    showToast('Gagal menghubungi AI', 'error');
   }
 };
