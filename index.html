@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Archive</title>
   <link id="favicon-link" rel="shortcut icon" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" type="image/x-icon">
-  <link rel="stylesheet" href="./assets/css/style.css?v=43">
+  <link rel="stylesheet" href="./assets/css/style.css?v=45">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -93,7 +93,7 @@
         <div class="main-right-actions">
           <button type="button" id="btn-toggle-library-privacy" class="minimal-add-btn" style="display: none;" onclick="toggleLibraryPrivacy()" title="Toggle Library Public / Private">
             <ion-icon id="library-privacy-icon" name="eye-outline"></ion-icon>
-            <span id="library-privacy-text">Library: Public</span>
+            <span id="library-privacy-text">Public</span>
           </button>
 
           <button type="button" id="btn-add-post" class="minimal-add-btn" style="display: none;" onclick="openPostModal()">
@@ -270,46 +270,54 @@
                 </div>
 
                 <div class="popover-field">
-                  <label>Rating</label>
-                  <select id="filter-rating" class="control-select">
-                    <option value="all">All Ratings</option>
-                    <option value="under_5">&lt; 5.0</option>
-                    <option value="5_plus">5.0+</option>
-                    <option value="6_plus">6.0+</option>
-                    <option value="7_plus">7.0+</option>
-                    <option value="8_plus">8.0+</option>
-                    <option value="9_plus">9.0+</option>
-                    <option value="exact_10">10.0</option>
-                    <option value="unrated">Unrated</option>
-                  </select>
+                  <label>Rating Range (1.0 – 10.0)</label>
+                  <div class="range-input-row">
+                    <input type="number" id="filter-rating-min" class="control-input" step="0.1" min="1" max="10" placeholder="Min">
+                    <span class="range-sep">–</span>
+                    <input type="number" id="filter-rating-max" class="control-input" step="0.1" min="1" max="10" placeholder="Max">
+                  </div>
+                  <label class="checkbox-inline-label">
+                    <input type="checkbox" id="filter-unrated-only">
+                    <span>Unrated only</span>
+                  </label>
+                </div>
+
+                <div class="popover-field">
+                  <label>Total Units (Ch / Eps)</label>
+                  <div class="range-input-row">
+                    <input type="number" id="filter-units-min" class="control-input" min="0" placeholder="Min">
+                    <span class="range-sep">–</span>
+                    <input type="number" id="filter-units-max" class="control-input" min="0" placeholder="Max">
+                  </div>
                 </div>
 
                 <button type="button" class="popover-reset-btn" onclick="resetLibraryFilters()">Reset Filters</button>
               </div>
             </div>
 
-            <!-- 2. SORT BUTTON & POPOVER (WITH DIRECTION TOGGLE 10->1 / 1->10, A->Z / Z->A) -->
+            <!-- 2. SORT BUTTON & POPOVER -->
             <div class="popover-wrapper" id="sort-popover-wrap">
               <button type="button" id="btn-sort-toggle" class="toolbar-action-btn" onclick="toggleToolbarPopover('sort')">
                 <ion-icon name="swap-vertical-outline"></ion-icon>
-                <span id="sort-btn-label">Rating (10→1)</span>
+                <span id="sort-btn-label">Rating (Best)</span>
               </button>
 
               <div id="sort-popover-menu" class="toolbar-popover-menu">
                 <div class="popover-field">
                   <label>Sort By</label>
                   <select id="sort-library-field" class="control-select" onchange="onSortOptionChange()">
-                    <option value="rating" selected>Highest Rating</option>
+                    <option value="rating" selected>Rating</option>
+                    <option value="units">Total Units (Ch/Eps)</option>
                     <option value="recent">Recently Updated</option>
                     <option value="title">Title</option>
                   </select>
                 </div>
 
                 <div class="popover-field">
-                  <label>Order Direction</label>
+                  <label>Order</label>
                   <div class="sort-dir-row">
-                    <button type="button" id="btn-sort-desc" class="sort-dir-btn active" onclick="setSortDirection('desc')">10 → 1</button>
-                    <button type="button" id="btn-sort-asc" class="sort-dir-btn" onclick="setSortDirection('asc')">1 → 10</button>
+                    <button type="button" id="btn-sort-desc" class="sort-dir-btn active" onclick="setSortDirection('desc')">Best</button>
+                    <button type="button" id="btn-sort-asc" class="sort-dir-btn" onclick="setSortDirection('asc')">Worst</button>
                   </div>
                 </div>
               </div>
@@ -616,7 +624,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./assets/js/script.js?v=43"></script>
+  <script src="./assets/js/script.js?v=45"></script>
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 </body>
