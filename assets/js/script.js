@@ -12,23 +12,760 @@ const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAE
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-    <rect width="100" height="100" fill="#27272a"/>
-    <circle cx="50" cy="38" r="18" fill="#71717a"/>
-    <path d="M20 88c0-16.5 13.5-30 30-30s30 13.5 30 30" fill="#71717a"/>
-  </svg>`
-);
+// Application State
+let allMediaLogs = [];
+let allBlogPosts = [];
+let lastApiResults = [];
+let pendingUploadedUrls = [];
+let currentCategory = 'all';
+let currentMainView = 'blog';
+let libraryViewMode = 'grid';
+let itemsPerPage = 8;
+let visibleMediaLimit = 8;
+let isStatsExpanded = false;
+let isAdminLoggedIn = false;
+let isProfileLoaded = false;
 
-const DEFAULT_COVER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300" fill="none">
-    <rect width="200" height="300" fill="#27272a"/>
-    <rect x="74" y="124" width="52" height="52" rx="10" stroke="#52525b" stroke-width="4"/>
-    <circle cx="91" cy="141" r="4" fill="#52525b"/>
-    <path d="M78 168l16-16 11 11 10-10 11 15" stroke="#52525b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`
-);
+// Sort State (Default: Rating Best)
+let currentSortField = 'rating';
+let currentSortDir = 'desc';
 
+let currentProfile = {
+  name: '',
+  bio: '',
+  avatar_url: '',
+  banner_url: '',
+  social_links: [],
+  is_library_private: false
+};
+
+function setElText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+// ==========================================
+// MINIMALIST TOAST NOTIFICATION
+// ==========================================
+function showToast(message, type = 'success', duration = 2600) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const iconMap = {
+    success: 'checkmark-circle-outline',
+    error: 'alert-circle-outline',
+    info: 'information-circle-outline'
+  };
+
+  const toast = document.createElement('div');
+  toast.className = `toast-item ${type}`;
+  toast.innerHTML = `
+    <ion-icon name="${iconMap[type] || iconMap.info}"></ion-icon>
+    <span>${escapeHtml(message)}</span>
+  `;
+
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.add('hide');
+    setTimeout(() => toast.remove(), 240);
+  }, duration);
+}
+
+// ==========================================
+// 2. INITIALIZATION, SCROLL LISTENERS & VIEW TABS
+// ==========================================
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    setupScrollListeners();
+    setupOutsidePopoverCloser();
+    setupFilterListeners();
+    updateSortUIControls();
+
+    await checkAdminSession();
+    await fetchProfileSettings();
+    await Promise.all([fetchBlogPosts(), fetchMediaLogs()]);
+  } catch (err) {
+    console.error('Initialization error:', err);
+    showToast('Init error: ' + err.message, 'error', 5000);
+  }
+});
+
+function setupScrollListeners() {
+  const stickyHeader = document.getElementById('sticky-mini-header');
+  const backToTopBtn = document.getElementById('btn-back-to-top');
+  const profileCard = document.getElementById('profile-header-card');
+
+  window.addEventListener('scroll', () => {
+    const scrollY = window.scrollY || document.documentElement.scrollTop;
+    const triggerHeight = profileCard ? (profileCard.offsetTop + profileCard.offsetHeight - 20) : 180;
+
+    if (stickyHeader) {
+      stickyHeader.classList.toggle('visible', scrollY > triggerHeight);
+    }
+
+    if (backToTopBtn) {
+      backToTopBtn.classList.toggle('visible', scrollY > 360);
+    }
+  }, { passive: true });
+}
+
+function closeAllToolbarPopovers() {
+  const pairs = [
+    ['filter-popover-menu', 'btn-filter-toggle'],
+    ['sort-popover-menu', 'btn-sort-toggle'],
+    ['pages-popover-menu', 'btn-pages-toggle']
+  ];
+  pairs.forEach(([menuId, btnId]) => {
+    const m = document.getElementById(menuId);
+    const b = document.getElementById(btnId);
+    if (m) m.classList.remove('open');
+    if (b) b.classList.remove('active');
+  });
+}
+
+function setupOutsidePopoverCloser() {
+  document.addEventListener('click', (e) => {
+    const filterWrap = document.getElementById('filter-popover-wrap');
+    const sortWrap = document.getElementById('sort-popover-wrap');
+    const pagesWrap = document.getElementById('pages-popover-wrap');
+
+    const insideFilter = filterWrap && filterWrap.contains(e.target);
+    const insideSort = sortWrap && sortWrap.contains(e.target);
+    const insidePages = pagesWrap && pagesWrap.contains(e.target);
+
+    if (!insideFilter && !insideSort && !insidePages) {
+      closeAllToolbarPopovers();
+    }
+  });
+}
+
+window.toggleToolbarPopover = function (type) {
+  const map = {
+    filter: ['filter-popover-menu', 'btn-filter-toggle'],
+    sort: ['sort-popover-menu', 'btn-sort-toggle'],
+    pages: ['pages-popover-menu', 'btn-pages-toggle']
+  };
+  const target = map[type];
+  if (!target) return;
+
+  const menuEl = document.getElementById(target[0]);
+  const btnEl = document.getElementById(target[1]);
+  const willOpen = menuEl ? !menuEl.classList.contains('open') : false;
+
+  closeAllToolbarPopovers();
+
+  if (willOpen && menuEl && btnEl) {
+    // Reset inline style agar mengikuti rule CSS (Mobile <= 680px: left 0 | Desktop > 680px: right 0)
+    menuEl.style.left = '';
+    menuEl.style.right = '';
+    menuEl.classList.add('open');
+    btnEl.classList.add('active');
+
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const isMobileLayout = viewportWidth <= 680;
+    const rect = menuEl.getBoundingClientRect();
+    const btnRect = btnEl.getBoundingClientRect();
+
+    if (isMobileLayout) {
+      // Mode Mobile: Default rata kiri (membuka ke kanan)
+      // Jika menu melewati tepi kanan layar, geser ke kiri secukupnya
+      if (rect.right > viewportWidth - 14) {
+        const overflowRight = rect.right - (viewportWidth - 14);
+        const safeShift = Math.min(overflowRight, Math.max(0, btnRect.left - 14));
+        menuEl.style.left = `-${safeShift}px`;
+      }
+    } else {
+      // Mode Desktop/Laptop: Default rata kanan (membuka ke kiri)
+      // Jika posisi tombol agak ke tengah sehingga menu melewati tepi kiri, geser ke kanan secukupnya
+      if (rect.left < 14) {
+        const overflowLeft = 14 - rect.left;
+        menuEl.style.right = `-${overflowLeft}px`;
+      }
+    }
+  }
+};
+
+window.scrollToTopSmooth = function () {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.switchMainView = function (viewName) {
+  if (viewName === 'library' && currentProfile.is_library_private && !isAdminLoggedIn) {
+    viewName = 'blog';
+  }
+
+  currentMainView = viewName;
+
+  document.querySelectorAll('.main-view-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === viewName);
+  });
+
+  document.querySelectorAll('.mini-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === viewName);
+  });
+
+  const libView = document.getElementById('view-library');
+  const blogView = document.getElementById('view-blog');
+
+  if (libView && blogView) {
+    libView.classList.remove('active-view');
+    blogView.classList.remove('active-view');
+
+    if (viewName === 'library') {
+      blogView.style.display = 'none';
+      libView.style.display = 'block';
+      void libView.offsetWidth;
+      libView.classList.add('active-view');
+    } else {
+      libView.style.display = 'none';
+      blogView.style.display = 'block';
+      void blogView.offsetWidth;
+      blogView.classList.add('active-view');
+    }
+  }
+
+  updateAdminActionButtons();
+};
+
+function updateLibraryTabVisibility() {
+  const isPrivate = Boolean(currentProfile.is_library_private);
+  const canViewLibrary = !isPrivate || isAdminLoggedIn;
+
+  const mainLibBtn = document.getElementById('main-tab-library');
+  const miniLibBtn = document.getElementById('mini-tab-library');
+  const lockBadge = document.getElementById('library-private-lock');
+
+  if (mainLibBtn) mainLibBtn.style.display = canViewLibrary ? 'inline-flex' : 'none';
+  if (miniLibBtn) miniLibBtn.style.display = canViewLibrary ? 'inline-flex' : 'none';
+  if (lockBadge) lockBadge.style.display = (isPrivate && isAdminLoggedIn) ? 'inline-block' : 'none';
+
+  if (!canViewLibrary && currentMainView === 'library') {
+    switchMainView('blog');
+  }
+}
+
+window.toggleLibraryPrivacy = async function () {
+  if (!isAdminLoggedIn) return;
+
+  const nextState = !currentProfile.is_library_private;
+  const { error } = await supabaseClient
+    .from('profile_settings')
+    .upsert([{
+      id: 1,
+      name: currentProfile.name,
+      bio: currentProfile.bio,
+      avatar_url: currentProfile.avatar_url,
+      banner_url: currentProfile.banner_url,
+      social_links: currentProfile.social_links,
+      is_library_private: nextState,
+      updated_at: new Date().toISOString()
+    }]);
+
+  if (error) {
+    showToast(error.message, 'error');
+    return;
+  }
+
+  currentProfile.is_library_private = nextState;
+  updateLibraryTabVisibility();
+  updateAdminActionButtons();
+  showToast(nextState ? 'Library set to Private' : 'Library set to Public', 'info');
+};
+
+window.setLibraryViewMode = function (mode) {
+  libraryViewMode = mode;
+  const gridBtn = document.getElementById('btn-view-grid');
+  const listBtn = document.getElementById('btn-view-list');
+  if (gridBtn) gridBtn.classList.toggle('active', mode === 'grid');
+  if (listBtn) listBtn.classList.toggle('active', mode === 'list');
+  renderMediaGrid();
+};
+
+window.selectItemsPerPage = function (val) {
+  if (val === 'all') {
+    itemsPerPage = Infinity;
+    visibleMediaLimit = Infinity;
+  } else {
+    itemsPerPage = parseInt(val, 10) || 8;
+    visibleMediaLimit = itemsPerPage;
+  }
+
+  document.querySelectorAll('#pages-popover-menu .page-option-item').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.limit === String(val));
+  });
+
+  closeAllToolbarPopovers();
+  renderMediaGrid();
+};
+
+window.loadMoreMedia = function () {
+  if (itemsPerPage === Infinity) {
+    visibleMediaLimit = Infinity;
+  } else {
+    visibleMediaLimit += itemsPerPage;
+  }
+  renderMediaGrid();
+};
+
+window.toggleLibraryStats = function () {
+  isStatsExpanded = !isStatsExpanded;
+  const panel = document.getElementById('collapsible-stats-panel');
+  const toggleBtn = document.getElementById('btn-toggle-stats');
+  const textEl = document.getElementById('stats-toggle-text');
+  const iconEl = document.getElementById('stats-chevron-icon');
+
+  if (panel) panel.style.display = isStatsExpanded ? 'flex' : 'none';
+  if (toggleBtn) toggleBtn.classList.toggle('active', isStatsExpanded);
+  if (textEl) textEl.textContent = isStatsExpanded ? 'Hide Stats' : 'Show Stats';
+  if (iconEl) iconEl.setAttribute('name', isStatsExpanded ? 'chevron-up-outline' : 'chevron-down-outline');
+};
+
+function updateAdminActionButtons() {
+  const addMediaBtn = document.getElementById('btn-add-media');
+  const addPostBtn = document.getElementById('btn-add-post');
+  const privacyBtn = document.getElementById('btn-toggle-library-privacy');
+  const privacyIcon = document.getElementById('library-privacy-icon');
+  const privacyText = document.getElementById('library-privacy-text');
+
+  if (!isAdminLoggedIn) {
+    if (addMediaBtn) addMediaBtn.style.display = 'none';
+    if (addPostBtn) addPostBtn.style.display = 'none';
+    if (privacyBtn) privacyBtn.style.display = 'none';
+    return;
+  }
+
+  const inLibrary = currentMainView === 'library';
+
+  if (privacyBtn) {
+    privacyBtn.style.display = inLibrary ? 'inline-flex' : 'none';
+    const isPriv = Boolean(currentProfile.is_library_private);
+    if (privacyIcon) privacyIcon.setAttribute('name', isPriv ? 'eye-off-outline' : 'eye-outline');
+    if (privacyText) privacyText.textContent = isPriv ? 'Private' : 'Public';
+  }
+
+  if (addMediaBtn) addMediaBtn.style.display = inLibrary ? 'inline-flex' : 'none';
+  if (addPostBtn) addPostBtn.style.display = currentMainView === 'blog' ? 'inline-flex' : 'none';
+}
+
+async function checkAdminSession() {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  isAdminLoggedIn = !!session;
+  updateAdminUI();
+}
+
+function updateAdminUI() {
+  const editProfileBtn = document.getElementById('btn-edit-profile');
+  const lockIcon = document.getElementById('admin-lock-icon');
+  const btnText = document.getElementById('admin-btn-text');
+
+  if (isAdminLoggedIn) {
+    if (editProfileBtn) editProfileBtn.style.display = 'inline-flex';
+    if (lockIcon) lockIcon.setAttribute('name', 'log-out-outline');
+    if (btnText) btnText.textContent = 'Logout';
+  } else {
+    if (editProfileBtn) editProfileBtn.style.display = 'none';
+    if (lockIcon) lockIcon.setAttribute('name', 'lock-closed-outline');
+    if (btnText) btnText.textContent = 'Admin';
+  }
+
+  updateLibraryTabVisibility();
+  updateAdminActionButtons();
+  renderMediaGrid();
+  if (isProfileLoaded) renderBlogPosts();
+}
+
+window.handleAdminAuthClick = async function () {
+  if (isAdminLoggedIn) {
+    const confirm = await Swal.fire({
+      text: 'Exit Admin mode?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Logout',
+      cancelButtonText: 'Cancel',
+      background: '#1e1e1f',
+      color: '#fff'
+    });
+    if (confirm.isConfirmed) {
+      await supabaseClient.auth.signOut();
+      isAdminLoggedIn = false;
+      updateAdminUI();
+      showToast('Logged out from Admin mode', 'info');
+    }
+  } else {
+    document.getElementById('login-modal').classList.add('active');
+  }
+};
+
+window.closeLoginModal = function () {
+  document.getElementById('login-modal').classList.remove('active');
+};
+
+const loginForm = document.getElementById('admin-login-form');
+if (loginForm) {
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      isAdminLoggedIn = true;
+      closeLoginModal();
+      updateAdminUI();
+      showToast('Admin login successful', 'success');
+    }
+  });
+}
+
+// ==========================================
+// 2B. IMAGE COMPRESSION & STORAGE UPLOAD/CLEANUP
+// ==========================================
+function compressImageFile(file, maxWidth = 800, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Image compression failed'));
+          },
+          'image/webp',
+          quality
+        );
+      };
+      img.onerror = () => reject(new Error('Invalid image file'));
+      img.src = event.target.result;
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadImageToSupabase(file, folder = 'covers') {
+  const maxWidth = folder === 'avatars' ? 400 : (folder === 'banners' ? 1200 : (folder === 'posts' ? 900 : 600));
+  const compressedBlob = await compressImageFile(file, maxWidth, 0.82);
+  const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.webp`;
+
+  const { error } = await supabaseClient.storage
+    .from(STORAGE_BUCKET)
+    .upload(fileName, compressedBlob, {
+      contentType: 'image/webp',
+      upsert: false
+    });
+
+  if (error) throw error;
+
+  const { data: publicData } = supabaseClient.storage
+    .from(STORAGE_BUCKET)
+    .getPublicUrl(fileName);
+
+  pendingUploadedUrls.push(publicData.publicUrl);
+  return publicData.publicUrl;
+}
+
+async function deleteOldStorageFile(fileUrl) {
+  if (!fileUrl) return;
+  const marker = `/storage/v1/object/public/${STORAGE_BUCKET}/`;
+  const idx = fileUrl.indexOf(marker);
+  if (idx === -1) return;
+
+  const filePath = decodeURIComponent(fileUrl.substring(idx + marker.length).split('?')[0]);
+  if (!filePath) return;
+
+  await supabaseClient.storage.from(STORAGE_BUCKET).remove([filePath]);
+}
+
+async function cleanupPendingUploads(keepUrls = []) {
+  const keepSet = new Set((Array.isArray(keepUrls) ? keepUrls : [keepUrls]).filter(Boolean));
+  for (const tempUrl of pendingUploadedUrls) {
+    if (!keepSet.has(tempUrl)) {
+      await deleteOldStorageFile(tempUrl);
+    }
+  }
+  pendingUploadedUrls = [];
+}
+
+// ==========================================
+// 2C. PROFILE SETTINGS, BANNER & SOCIAL LINKS
+// ==========================================
+function detectSocialIcon(url) {
+  const lower = (url || '').toLowerCase();
+  if (lower.includes('instagram.com')) return 'logo-instagram';
+  if (lower.includes('twitter.com') || lower.includes('x.com')) return 'logo-twitter';
+  if (lower.includes('github.com')) return 'logo-github';
+  if (lower.includes('youtube.com') || lower.includes('youtu.be')) return 'logo-youtube';
+  if (lower.includes('tiktok.com')) return 'logo-tiktok';
+  if (lower.includes('discord.gg') || lower.includes('discord.com')) return 'logo-discord';
+  if (lower.includes('twitch.tv')) return 'logo-twitch';
+  if (lower.includes('linkedin.com')) return 'logo-linkedin';
+  if (lower.includes('reddit.com')) return 'logo-reddit';
+  if (lower.includes('facebook.com')) return 'logo-facebook';
+  if (lower.includes('spotify.com')) return 'musical-notes-outline';
+  if (lower.includes('steamcommunity.com') || lower.includes('store.steampowered.com')) return 'logo-steam';
+  if (lower.includes('letterboxd.com')) return 'film-outline';
+  if (lower.includes('myanimelist.net') || lower.includes('anilist.co')) return 'tv-outline';
+  return 'link-outline';
+}
+
+async function fetchProfileSettings() {
+  const { data, error } = await supabaseClient
+    .from('profile_settings')
+    .select('*')
+    .eq('id', 1)
+    .single();
+
+  if (error) {
+    console.warn('Profile fetch warning:', error.message);
+  }
+
+  if (!error && data) {
+    currentProfile = {
+      name: data.name || '',
+      bio: data.bio || '',
+      avatar_url: data.avatar_url || '',
+      banner_url: data.banner_url || '',
+      social_links: Array.isArray(data.social_links) ? data.social_links : [],
+      is_library_private: Boolean(data.is_library_private)
+    };
+  }
+  isProfileLoaded = true;
+  applyProfileToUI();
+}
+
+function applyProfileToUI() {
+  setElText('profile-name-text', currentProfile.name);
+  setElText('profile-bio-text', currentProfile.bio);
+  setElText('sticky-name-text', currentProfile.name);
+
+  if (currentProfile.name) {
+    document.title = `${currentProfile.name} — Archive`;
+    setElText('footer-brand-name', currentProfile.name.toUpperCase());
+  }
+
+  const headerCard = document.getElementById('profile-header-card');
+  const bannerWrap = document.getElementById('profile-banner-wrap');
+  const bannerImg = document.getElementById('profile-banner-img');
+
+  if (headerCard && bannerWrap && bannerImg) {
+    if (currentProfile.banner_url) {
+      const cleanBanner = normalizeImageUrl(currentProfile.banner_url);
+      bannerImg.onerror = () => {
+        bannerWrap.style.display = 'none';
+        headerCard.classList.remove('has-banner');
+      };
+      bannerImg.src = cleanBanner;
+      bannerWrap.style.display = 'block';
+      headerCard.classList.add('has-banner');
+    } else {
+      bannerImg.src = '';
+      bannerWrap.style.display = 'none';
+      headerCard.classList.remove('has-banner');
+    }
+  }
+
+  const avatarEl = document.getElementById('profile-avatar-img');
+  const stickyAvatarEl = document.getElementById('sticky-avatar-img');
+  const faviconEl = document.getElementById('favicon-link');
+
+  if (avatarEl) {
+    if (currentProfile.avatar_url) {
+      const cleanUrl = normalizeImageUrl(currentProfile.avatar_url);
+      avatarEl.onerror = () => {
+        avatarEl.src = 'https://placehold.co/200x200/1e1e1f/ffffff?text=?';
+      };
+      avatarEl.src = cleanUrl;
+      if (stickyAvatarEl) stickyAvatarEl.src = cleanUrl;
+      if (faviconEl) faviconEl.href = cleanUrl;
+    } else {
+      avatarEl.src = TRANSPARENT_PIXEL;
+      if (stickyAvatarEl) stickyAvatarEl.src = TRANSPARENT_PIXEL;
+    }
+  }
+
+  const socialsBar = document.getElementById('profile-socials-bar');
+  if (socialsBar) {
+    const validLinks = (currentProfile.social_links || []).filter(s => s && s.url);
+    if (validLinks.length > 0) {
+      socialsBar.style.display = 'flex';
+      socialsBar.innerHTML = validLinks.map(s => {
+        const href = s.url.startsWith('http') ? s.url : `https://${s.url}`;
+        const label = escapeHtml(s.label || s.url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]);
+        const iconName = detectSocialIcon(href);
+        return `
+          <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="social-chip">
+            <ion-icon name="${iconName}"></ion-icon>
+            <span>${label}</span>
+          </a>
+        `;
+      }).join('');
+    } else {
+      socialsBar.style.display = 'none';
+      socialsBar.innerHTML = '';
+    }
+  }
+
+  updateLibraryTabVisibility();
+  updateAdminActionButtons();
+  renderBlogPosts();
+}
+
+window.addSocialLinkRow = function (label = '', url = '') {
+  const container = document.getElementById('social-links-editor');
+  if (!container) return;
+
+  const row = document.createElement('div');
+  row.className = 'social-edit-row';
+  row.innerHTML = `
+    <input type="text" class="form-input social-label-input" placeholder="Label (e.g. GitHub)" value="${escapeHtml(label)}">
+    <input type="url" class="form-input social-url-input" placeholder="https://..." value="${escapeHtml(url)}">
+    <button type="button" class="social-remove-btn" onclick="this.parentElement.remove()" title="Remove">
+      <ion-icon name="trash-outline"></ion-icon>
+    </button>
+  `;
+  container.appendChild(row);
+};
+
+window.openProfileModal = function () {
+  pendingUploadedUrls = [];
+  document.getElementById('edit-profile-name').value = currentProfile.name;
+  document.getElementById('edit-profile-bio').value = currentProfile.bio;
+  document.getElementById('edit-profile-avatar').value = currentProfile.avatar_url;
+  document.getElementById('edit-profile-banner').value = currentProfile.banner_url;
+  setElText('profile-upload-status', '');
+  setElText('banner-upload-status', '');
+
+  const editor = document.getElementById('social-links-editor');
+  if (editor) {
+    editor.innerHTML = '';
+    (currentProfile.social_links || []).forEach(link => {
+      addSocialLinkRow(link.label || '', link.url || '');
+    });
+  }
+
+  document.getElementById('profile-modal').classList.add('active');
+};
+
+window.closeProfileModal = async function () {
+  document.getElementById('profile-modal').classList.remove('active');
+  await cleanupPendingUploads([]);
+};
+
+window.clearBannerInput = function () {
+  document.getElementById('edit-profile-banner').value = '';
+  setElText('banner-upload-status', 'Banner removed (click Save Profile).');
+};
+
+window.handleBannerImageUpload = async function (event) {
+  const file = event.target.files ? event.target.files[0] : null;
+  event.target.value = '';
+  if (!file) return;
+
+  setElText('banner-upload-status', 'Uploading banner...');
+  try {
+    const publicUrl = await uploadImageToSupabase(file, 'banners');
+    document.getElementById('edit-profile-banner').value = publicUrl;
+    setElText('banner-upload-status', 'Banner uploaded! Click Save Profile.');
+    showToast('Banner uploaded', 'success');
+  } catch (err) {
+    setElText('banner-upload-status', `Upload failed: ${err.message}`);
+    showToast(err.message, 'error');
+  }
+};
+
+window.handleProfileImageUpload = async function (event) {
+  const file = event.target.files ? event.target.files[0] : null;
+  event.target.value = '';
+  if (!file) return;
+
+  setElText('profile-upload-status', 'Uploading avatar...');
+  try {
+    const publicUrl = await uploadImageToSupabase(file, 'avatars');
+    document.getElementById('edit-profile-avatar').value = publicUrl;
+    setElText('profile-upload-status', 'Avatar uploaded! Click Save Profile.');
+    showToast('Avatar uploaded', 'success');
+  } catch (err) {
+    setElText('profile-upload-status', `Upload failed: ${err.message}`);
+    showToast(err.message, 'error');
+  }
+};
+
+const profileForm = document.getElementById('profile-form');
+if (profileForm) {
+  profileForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const oldAvatar = currentProfile.avatar_url;
+    const oldBanner = currentProfile.banner_url;
+    const newAvatar = document.getElementById('edit-profile-avatar').value.trim();
+    const newBanner = document.getElementById('edit-profile-banner').value.trim();
+
+    const socialRows = document.querySelectorAll('#social-links-editor .social-edit-row');
+    const collectedLinks = [];
+    socialRows.forEach(row => {
+      const labelEl = row.querySelector('.social-label-input');
+      const urlEl = row.querySelector('.social-url-input');
+      const label = labelEl ? labelEl.value.trim() : '';
+      const url = urlEl ? urlEl.value.trim() : '';
+      if (url) {
+        collectedLinks.push({ label, url });
+      }
+    });
+
+    const updatedProfile = {
+      id: 1,
+      name: document.getElementById('edit-profile-name').value.trim(),
+      bio: document.getElementById('edit-profile-bio').value.trim(),
+      avatar_url: newAvatar,
+      banner_url: newBanner,
+      social_links: collectedLinks,
+      is_library_private: Boolean(currentProfile.is_library_private),
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabaseClient
+      .from('profile_settings')
+      .upsert([updatedProfile]);
+
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      await cleanupPendingUploads([newAvatar, newBanner]);
+      if (oldAvatar && oldAvatar !== newAvatar) {
+        await deleteOldStorageFile(oldAvatar);
+      }
+      if (oldBanner && oldBanner !== newBanner) {
+        await deleteOldStorageFile(oldBanner);
+      }
+      currentProfile = updatedProfile;
+      applyProfileToUI();
+      document.getElementById('profile-modal').classList.remove('active');
+      showToast('Profile updated', 'success');
+    }
+  });
+}
+
+// ==========================================
+// 3. MULTI-CATEGORY, ADDITIONAL ENTRIES & SMART STATUS HELPERS
+// ==========================================
 const CATEGORY_LABELS = {
   tv_show: 'TV Show',
   movie: 'Movie',
@@ -38,764 +775,142 @@ const CATEGORY_LABELS = {
   music: 'Music'
 };
 
-const VALID_CATEGORIES = ['tv_show', 'movie', 'comic', 'novel', 'game', 'music'];
-
-const SOCIAL_PLATFORMS = {
-  instagram: { label: 'Instagram', icon: 'logo-instagram' },
-  twitter: { label: 'X / Twitter', icon: 'logo-twitter' },
-  youtube: { label: 'YouTube', icon: 'logo-youtube' },
-  tiktok: { label: 'TikTok', icon: 'logo-tiktok' },
-  github: { label: 'GitHub', icon: 'logo-github' },
-  discord: { label: 'Discord', icon: 'logo-discord' },
-  spotify: { label: 'Spotify', icon: 'musical-notes-outline' },
-  mal: { label: 'MyAnimeList', icon: 'list-circle-outline' },
-  anilist: { label: 'AniList', icon: 'albums-outline' },
-  letterboxd: { label: 'Letterboxd', icon: 'film-outline' },
-  steam: { label: 'Steam', icon: 'game-controller-outline' },
-  website: { label: 'Website', icon: 'globe-outline' }
+const DEFAULT_UNITS_BY_CAT = {
+  tv_show: 'eps',
+  movie: 'movie',
+  comic: 'ch',
+  novel: 'vol',
+  game: 'item',
+  music: 'track'
 };
 
-const GROQ_KEY_STORAGE = 'archive_groq_api_key';
-
-let isAdminLoggedIn = false;
-let currentProfile = {
-  name: 'Archive',
-  bio: '',
-  avatar_url: '',
-  banner_url: '',
-  social_links: [],
-  is_library_public: true
+const UNIT_SHORT_LABELS = {
+  eps: 'Eps',
+  ch: 'Ch',
+  movie: 'Movie',
+  vol: 'Vol',
+  pages: 'Pages',
+  track: 'Track',
+  item: 'Item'
 };
 
-let allMediaLogs = [];
-let allBlogPosts = [];
-let aiChatMessages = [];
-let isAiSending = false;
-
-let activeMainView = 'blog';
-let activeCategory = 'all';
-let libraryViewMode = 'grid';
-let sortField = 'rating';
-let sortDirection = 'desc';
-let itemsPerPage = '8';
-let currentVisibleLimit = 8;
-let isStatsExpanded = false;
-
-// ==========================================
-// 2. INITIALIZATION & EVENT LISTENERS
-// ==========================================
-document.addEventListener('DOMContentLoaded', async () => {
-  setupScrollListeners();
-  setupOutsidePopoverCloser();
-  setupLibraryControls();
-  initGroqKeyInput();
-
-  await checkAdminSession();
-  await fetchProfile();
-  await Promise.all([fetchMediaLogs(), fetchBlogPosts()]);
-
-  if (isAdminLoggedIn) {
-    await fetchAiChatHistory();
+function getLegacyCategory(item) {
+  const rawCat = (item.category || '').toLowerCase().trim();
+  if (rawCat === 'series' || rawCat === 'tv_show') return 'tv_show';
+  if (rawCat === 'other') {
+    if (item.sub_category === 'light_novel') return 'novel';
+    if (item.sub_category === 'game') return 'game';
   }
-});
-
-function setupScrollListeners() {
-  const stickyHeader = document.getElementById('sticky-mini-header');
-  const backToTopBtn = document.getElementById('btn-back-to-top');
-
-  window.addEventListener('scroll', () => {
-    const y = window.scrollY || document.documentElement.scrollTop;
-    if (stickyHeader) stickyHeader.classList.toggle('visible', y > 220);
-    if (backToTopBtn) backToTopBtn.classList.toggle('visible', y > 400);
-  }, { passive: true });
+  return rawCat || 'tv_show';
 }
 
-window.scrollToTopSmooth = function () {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-};
-
-function setupOutsidePopoverCloser() {
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.popover-wrapper')) {
-      closeAllToolbarPopovers();
-    }
-  });
-}
-
-function closeAllToolbarPopovers() {
-  document.querySelectorAll('.toolbar-popover-menu').forEach(menu => menu.classList.remove('open'));
-  document.querySelectorAll('.toolbar-btn').forEach(btn => btn.classList.remove('active'));
-}
-
-window.toggleToolbarPopover = function (name) {
-  const targetMenu = document.getElementById(`${name}-popover-menu`);
-  const targetBtn = document.getElementById(`btn-${name}-toggle`);
-  if (!targetMenu) return;
-
-  const isOpen = targetMenu.classList.contains('open');
-  closeAllToolbarPopovers();
-
-  if (!isOpen) {
-    targetMenu.classList.add('open');
-    if (targetBtn) targetBtn.classList.add('active');
-  }
-};
-
-// ==========================================
-// 3. TOAST & HELPERS
-// ==========================================
-function showToast(message, type = 'info', duration = 2600) {
-  const container = document.getElementById('toast-container');
-  if (!container) return;
-
-  const toast = document.createElement('div');
-  toast.className = `toast-item ${type === 'error' ? 'error' : ''}`;
-
-  const iconName = type === 'error'
-    ? 'alert-circle-outline'
-    : type === 'success'
-      ? 'checkmark-circle-outline'
-      : 'information-circle-outline';
-
-  toast.innerHTML = `<ion-icon name="${iconName}"></ion-icon><span>${escapeHtml(message)}</span>`;
-  container.appendChild(toast);
-
-  setTimeout(() => {
-    toast.classList.add('hide');
-    setTimeout(() => toast.remove(), 240);
-  }, duration);
-}
-
-function escapeHtml(str) {
-  return String(str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function setElText(id, text) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = text;
-}
-
-function formatStatusDate(isoStr) {
-  if (!isoStr) return '';
-  const d = new Date(isoStr);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function formatNoteTimestamp(isoStr) {
-  if (!isoStr) return '';
-  const d = new Date(isoStr);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  });
-}
-
-async function uploadImageToStorage(file, folder = 'uploads') {
-  const ext = (file.name.split('.').pop() || 'png').toLowerCase();
-  const filePath = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-
-  const { error } = await supabaseClient.storage
-    .from('media-assets')
-    .upload(filePath, file, { upsert: true });
-
-  if (error) throw error;
-
-  const { data } = supabaseClient.storage
-    .from('media-assets')
-    .getPublicUrl(filePath);
-
-  return data.publicUrl;
-}
-
-// ==========================================
-// 4. ADMIN AUTH & VIEW SWITCHING
-// ==========================================
-async function checkAdminSession() {
-  const { data } = await supabaseClient.auth.getSession();
-  isAdminLoggedIn = Boolean(data?.session);
-  updateAdminUIState();
-}
-
-function updateAdminUIState() {
-  const lockIcon = document.getElementById('admin-lock-icon');
-  const adminBtnText = document.getElementById('admin-btn-text');
-  const editProfileBtn = document.getElementById('btn-edit-profile');
-  const mainAiTab = document.getElementById('main-tab-ai');
-  const miniAiTab = document.getElementById('mini-tab-ai');
-
-  if (lockIcon) lockIcon.setAttribute('name', isAdminLoggedIn ? 'log-out-outline' : 'lock-closed-outline');
-  if (adminBtnText) adminBtnText.textContent = isAdminLoggedIn ? 'Logout' : 'Admin';
-  if (editProfileBtn) editProfileBtn.style.display = isAdminLoggedIn ? 'inline-flex' : 'none';
-  if (mainAiTab) mainAiTab.style.display = isAdminLoggedIn ? 'inline-flex' : 'none';
-  if (miniAiTab) miniAiTab.style.display = isAdminLoggedIn ? 'inline-flex' : 'none';
-
-  if (!isAdminLoggedIn && activeMainView === 'ai') {
-    switchMainView('blog');
+function getItemTracks(item) {
+  if (Array.isArray(item.tracks) && item.tracks.length > 0) {
+    return item.tracks.map(t => ({
+      category: t.category || getLegacyCategory(item),
+      status: (t.status || item.status || 'planned').toLowerCase().trim(),
+      progress: Number(t.progress) || 0,
+      total_units: (t.total_units !== null && t.total_units !== undefined && t.total_units !== '') ? Number(t.total_units) : null,
+      unit_label: t.unit_label || DEFAULT_UNITS_BY_CAT[t.category] || 'eps'
+    }));
   }
 
-  updateContextActionButtons();
-  updateLibraryPrivacyUI();
+  const cat = getLegacyCategory(item);
+  return [{
+    category: cat,
+    status: (item.status || 'planned').toLowerCase().trim(),
+    progress: Number(item.progress) || 0,
+    total_units: (item.total_units !== null && item.total_units !== undefined && item.total_units !== '') ? Number(item.total_units) : null,
+    unit_label: item.unit_label || DEFAULT_UNITS_BY_CAT[cat] || 'eps'
+  }];
 }
 
-function updateContextActionButtons() {
-  const btnPrivacy = document.getElementById('btn-toggle-library-privacy');
-  const btnAddMedia = document.getElementById('btn-add-media');
-  const btnAddPost = document.getElementById('btn-add-post');
-  const tabBarActions = document.getElementById('tab-bar-actions');
-
-  if (!isAdminLoggedIn) {
-    if (btnPrivacy) btnPrivacy.style.display = 'none';
-    if (btnAddMedia) btnAddMedia.style.display = 'none';
-    if (btnAddPost) btnAddPost.style.display = 'none';
-    if (tabBarActions) tabBarActions.style.display = 'none';
-    return;
-  }
-
-  if (activeMainView === 'blog') {
-    if (tabBarActions) tabBarActions.style.display = 'flex';
-    if (btnAddPost) btnAddPost.style.display = 'inline-flex';
-    if (btnAddMedia) btnAddMedia.style.display = 'none';
-    if (btnPrivacy) btnPrivacy.style.display = 'none';
-  } else if (activeMainView === 'library') {
-    if (tabBarActions) tabBarActions.style.display = 'flex';
-    if (btnAddPost) btnAddPost.style.display = 'none';
-    if (btnAddMedia) btnAddMedia.style.display = 'inline-flex';
-    if (btnPrivacy) btnPrivacy.style.display = 'inline-flex';
-  } else {
-    if (btnAddPost) btnAddPost.style.display = 'none';
-    if (btnAddMedia) btnAddMedia.style.display = 'none';
-    if (btnPrivacy) btnPrivacy.style.display = 'none';
-    if (tabBarActions) tabBarActions.style.display = 'none';
-  }
-}
-
-window.switchMainView = function (viewName) {
-  if (viewName === 'ai' && !isAdminLoggedIn) return;
-
-  if (viewName === 'library' && !isAdminLoggedIn && currentProfile.is_library_public === false) {
-    showToast('Library is currently set to private', 'info');
-    return;
-  }
-
-  activeMainView = viewName;
-
-  document.querySelectorAll('.main-view-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.view === viewName);
-  });
-  document.querySelectorAll('.mini-tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.view === viewName);
-  });
-
-  ['blog', 'library', 'ai'].forEach(v => {
-    const el = document.getElementById(`view-${v}`);
-    if (!el) return;
-    if (v === viewName) {
-      el.style.display = 'block';
-      el.classList.add('active-view');
-    } else {
-      el.style.display = 'none';
-      el.classList.remove('active-view');
-    }
-  });
-
-  updateContextActionButtons();
-};
-
-window.handleAdminAuthClick = async function () {
-  if (isAdminLoggedIn) {
-    const res = await Swal.fire({
-      text: 'Sign out from Admin mode?',
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonColor: '#ffffff',
-      confirmButtonText: '<span style="color:#121212;font-weight:600;">Sign Out</span>',
-      cancelButtonText: 'Cancel',
-      background: '#1e1e1f',
-      color: '#fff'
-    });
-    if (!res.isConfirmed) return;
-
-    await supabaseClient.auth.signOut();
-    isAdminLoggedIn = false;
-    aiChatMessages = [];
-    updateAdminUIState();
-    renderBlogPosts();
-    renderMediaGrid();
-    showToast('Signed out', 'info');
-  } else {
-    document.getElementById('login-modal')?.classList.add('active');
-  }
-};
-
-window.closeLoginModal = function () {
-  document.getElementById('login-modal')?.classList.remove('active');
-};
-
-document.getElementById('admin-login-form')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const email = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-password').value;
-
-  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-  if (error) {
-    showToast(error.message, 'error');
-    return;
-  }
-
-  isAdminLoggedIn = true;
-  closeLoginModal();
-  updateAdminUIState();
-  renderBlogPosts();
-  renderMediaGrid();
-  await fetchAiChatHistory();
-  showToast('Signed in as Admin', 'success');
-});
-
-// ==========================================
-// 5. PROFILE & PRIVACY MANAGEMENT
-// ==========================================
-async function fetchProfile() {
-  const { data, error } = await supabaseClient
-    .from('profile_settings')
-    .select('*')
-    .eq('id', 1)
-    .maybeSingle();
-
-  if (!error && data) {
-    currentProfile = {
-      ...currentProfile,
-      ...data,
-      social_links: Array.isArray(data.social_links) ? data.social_links : [],
-      is_library_public: data.is_library_public !== false
+function getItemSeasons(item) {
+  if (!Array.isArray(item.seasons)) return [];
+  const fallbackCat = getLegacyCategory(item);
+  return item.seasons.map(s => {
+    const unit = s.unit_label || 'eps';
+    const inferredCat = s.category || (unit === 'movie' ? 'movie' : (unit === 'ch' ? 'comic' : (unit === 'vol' || unit === 'pages' ? 'novel' : (unit === 'track' ? 'music' : fallbackCat))));
+    return {
+      name: s.name || '',
+      category: inferredCat,
+      status: (s.status || 'planned').toLowerCase().trim(),
+      progress: Number(s.progress) || 0,
+      total_units: (s.total_units !== null && s.total_units !== undefined && s.total_units !== '') ? Number(s.total_units) : null,
+      unit_label: unit
     };
-  }
-
-  renderProfileHeader();
-  updateLibraryPrivacyUI();
-}
-
-function renderProfileHeader() {
-  const name = currentProfile.name || 'Archive';
-  const bio = currentProfile.bio || '';
-  const avatar = currentProfile.avatar_url || DEFAULT_AVATAR;
-  const banner = (currentProfile.banner_url || '').trim();
-
-  document.title = name;
-  setElText('profile-name-text', name);
-  setElText('profile-bio-text', bio);
-  setElText('sticky-name-text', name);
-  setElText('footer-brand-name', name);
-
-  const avatarImg = document.getElementById('profile-avatar-img');
-  const stickyAvatarImg = document.getElementById('sticky-avatar-img');
-  const faviconLink = document.getElementById('favicon-link');
-
-  if (avatarImg) avatarImg.src = avatar;
-  if (stickyAvatarImg) stickyAvatarImg.src = avatar;
-  if (faviconLink && currentProfile.avatar_url) faviconLink.href = currentProfile.avatar_url;
-
-  const headerCard = document.getElementById('profile-header-card');
-  const bannerWrap = document.getElementById('profile-banner-wrap');
-  const bannerImg = document.getElementById('profile-banner-img');
-
-  if (banner && bannerWrap && bannerImg && headerCard) {
-    bannerImg.src = banner;
-    bannerWrap.style.display = 'block';
-    headerCard.classList.add('has-banner');
-  } else if (bannerWrap && headerCard) {
-    bannerWrap.style.display = 'none';
-    headerCard.classList.remove('has-banner');
-  }
-
-  const socialsBar = document.getElementById('profile-socials-bar');
-  const links = currentProfile.social_links || [];
-  if (socialsBar) {
-    if (links.length === 0) {
-      socialsBar.style.display = 'none';
-    } else {
-      socialsBar.style.display = 'flex';
-      socialsBar.innerHTML = links.map(link => {
-        const meta = SOCIAL_PLATFORMS[link.platform] || SOCIAL_PLATFORMS.website;
-        return `
-          <a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" class="social-chip">
-            <ion-icon name="${meta.icon}"></ion-icon>
-            <span>${escapeHtml(meta.label)}</span>
-          </a>
-        `;
-      }).join('');
-    }
-  }
-}
-
-function updateLibraryPrivacyUI() {
-  const isPublic = currentProfile.is_library_public !== false;
-  const lockBadge = document.getElementById('library-private-lock');
-  const privacyIcon = document.getElementById('library-privacy-icon');
-  const privacyText = document.getElementById('library-privacy-text');
-
-  if (lockBadge) lockBadge.style.display = isPublic ? 'none' : 'inline-block';
-  if (privacyIcon) privacyIcon.setAttribute('name', isPublic ? 'eye-outline' : 'eye-off-outline');
-  if (privacyText) privacyText.textContent = isPublic ? 'Public' : 'Private';
-
-  if (!isPublic && !isAdminLoggedIn && activeMainView === 'library') {
-    switchMainView('blog');
-  }
-}
-
-window.toggleLibraryPrivacy = async function () {
-  if (!isAdminLoggedIn) return;
-  const nextPublic = !(currentProfile.is_library_public !== false);
-
-  const { error } = await supabaseClient
-    .from('profile_settings')
-    .upsert({ id: 1, is_library_public: nextPublic });
-
-  if (error) {
-    showToast(error.message, 'error');
-    return;
-  }
-
-  currentProfile.is_library_public = nextPublic;
-  updateLibraryPrivacyUI();
-  showToast(nextPublic ? 'Library is now Public' : 'Library is now Private', 'success');
-};
-
-window.openProfileModal = function () {
-  if (!isAdminLoggedIn) return;
-  document.getElementById('edit-profile-name').value = currentProfile.name || '';
-  document.getElementById('edit-profile-bio').value = currentProfile.bio || '';
-  document.getElementById('edit-profile-avatar').value = currentProfile.avatar_url || '';
-  document.getElementById('edit-profile-banner').value = currentProfile.banner_url || '';
-  setElText('profile-upload-status', '');
-  setElText('banner-upload-status', '');
-
-  const editor = document.getElementById('social-links-editor');
-  if (editor) {
-    editor.innerHTML = '';
-    (currentProfile.social_links || []).forEach(item => addSocialLinkRow(item.platform, item.url));
-  }
-
-  document.getElementById('profile-modal')?.classList.add('active');
-};
-
-window.closeProfileModal = function () {
-  document.getElementById('profile-modal')?.classList.remove('active');
-};
-
-window.clearBannerInput = function () {
-  const input = document.getElementById('edit-profile-banner');
-  if (input) input.value = '';
-};
-
-window.addSocialLinkRow = function (platform = 'instagram', url = '') {
-  const editor = document.getElementById('social-links-editor');
-  if (!editor) return;
-
-  const row = document.createElement('div');
-  row.className = 'social-edit-row';
-
-  const optionsHtml = Object.entries(SOCIAL_PLATFORMS).map(([key, val]) =>
-    `<option value="${key}" ${key === platform ? 'selected' : ''}>${val.label}</option>`
-  ).join('');
-
-  row.innerHTML = `
-    <select class="form-input social-platform-select">${optionsHtml}</select>
-    <input type="url" class="form-input social-url-input" placeholder="https://..." value="${escapeHtml(url)}">
-    <button type="button" class="social-remove-btn" onclick="this.parentElement.remove()" title="Remove">
-      <ion-icon name="trash-outline"></ion-icon>
-    </button>
-  `;
-  editor.appendChild(row);
-};
-
-window.handleProfileImageUpload = async function (event) {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  setElText('profile-upload-status', 'Uploading avatar...');
-  try {
-    const publicUrl = await uploadImageToStorage(file, 'avatars');
-    document.getElementById('edit-profile-avatar').value = publicUrl;
-    setElText('profile-upload-status', 'Avatar uploaded');
-  } catch (err) {
-    setElText('profile-upload-status', '');
-    showToast(err.message, 'error');
-  }
-};
-
-window.handleBannerImageUpload = async function (event) {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  setElText('banner-upload-status', 'Uploading banner...');
-  try {
-    const publicUrl = await uploadImageToStorage(file, 'banners');
-    document.getElementById('edit-profile-banner').value = publicUrl;
-    setElText('banner-upload-status', 'Banner uploaded');
-  } catch (err) {
-    setElText('banner-upload-status', '');
-    showToast(err.message, 'error');
-  }
-};
-
-document.getElementById('profile-form')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!isAdminLoggedIn) return;
-
-  const socialRows = document.querySelectorAll('#social-links-editor .social-edit-row');
-  const socialLinks = [];
-  socialRows.forEach(row => {
-    const platform = row.querySelector('.social-platform-select')?.value || 'website';
-    const url = (row.querySelector('.social-url-input')?.value || '').trim();
-    if (url) socialLinks.push({ platform, url });
   });
+}
 
-  const payload = {
-    id: 1,
-    name: document.getElementById('edit-profile-name').value.trim() || 'Archive',
-    bio: document.getElementById('edit-profile-bio').value.trim(),
-    avatar_url: document.getElementById('edit-profile-avatar').value.trim(),
-    banner_url: document.getElementById('edit-profile-banner').value.trim(),
-    social_links: socialLinks
+function getAllItemUnits(item) {
+  return [...getItemTracks(item), ...getItemSeasons(item)];
+}
+
+function getItemCategories(item) {
+  const allUnits = getAllItemUnits(item);
+  const cats = new Set(allUnits.map(t => t.category));
+  if (Array.isArray(item.categories)) {
+    item.categories.forEach(c => { if (c) cats.add(c); });
+  }
+  return Array.from(cats);
+}
+
+function getItemTotalUnitsValue(item) {
+  const allUnits = getAllItemUnits(item);
+  const sumTotal = allUnits.reduce((sum, t) => sum + (Number(t.total_units) || 0), 0);
+  if (sumTotal > 0) return sumTotal;
+  return allUnits.reduce((sum, t) => sum + (Number(t.progress) || 0), 0);
+}
+
+function computeSyncedStatus(unitsList) {
+  const statuses = unitsList.map(t => (t.status || 'planned').toLowerCase().trim());
+
+  if (statuses.includes('ongoing')) {
+    return { key: 'ongoing', label: 'Ongoing' };
+  }
+  if (statuses.length > 0 && statuses.every(s => s === 'completed')) {
+    return { key: 'completed', label: 'Completed' };
+  }
+  if (statuses.includes('dropped')) {
+    return { key: 'dropped', label: 'Dropped' };
+  }
+  return { key: 'planned', label: 'Planned' };
+}
+
+function computeCombinedProgress(unitsList, syncedStatusKey) {
+  const totalProgress = unitsList.reduce((sum, t) => sum + (Number(t.progress) || 0), 0);
+  const allHaveTotal = unitsList.every(t => t.total_units !== null && Number(t.total_units) > 0);
+  const totalUnits = allHaveTotal
+    ? unitsList.reduce((sum, t) => sum + Number(t.total_units), 0)
+    : null;
+
+  const text = totalUnits !== null ? `${totalProgress}/${totalUnits}` : `${totalProgress}/?`;
+
+  let percent = 0;
+  if (syncedStatusKey === 'completed') {
+    percent = 100;
+  } else if (totalUnits !== null && totalUnits > 0) {
+    percent = Math.min(100, Math.max(0, Math.round((totalProgress / totalUnits) * 100)));
+  } else if (syncedStatusKey === 'planned') {
+    percent = 100;
+  } else {
+    percent = totalProgress > 0 ? 45 : 0;
+  }
+
+  return {
+    text,
+    percent,
+    isPlannedEmpty: syncedStatusKey === 'planned' && totalProgress === 0
   };
+}
 
-  const { error } = await supabaseClient.from('profile_settings').upsert(payload);
-  if (error) {
-    showToast(error.message, 'error');
-    return;
-  }
-
-  currentProfile = { ...currentProfile, ...payload };
-  renderProfileHeader();
-  renderBlogPosts();
-  closeProfileModal();
-  showToast('Profile updated', 'success');
-});
+function formatEntryBadgeLabel(extraPartsCount) {
+  const totalEntries = extraPartsCount + 1;
+  return totalEntries === 1 ? '1 Entry' : `${totalEntries} Entries`;
+}
 
 // ==========================================
-// 6. PERSONAL NOTES / MICRO-BLOG FEED
-// ==========================================
-async function fetchBlogPosts() {
-  const { data, error } = await supabaseClient
-    .from('blog_posts')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.warn('Notes fetch error:', error.message);
-    return;
-  }
-
-  allBlogPosts = data || [];
-  renderBlogPosts();
-  updateAiContextSidebar();
-}
-
-function linkifyText(rawText) {
-  const escaped = escapeHtml(rawText || '');
-  const urlRegex = /(https?:\/\/[^\s<]+)/g;
-  return escaped.replace(urlRegex, url =>
-    `<a href="${url}" target="_blank" rel="noopener noreferrer" class="inline-note-link">${url}</a>`
-  );
-}
-
-function extractFirstUrl(rawText) {
-  const match = (rawText || '').match(/https?:\/\/[^\s]+/);
-  return match ? match[0] : null;
-}
-
-function renderBlogPosts() {
-  const container = document.getElementById('blog-feed-list');
-  if (!container) return;
-
-  if (allBlogPosts.length === 0) {
-    container.innerHTML = `<p class="empty-state">No notes published yet.</p>`;
-    return;
-  }
-
-  const authorName = escapeHtml(currentProfile.name || 'Archive');
-  const authorAvatar = escapeHtml(currentProfile.avatar_url || DEFAULT_AVATAR);
-
-  container.innerHTML = allBlogPosts.map(post => {
-    const timeStr = formatNoteTimestamp(post.created_at);
-    const firstUrl = extractFirstUrl(post.content);
-    let linkPreviewHtml = '';
-
-    if (firstUrl && !post.image_url) {
-      try {
-        const u = new URL(firstUrl);
-        linkPreviewHtml = `
-          <a href="${escapeHtml(firstUrl)}" target="_blank" rel="noopener noreferrer" class="link-preview-card">
-            <div class="link-preview-icon"><ion-icon name="link-outline"></ion-icon></div>
-            <div class="link-preview-info">
-              <span class="link-preview-domain">${escapeHtml(u.hostname.replace(/^www\./, ''))}</span>
-              <span class="link-preview-title">${escapeHtml(firstUrl)}</span>
-            </div>
-          </a>
-        `;
-      } catch (_) {}
-    }
-
-    const imageHtml = post.image_url ? `
-      <div class="blog-post-image-wrap">
-        <img src="${escapeHtml(post.image_url)}" alt="Post attachment" loading="lazy">
-      </div>
-    ` : '';
-
-    const adminActionsHtml = isAdminLoggedIn ? `
-      <div class="blog-post-actions">
-        <button type="button" class="blog-icon-btn" onclick="openPostModal('${post.id}')" title="Edit Note">
-          <ion-icon name="create-outline"></ion-icon>
-        </button>
-        <button type="button" class="blog-icon-btn delete" onclick="deleteBlogPost('${post.id}')" title="Delete Note">
-          <ion-icon name="trash-outline"></ion-icon>
-        </button>
-      </div>
-    ` : '';
-
-    return `
-      <article class="blog-post-card">
-        <div class="blog-post-header">
-          <div class="blog-post-author">
-            <img src="${authorAvatar}" alt="${authorName}" class="blog-post-avatar">
-            <div class="blog-post-meta">
-              <span class="blog-post-name">${authorName}</span>
-              <span class="blog-post-time">${timeStr}</span>
-            </div>
-          </div>
-          ${adminActionsHtml}
-        </div>
-        <div class="blog-post-text">${linkifyText(post.content)}</div>
-        ${linkPreviewHtml}
-        ${imageHtml}
-      </article>
-    `;
-  }).join('');
-}
-
-window.openPostModal = function (postId = null) {
-  if (!isAdminLoggedIn) return;
-  const idInput = document.getElementById('post-id');
-  const contentInput = document.getElementById('post-content');
-  const imageInput = document.getElementById('post-image');
-
-  setElText('post-upload-status', '');
-
-  if (postId) {
-    const existing = allBlogPosts.find(p => String(p.id) === String(postId));
-    if (!existing) return;
-    setElText('post-modal-title', 'Edit Post');
-    idInput.value = existing.id;
-    contentInput.value = existing.content || '';
-    imageInput.value = existing.image_url || '';
-  } else {
-    setElText('post-modal-title', 'New Post');
-    idInput.value = '';
-    contentInput.value = '';
-    imageInput.value = '';
-  }
-
-  document.getElementById('post-modal')?.classList.add('active');
-};
-
-window.closePostModal = function () {
-  document.getElementById('post-modal')?.classList.remove('active');
-};
-
-window.clearPostImageInput = function () {
-  const input = document.getElementById('post-image');
-  if (input) input.value = '';
-};
-
-window.handlePostImageUpload = async function (event) {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  setElText('post-upload-status', 'Uploading photo...');
-  try {
-    const publicUrl = await uploadImageToStorage(file, 'notes');
-    document.getElementById('post-image').value = publicUrl;
-    setElText('post-upload-status', 'Photo uploaded');
-  } catch (err) {
-    setElText('post-upload-status', '');
-    showToast(err.message, 'error');
-  }
-};
-
-document.getElementById('post-form')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!isAdminLoggedIn) return;
-
-  const id = document.getElementById('post-id').value;
-  const content = document.getElementById('post-content').value.trim();
-  const imageUrl = document.getElementById('post-image').value.trim() || null;
-
-  if (!content) return;
-
-  const nowIso = new Date().toISOString();
-
-  if (id) {
-    const { error } = await supabaseClient
-      .from('blog_posts')
-      .update({ content, image_url: imageUrl, updated_at: nowIso })
-      .eq('id', id);
-
-    if (error) {
-      showToast(error.message, 'error');
-      return;
-    }
-    showToast('Post updated', 'success');
-  } else {
-    const { error } = await supabaseClient
-      .from('blog_posts')
-      .insert([{ content, image_url: imageUrl, created_at: nowIso, updated_at: nowIso }]);
-
-    if (error) {
-      showToast(error.message, 'error');
-      return;
-    }
-    showToast('Post published', 'success');
-  }
-
-  closePostModal();
-  await fetchBlogPosts();
-});
-
-window.deleteBlogPost = async function (postId) {
-  if (!isAdminLoggedIn) return;
-  const res = await Swal.fire({
-    text: 'Delete this note post?',
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#ff5f5f',
-    confirmButtonText: 'Delete',
-    cancelButtonText: 'Cancel',
-    background: '#1e1e1f',
-    color: '#fff'
-  });
-
-  if (!res.isConfirmed) return;
-
-  const { error } = await supabaseClient.from('blog_posts').delete().eq('id', postId);
-  if (error) {
-    showToast(error.message, 'error');
-    return;
-  }
-
-  await fetchBlogPosts();
-  showToast('Post deleted', 'info');
-};
-
-// ==========================================
-// 7. MEDIA LIBRARY LOGIC
+// 3B. LOAD MEDIA DATA & AUTO-CALCULATE STATS
 // ==========================================
 async function fetchMediaLogs() {
   const { data, error } = await supabaseClient
@@ -804,841 +919,1366 @@ async function fetchMediaLogs() {
     .order('updated_at', { ascending: false });
 
   if (error) {
-    console.warn('Media logs fetch error:', error.message);
+    const grid = document.getElementById('media-grid');
+    if (grid) grid.innerHTML = `<p class="empty-state">Failed to load data: ${escapeHtml(error.message)}</p>`;
     return;
   }
 
   allMediaLogs = data || [];
-  updateLibraryStats();
+  updateStatsUI();
   renderMediaGrid();
-  updateAiContextSidebar();
 }
 
-function getAllItemUnits(item) {
-  const tracks = Array.isArray(item.category_tracks) && item.category_tracks.length > 0
-    ? item.category_tracks
-    : [{
-        category: item.category || 'tv_show',
-        status: item.status || 'planned',
-        progress: Number(item.progress) || 0,
-        total: item.total !== null && item.total !== undefined ? Number(item.total) : null,
-        unit: item.unit || 'Eps'
-      }];
+function updateStatsUI() {
+  const catStats = {
+    tv_show: { total: 0, done: 0 },
+    movie: { total: 0, done: 0 },
+    comic: { total: 0, done: 0 },
+    novel: { total: 0, done: 0 },
+    game: { total: 0, done: 0 },
+    music: { total: 0, done: 0 }
+  };
 
-  const extras = Array.isArray(item.seasons) ? item.seasons : [];
-  return [
-    ...tracks.map(t => ({
-      title: CATEGORY_LABELS[t.category] || t.category,
-      category: t.category || 'tv_show',
-      status: t.status || 'planned',
-      progress: Number(t.progress) || 0,
-      total: t.total !== null && t.total !== undefined && t.total !== '' ? Number(t.total) : null,
-      unit: t.unit || 'Eps',
-      isExtra: false
-    })),
-    ...extras.map(s => ({
-      title: s.title || 'Part',
-      category: s.category || tracks[0].category || 'tv_show',
-      status: s.status || 'planned',
-      progress: Number(s.progress) || 0,
-      total: s.total !== null && s.total !== undefined && s.total !== '' ? Number(s.total) : null,
-      unit: s.unit || 'Eps',
-      isExtra: true
-    }))
-  ];
-}
+  const unitCounts = {
+    eps: 0,
+    ch: 0,
+    pages: 0,
+    vol: 0,
+    movie: 0,
+    track: 0,
+    item: 0
+  };
 
-function getItemCategories(item) {
-  const units = getAllItemUnits(item);
-  const set = new Set();
-  units.forEach(u => {
-    if (VALID_CATEGORIES.includes(u.category)) set.add(u.category);
-  });
-  if (set.size === 0) set.add('tv_show');
-  return Array.from(set);
-}
-
-function computeSyncedStatus(units) {
-  const statuses = units.map(u => u.status);
-  if (statuses.includes('ongoing')) return { key: 'ongoing', label: 'Ongoing' };
-  if (statuses.every(s => s === 'completed')) return { key: 'completed', label: 'Completed' };
-  if (statuses.every(s => s === 'dropped')) return { key: 'dropped', label: 'Dropped' };
-  if (statuses.includes('completed') && statuses.includes('planned')) return { key: 'ongoing', label: 'Ongoing' };
-  return { key: 'planned', label: 'Planned' };
-}
-
-function computeCombinedProgress(units, statusKey) {
-  let sumProg = 0;
-  let sumTotal = 0;
-  let hasUnknownTotal = false;
-
-  units.forEach(u => {
-    sumProg += Number(u.progress) || 0;
-    if (u.total !== null && u.total !== undefined && Number(u.total) > 0) {
-      sumTotal += Number(u.total);
-    } else {
-      hasUnknownTotal = true;
-    }
-  });
-
-  const mainUnit = units[0]?.unit || 'Eps';
-  const pct = sumTotal > 0 ? Math.min(100, Math.round((sumProg / sumTotal) * 100)) : (statusKey === 'completed' ? 100 : 0);
-  const text = sumTotal > 0 && !hasUnknownTotal
-    ? `${sumProg}/${sumTotal} ${mainUnit}`
-    : `${sumProg} ${mainUnit}`;
-
-  return { sumProg, sumTotal, pct, text };
-}
-
-window.toggleLibraryStats = function () {
-  isStatsExpanded = !isStatsExpanded;
-  const panel = document.getElementById('collapsible-stats-panel');
-  const text = document.getElementById('stats-toggle-text');
-  const icon = document.getElementById('stats-chevron-icon');
-
-  if (panel) panel.style.display = isStatsExpanded ? 'flex' : 'none';
-  if (text) text.textContent = isStatsExpanded ? 'Hide Stats' : 'Show Stats';
-  if (icon) icon.setAttribute('name', isStatsExpanded ? 'chevron-up-outline' : 'chevron-down-outline');
-};
-
-function updateLibraryStats() {
-  setElText('total-entries-label', `${allMediaLogs.length} Entries`);
-
-  const catCounts = { tv_show: 0, movie: 0, comic: 0, novel: 0, game: 0, music: 0 };
-  const catCompleted = { tv_show: 0, movie: 0, comic: 0, novel: 0, game: 0, music: 0 };
-  const unitTotals = { Eps: 0, Ch: 0, Pages: 0, Vol: 0, Movie: 0, Track: 0, Item: 0 };
-
-  let totalCompletedEntries = 0;
-  let ratingSum = 0;
-  let ratedCount = 0;
+  let totalCompleted = 0;
 
   allMediaLogs.forEach(item => {
-    const units = getAllItemUnits(item);
-    const cats = getItemCategories(item);
-    const synced = computeSyncedStatus(units);
+    const allUnits = getAllItemUnits(item);
+    const synced = computeSyncedStatus(allUnits);
+    if (synced.key === 'completed') totalCompleted += 1;
 
-    if (synced.key === 'completed') totalCompletedEntries++;
+    allUnits.forEach(u => {
+      if (catStats[u.category]) {
+        catStats[u.category].total += 1;
+        if (u.status === 'completed') catStats[u.category].done += 1;
+      }
 
-    if (item.rating !== null && item.rating !== undefined && Number(item.rating) > 0) {
-      ratingSum += Number(item.rating);
-      ratedCount++;
-    }
-
-    cats.forEach(c => {
-      if (catCounts[c] !== undefined) {
-        catCounts[c]++;
-        if (synced.key === 'completed') catCompleted[c]++;
+      const unitKey = u.unit_label || DEFAULT_UNITS_BY_CAT[u.category] || 'item';
+      const progNum = Number(u.progress) || 0;
+      if (unitCounts[unitKey] !== undefined) {
+        unitCounts[unitKey] += progNum;
+      } else {
+        unitCounts.item += progNum;
       }
     });
-
-    units.forEach(u => {
-      const p = Number(u.progress) || 0;
-      const key = u.unit in unitTotals ? u.unit : 'Item';
-      unitTotals[key] += p;
-    });
   });
 
-  setElText('stat-cat-tv', catCounts.tv_show);
-  setElText('stat-cat-tv-sub', `${catCompleted.tv_show} Completed`);
-  setElText('stat-cat-movie', catCounts.movie);
-  setElText('stat-cat-movie-sub', `${catCompleted.movie} Completed`);
-  setElText('stat-cat-comic', catCounts.comic);
-  setElText('stat-cat-comic-sub', `${catCompleted.comic} Completed`);
-  setElText('stat-cat-novel', catCounts.novel);
-  setElText('stat-cat-novel-sub', `${catCompleted.novel} Completed`);
-  setElText('stat-cat-game', catCounts.game);
-  setElText('stat-cat-game-sub', `${catCompleted.game} Completed`);
-  setElText('stat-cat-music', catCounts.music);
-  setElText('stat-cat-music-sub', `${catCompleted.music} Completed`);
+  const totalEntries = allMediaLogs.length;
+  const completionRate = totalEntries > 0 ? Math.round((totalCompleted / totalEntries) * 100) : 0;
 
-  setElText('stat-unit-eps', unitTotals.Eps);
-  setElText('stat-unit-ch', unitTotals.Ch);
-  setElText('stat-unit-pages', unitTotals.Pages);
-  setElText('stat-unit-vol', unitTotals.Vol);
-  setElText('stat-unit-movie', unitTotals.Movie);
-  setElText('stat-unit-track', unitTotals.Track);
-  setElText('stat-unit-item', unitTotals.Item);
+  const ratedItems = allMediaLogs.filter(i => i.rating !== null && i.rating !== undefined && i.rating !== '');
+  const avgRating = ratedItems.length
+    ? (ratedItems.reduce((sum, i) => sum + Number(i.rating), 0) / ratedItems.length).toFixed(2)
+    : '0.0';
 
-  const rate = allMediaLogs.length > 0 ? Math.round((totalCompletedEntries / allMediaLogs.length) * 100) : 0;
-  const avgRating = ratedCount > 0 ? (ratingSum / ratedCount).toFixed(1) : '0.0';
+  setElText('total-entries-label', `${totalEntries} Entries`);
 
-  setElText('stat-completed-total', totalCompletedEntries);
-  setElText('stat-completion-rate', `${rate}% Rate`);
+  // Group 1: Categories
+  setElText('stat-cat-tv', catStats.tv_show.total.toLocaleString('en-US'));
+  setElText('stat-cat-tv-sub', `${catStats.tv_show.done} Completed`);
+
+  setElText('stat-cat-movie', catStats.movie.total.toLocaleString('en-US'));
+  setElText('stat-cat-movie-sub', `${catStats.movie.done} Completed`);
+
+  setElText('stat-cat-comic', catStats.comic.total.toLocaleString('en-US'));
+  setElText('stat-cat-comic-sub', `${catStats.comic.done} Completed`);
+
+  setElText('stat-cat-novel', catStats.novel.total.toLocaleString('en-US'));
+  setElText('stat-cat-novel-sub', `${catStats.novel.done} Completed`);
+
+  setElText('stat-cat-game', catStats.game.total.toLocaleString('en-US'));
+  setElText('stat-cat-game-sub', `${catStats.game.done} Completed`);
+
+  setElText('stat-cat-music', catStats.music.total.toLocaleString('en-US'));
+  setElText('stat-cat-music-sub', `${catStats.music.done} Completed`);
+
+  // Group 2: Total Counts by Unit
+  setElText('stat-unit-eps', unitCounts.eps.toLocaleString('en-US'));
+  setElText('stat-unit-ch', unitCounts.ch.toLocaleString('en-US'));
+  setElText('stat-unit-pages', unitCounts.pages.toLocaleString('en-US'));
+  setElText('stat-unit-vol', unitCounts.vol.toLocaleString('en-US'));
+  setElText('stat-unit-movie', unitCounts.movie.toLocaleString('en-US'));
+  setElText('stat-unit-track', unitCounts.track.toLocaleString('en-US'));
+  setElText('stat-unit-item', unitCounts.item.toLocaleString('en-US'));
+
+  // Group 3 (Bottom): Total Completed & Mean Rating
+  setElText('stat-completed-total', totalCompleted.toLocaleString('en-US'));
+  setElText('stat-completion-rate', `${completionRate}% Rate`);
+
   setElText('stat-avg-rating', avgRating);
-  setElText('stat-rated-count', `${ratedCount} Rated`);
+  setElText('stat-rated-count', `${ratedItems.length} Rated`);
 }
 
-function setupLibraryControls() {
-  document.querySelectorAll('.cat-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      activeCategory = tab.dataset.category || 'all';
-      resetPaginationAndRender();
-    });
-  });
-
-  ['search-library', 'filter-status', 'filter-rating-min', 'filter-rating-max', 'filter-unrated-only', 'filter-units-min', 'filter-units-max'].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('input', () => {
-      updateFilterIndicatorDot();
-      resetPaginationAndRender();
-    });
-    el.addEventListener('change', () => {
-      updateFilterIndicatorDot();
-      resetPaginationAndRender();
-    });
-  });
+// ==========================================
+// 4. FILTER (CUSTOM RANGES), SORT (2-WAY), PAGINATION & RENDER MEDIA
+// ==========================================
+function resetPaginationAndRender() {
+  visibleMediaLimit = itemsPerPage;
+  updateFilterActiveIndicator();
+  renderMediaGrid();
 }
 
-function updateFilterIndicatorDot() {
-  const status = document.getElementById('filter-status')?.value || 'all';
+function updateFilterActiveIndicator() {
+  const statusVal = document.getElementById('filter-status')?.value || 'all';
   const rMin = document.getElementById('filter-rating-min')?.value || '';
   const rMax = document.getElementById('filter-rating-max')?.value || '';
-  const unrated = document.getElementById('filter-unrated-only')?.checked || false;
+  const unratedOnly = document.getElementById('filter-unrated-only')?.checked || false;
   const uMin = document.getElementById('filter-units-min')?.value || '';
   const uMax = document.getElementById('filter-units-max')?.value || '';
 
-  const hasActive = status !== 'all' || rMin !== '' || rMax !== '' || unrated || uMin !== '' || uMax !== '';
+  const isFiltered = statusVal !== 'all' || rMin !== '' || rMax !== '' || unratedOnly || uMin !== '' || uMax !== '';
   const dot = document.getElementById('filter-active-dot');
-  if (dot) dot.style.display = hasActive ? 'inline-block' : 'none';
+  if (dot) {
+    dot.style.display = isFiltered ? 'inline-block' : 'none';
+  }
 }
 
 window.resetLibraryFilters = function () {
-  document.getElementById('filter-status').value = 'all';
-  document.getElementById('filter-rating-min').value = '';
-  document.getElementById('filter-rating-max').value = '';
-  document.getElementById('filter-unrated-only').checked = false;
-  document.getElementById('filter-units-min').value = '';
-  document.getElementById('filter-units-max').value = '';
-  updateFilterIndicatorDot();
+  const statusEl = document.getElementById('filter-status');
+  const rMinEl = document.getElementById('filter-rating-min');
+  const rMaxEl = document.getElementById('filter-rating-max');
+  const unratedEl = document.getElementById('filter-unrated-only');
+  const uMinEl = document.getElementById('filter-units-min');
+  const uMaxEl = document.getElementById('filter-units-max');
+
+  if (statusEl) statusEl.value = 'all';
+  if (rMinEl) { rMinEl.value = ''; rMinEl.disabled = false; }
+  if (rMaxEl) { rMaxEl.value = ''; rMaxEl.disabled = false; }
+  if (unratedEl) unratedEl.checked = false;
+  if (uMinEl) uMinEl.value = '';
+  if (uMaxEl) uMaxEl.value = '';
+
   resetPaginationAndRender();
 };
 
+function updateSortUIControls() {
+  const fieldEl = document.getElementById('sort-library-field');
+  if (fieldEl) fieldEl.value = currentSortField;
+
+  const descBtn = document.getElementById('btn-sort-desc');
+  const ascBtn = document.getElementById('btn-sort-asc');
+  const labelEl = document.getElementById('sort-btn-label');
+
+  if (descBtn) descBtn.classList.toggle('active', currentSortDir === 'desc');
+  if (ascBtn) ascBtn.classList.toggle('active', currentSortDir === 'asc');
+
+  if (currentSortField === 'rating') {
+    if (descBtn) descBtn.textContent = 'Best';
+    if (ascBtn) ascBtn.textContent = 'Worst';
+    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Rating (Best)' : 'Rating (Worst)';
+  } else if (currentSortField === 'units') {
+    if (descBtn) descBtn.textContent = 'Longest';
+    if (ascBtn) ascBtn.textContent = 'Shortest';
+    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Count (Longest)' : 'Count (Shortest)';
+  } else if (currentSortField === 'title') {
+    if (descBtn) descBtn.textContent = 'Z → A';
+    if (ascBtn) ascBtn.textContent = 'A → Z';
+    if (labelEl) labelEl.textContent = currentSortDir === 'asc' ? 'Title (A→Z)' : 'Title (Z→A)';
+  } else {
+    if (descBtn) descBtn.textContent = 'Newest';
+    if (ascBtn) ascBtn.textContent = 'Oldest';
+    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Updated (New)' : 'Updated (Old)';
+  }
+}
+
 window.onSortOptionChange = function () {
-  sortField = document.getElementById('sort-library-field')?.value || 'rating';
-  updateSortButtonLabel();
+  const fieldEl = document.getElementById('sort-library-field');
+  const fieldVal = fieldEl ? fieldEl.value : 'rating';
+  currentSortField = fieldVal;
+  currentSortDir = fieldVal === 'title' ? 'asc' : 'desc';
+  updateSortUIControls();
   resetPaginationAndRender();
 };
 
 window.setSortDirection = function (dir) {
-  sortDirection = dir;
-  document.getElementById('btn-sort-desc')?.classList.toggle('active', dir === 'desc');
-  document.getElementById('btn-sort-asc')?.classList.toggle('active', dir === 'asc');
-  updateSortButtonLabel();
+  currentSortDir = dir;
+  updateSortUIControls();
   resetPaginationAndRender();
 };
 
-function updateSortButtonLabel() {
-  const map = {
-    rating: sortDirection === 'desc' ? 'Rating (Best)' : 'Rating (Worst)',
-    updated: sortDirection === 'desc' ? 'Newest' : 'Oldest',
-    units: sortDirection === 'desc' ? 'Count (High)' : 'Count (Low)',
-    title: sortDirection === 'desc' ? 'Title (Z-A)' : 'Title (A-Z)'
-  };
-  setElText('sort-btn-label', map[sortField] || 'Sort');
+function setupFilterListeners() {
+  document.querySelectorAll('.cat-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentCategory = btn.dataset.category;
+      resetPaginationAndRender();
+    });
+  });
+
+  const searchInput = document.getElementById('search-library');
+  const statusSelect = document.getElementById('filter-status');
+  const rMinInput = document.getElementById('filter-rating-min');
+  const rMaxInput = document.getElementById('filter-rating-max');
+  const unratedCheck = document.getElementById('filter-unrated-only');
+  const uMinInput = document.getElementById('filter-units-min');
+  const uMaxInput = document.getElementById('filter-units-max');
+
+  if (searchInput) searchInput.addEventListener('input', resetPaginationAndRender);
+  if (statusSelect) statusSelect.addEventListener('change', resetPaginationAndRender);
+  if (rMinInput) rMinInput.addEventListener('input', resetPaginationAndRender);
+  if (rMaxInput) rMaxInput.addEventListener('input', resetPaginationAndRender);
+  if (uMinInput) uMinInput.addEventListener('input', resetPaginationAndRender);
+  if (uMaxInput) uMaxInput.addEventListener('input', resetPaginationAndRender);
+
+  if (unratedCheck) {
+    unratedCheck.addEventListener('change', () => {
+      const isChecked = unratedCheck.checked;
+      if (rMinInput) rMinInput.disabled = isChecked;
+      if (rMaxInput) rMaxInput.disabled = isChecked;
+      resetPaginationAndRender();
+    });
+  }
 }
 
-window.selectItemsPerPage = function (limitVal) {
-  itemsPerPage = limitVal;
-  document.querySelectorAll('.page-option-item').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.limit === limitVal);
-  });
-  closeAllToolbarPopovers();
-  resetPaginationAndRender();
-};
-
-window.setLibraryViewMode = function (mode) {
-  libraryViewMode = mode;
-  document.getElementById('btn-view-grid')?.classList.toggle('active', mode === 'grid');
-  document.getElementById('btn-view-list')?.classList.toggle('active', mode === 'list');
-  renderMediaGrid();
-};
-
-function resetPaginationAndRender() {
-  currentVisibleLimit = itemsPerPage === 'all' ? Infinity : Number(itemsPerPage) || 8;
-  renderMediaGrid();
+function normalizeImageUrl(url) {
+  if (!url) return '';
+  return url.trim().replace(/^http:\/\//i, 'https://');
 }
 
-window.loadMoreMedia = function () {
-  const step = itemsPerPage === 'all' ? 9999 : Number(itemsPerPage) || 8;
-  currentVisibleLimit += step;
-  renderMediaGrid();
-};
-
-function getFilteredAndSortedMedia() {
-  const q = (document.getElementById('search-library')?.value || '').trim().toLowerCase();
-  const statusFilter = document.getElementById('filter-status')?.value || 'all';
-  const rMinRaw = document.getElementById('filter-rating-min')?.value || '';
-  const rMaxRaw = document.getElementById('filter-rating-max')?.value || '';
-  const unratedOnly = document.getElementById('filter-unrated-only')?.checked || false;
-  const uMinRaw = document.getElementById('filter-units-min')?.value || '';
-  const uMaxRaw = document.getElementById('filter-units-max')?.value || '';
-
-  const filtered = allMediaLogs.filter(item => {
-    const units = getAllItemUnits(item);
-    const cats = getItemCategories(item);
-    const synced = computeSyncedStatus(units);
-    const combined = computeCombinedProgress(units, synced.key);
-
-    if (activeCategory !== 'all' && !cats.includes(activeCategory)) return false;
-    if (statusFilter !== 'all' && synced.key !== statusFilter) return false;
-
-    if (q) {
-      const titleMatch = (item.title || '').toLowerCase().includes(q);
-      const subMatch = units.some(u => (u.title || '').toLowerCase().includes(q));
-      if (!titleMatch && !subMatch) return false;
-    }
-
-    const hasRating = item.rating !== null && item.rating !== undefined && Number(item.rating) > 0;
-    if (unratedOnly && hasRating) return false;
-    if (rMinRaw !== '' && (!hasRating || Number(item.rating) < Number(rMinRaw))) return false;
-    if (rMaxRaw !== '' && (!hasRating || Number(item.rating) > Number(rMaxRaw))) return false;
-
-    if (uMinRaw !== '' && combined.sumProg < Number(uMinRaw)) return false;
-    if (uMaxRaw !== '' && combined.sumProg > Number(uMaxRaw)) return false;
-
-    return true;
+function formatStatusDate(isoString) {
+  if (!isoString) return '—';
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
   });
+}
 
-  const dirMult = sortDirection === 'asc' ? 1 : -1;
+function matchesCustomFilters(item) {
+  const rMinRaw = document.getElementById('filter-rating-min')?.value ?? '';
+  const rMaxRaw = document.getElementById('filter-rating-max')?.value ?? '';
+  const unratedOnly = document.getElementById('filter-unrated-only')?.checked ?? false;
+  const uMinRaw = document.getElementById('filter-units-min')?.value ?? '';
+  const uMaxRaw = document.getElementById('filter-units-max')?.value ?? '';
 
-  filtered.sort((a, b) => {
-    if (sortField === 'rating') {
-      const ra = a.rating !== null && a.rating !== undefined ? Number(a.rating) : -1;
-      const rb = b.rating !== null && b.rating !== undefined ? Number(b.rating) : -1;
-      if (ra === rb) return (a.title || '').localeCompare(b.title || '');
-      return (ra - rb) * dirMult;
-    }
-    if (sortField === 'units') {
-      const ua = computeCombinedProgress(getAllItemUnits(a), 'ongoing').sumProg;
-      const ub = computeCombinedProgress(getAllItemUnits(b), 'ongoing').sumProg;
-      return (ua - ub) * dirMult;
-    }
-    if (sortField === 'title') {
-      return (a.title || '').localeCompare(b.title || '') * (sortDirection === 'asc' ? 1 : -1);
-    }
-    const ta = new Date(a.updated_at || a.created_at || 0).getTime();
-    const tb = new Date(b.updated_at || b.created_at || 0).getTime();
-    return (ta - tb) * dirMult;
-  });
+  const hasRating = item.rating !== null && item.rating !== undefined && item.rating !== '';
+  const rVal = hasRating ? Number(item.rating) : null;
 
-  return filtered;
+  if (unratedOnly) {
+    if (hasRating) return false;
+  } else if (rMinRaw !== '' || rMaxRaw !== '') {
+    if (!hasRating || Number.isNaN(rVal)) return false;
+    if (rMinRaw !== '' && rVal < parseFloat(rMinRaw)) return false;
+    if (rMaxRaw !== '' && rVal > parseFloat(rMaxRaw)) return false;
+  }
+
+  if (uMinRaw !== '' || uMaxRaw !== '') {
+    const totalUnits = getItemTotalUnitsValue(item);
+    if (uMinRaw !== '' && totalUnits < parseInt(uMinRaw, 10)) return false;
+    if (uMaxRaw !== '' && totalUnits > parseInt(uMaxRaw, 10)) return false;
+  }
+
+  return true;
 }
 
 function renderMediaGrid() {
-  const container = document.getElementById('media-grid');
+  const grid = document.getElementById('media-grid');
+  if (!grid) return;
+
   const loadMoreWrap = document.getElementById('load-more-wrap');
-  if (!container) return;
+  const loadMoreText = document.getElementById('load-more-text');
 
-  const list = getFilteredAndSortedMedia();
-  container.classList.toggle('list-view', libraryViewMode === 'list');
+  const searchEl = document.getElementById('search-library');
+  const statusEl = document.getElementById('filter-status');
 
-  if (list.length === 0) {
-    container.innerHTML = `<p class="empty-state">No media entries found.</p>`;
+  const query = searchEl ? searchEl.value.toLowerCase().trim() : '';
+  const statusFilter = statusEl ? statusEl.value : 'all';
+
+  grid.classList.toggle('list-view', libraryViewMode === 'list');
+
+  let filtered = allMediaLogs.filter(item => {
+    const cats = getItemCategories(item);
+    const allUnits = getAllItemUnits(item);
+    const seasons = getItemSeasons(item);
+    const synced = computeSyncedStatus(allUnits);
+
+    const matchCat = currentCategory === 'all' || cats.includes(currentCategory);
+    const matchStatus = statusFilter === 'all' || synced.key === statusFilter || allUnits.some(t => t.status === statusFilter);
+    const matchRange = matchesCustomFilters(item);
+    const matchTitle = (item.title || '').toLowerCase().includes(query);
+    const matchSeason = seasons.some(s => (s.name || '').toLowerCase().includes(query));
+    const matchQuery = !query || matchTitle || matchSeason;
+
+    return matchCat && matchStatus && matchRange && matchQuery;
+  });
+
+  filtered.sort((a, b) => {
+    if (currentSortField === 'rating') {
+      const aHas = a.rating !== null && a.rating !== undefined && a.rating !== '';
+      const bHas = b.rating !== null && b.rating !== undefined && b.rating !== '';
+      if (!aHas && !bHas) return 0;
+      if (!aHas) return 1;
+      if (!bHas) return -1;
+
+      const diff = Number(a.rating) - Number(b.rating);
+      return currentSortDir === 'desc' ? -diff : diff;
+    }
+
+    if (currentSortField === 'units') {
+      const uA = getItemTotalUnitsValue(a);
+      const uB = getItemTotalUnitsValue(b);
+      return currentSortDir === 'desc' ? (uB - uA) : (uA - uB);
+    }
+
+    if (currentSortField === 'title') {
+      const cmp = (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' });
+      return currentSortDir === 'asc' ? cmp : -cmp;
+    }
+
+    const timeA = new Date(a.updated_at || a.created_at || 0).getTime();
+    const timeB = new Date(b.updated_at || b.created_at || 0).getTime();
+    return currentSortDir === 'desc' ? (timeB - timeA) : (timeA - timeB);
+  });
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `<p class="empty-state">No media found matching these filters.</p>`;
     if (loadMoreWrap) loadMoreWrap.style.display = 'none';
     return;
   }
 
-  const visibleItems = list.slice(0, currentVisibleLimit);
-
-  if (libraryViewMode === 'list') {
-    container.innerHTML = visibleItems.map(item => {
-      const units = getAllItemUnits(item);
-      const cats = getItemCategories(item).map(c => CATEGORY_LABELS[c] || c).join(' • ');
-      const synced = computeSyncedStatus(units);
-      const combined = computeCombinedProgress(units, synced.key);
-      const cover = escapeHtml(item.cover_url || DEFAULT_COVER);
-      const ratingStr = (item.rating !== null && item.rating !== undefined && Number(item.rating) > 0)
-        ? `★ ${Number(item.rating).toFixed(1)}`
-        : '—';
-      const repeatHtml = Number(item.repeat_count) > 0
-        ? `<span class="list-repeat-tag">↻ ${item.repeat_count}x</span>`
-        : '';
-      const editBtnHtml = isAdminLoggedIn ? `
-        <button type="button" class="list-edit-btn" onclick="event.stopPropagation(); openMediaModal('${item.id}')" title="Edit">
-          <ion-icon name="create-outline"></ion-icon>
-        </button>
-      ` : '';
-
-      return `
-        <article class="media-list-row" onclick="openMediaDetailModal('${item.id}')">
-          <img src="${cover}" alt="${escapeHtml(item.title)}" class="list-thumb" loading="lazy">
-          <div class="list-main-info">
-            <h3 class="list-title">${escapeHtml(item.title)}</h3>
-            <div class="list-sub-meta">
-              <span class="list-cat-tag">${escapeHtml(cats)}</span>
-              <span>•</span>
-              <span class="status-pill ${synced.key}">${synced.label}</span>
-              <span class="list-hide-mobile">• ${escapeHtml(combined.text)}</span>
-              ${repeatHtml}
-            </div>
-          </div>
-          <div class="list-right-meta">
-            <span class="list-rating-pill">${ratingStr}</span>
-            ${editBtnHtml}
-          </div>
-        </article>
-      `;
-    }).join('');
-  } else {
-    container.innerHTML = visibleItems.map(item => {
-      const units = getAllItemUnits(item);
-      const cats = getItemCategories(item);
-      const synced = computeSyncedStatus(units);
-      const combined = computeCombinedProgress(units, synced.key);
-      const cover = escapeHtml(item.cover_url || DEFAULT_COVER);
-
-      const catBadgesHtml = cats.map(c =>
-        `<span class="badge-cat">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`
-      ).join('');
-
-      const ratingBadgeHtml = (item.rating !== null && item.rating !== undefined && Number(item.rating) > 0)
-        ? `<span class="badge-rating">★ ${Number(item.rating).toFixed(1)}</span>`
-        : '';
-
-      const repeatBadgeHtml = Number(item.repeat_count) > 0
-        ? `<span class="badge-repeat">↻ ${item.repeat_count}x</span>`
-        : '';
-
-      const extraCount = Array.isArray(item.seasons) ? item.seasons.length : 0;
-      const seasonsBadgeHtml = extraCount > 0
-        ? `<span class="badge-seasons">+${extraCount} Entry</span>`
-        : '';
-
-      const editBtnHtml = isAdminLoggedIn ? `
-        <button type="button" class="cover-edit-btn" onclick="event.stopPropagation(); openMediaModal('${item.id}')" title="Edit Entry">
-          <ion-icon name="create-outline"></ion-icon>
-        </button>
-      ` : '';
-
-      const fillClass = synced.key === 'planned' && combined.pct === 0 ? 'planned-empty' : synced.key;
-      const dateStr = formatStatusDate(item.updated_at || item.created_at);
-
-      return `
-        <article class="media-card" onclick="openMediaDetailModal('${item.id}')">
-          <div class="media-cover-wrap">
-            <img src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy">
-            <div class="cover-left-badges">
-              <div class="badge-cat-row">${catBadgesHtml}</div>
-              ${ratingBadgeHtml}
-              ${repeatBadgeHtml}
-            </div>
-            ${seasonsBadgeHtml}
-            ${editBtnHtml}
-          </div>
-          <div class="media-body">
-            <h3 class="media-title">${escapeHtml(item.title)}</h3>
-            <div class="media-bottom-stack">
-              <div class="media-meta-row">
-                <span class="status-pill ${synced.key}">${synced.label}</span>
-                <span class="progress-pill ${synced.key}">${escapeHtml(combined.text)}</span>
-              </div>
-              <div class="progress-track">
-                <div class="progress-fill ${fillClass}" style="width: ${combined.pct}%;"></div>
-              </div>
-              <div class="media-footer-row">
-                <span class="status-date-item">
-                  <ion-icon name="time-outline"></ion-icon>
-                  <span>${dateStr}</span>
-                </span>
-              </div>
-            </div>
-          </div>
-        </article>
-      `;
-    }).join('');
-  }
+  const displayedItems = visibleMediaLimit === Infinity ? filtered : filtered.slice(0, visibleMediaLimit);
+  const remainingCount = filtered.length - displayedItems.length;
 
   if (loadMoreWrap) {
-    if (visibleItems.length < list.length) {
+    if (remainingCount > 0) {
       loadMoreWrap.style.display = 'flex';
-      setElText('load-more-text', `Load More (${visibleItems.length} of ${list.length})`);
+      if (loadMoreText) loadMoreText.textContent = `Load More (${remainingCount} remaining)`;
     } else {
       loadMoreWrap.style.display = 'none';
     }
   }
-}
 
-window.openMediaDetailModal = function (mediaId) {
-  const item = allMediaLogs.find(m => String(m.id) === String(mediaId));
-  if (!item) return;
+  // COMPACT LIST VIEW RENDER
+  if (libraryViewMode === 'list') {
+    grid.innerHTML = displayedItems.map(item => {
+      const safeId = escapeHtml(String(item.id));
+      const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/120x180/1e1e1f/888888?text=?';
+      const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
+      const allUnits = getAllItemUnits(item);
+      const cats = getItemCategories(item);
+      const seasons = getItemSeasons(item);
+      const synced = computeSyncedStatus(allUnits);
+      const combined = computeCombinedProgress(allUnits, synced.key);
+      const repeatCount = Number(item.repeat_count) || 0;
+      const statusDateText = formatStatusDate(item.updated_at || item.created_at);
 
-  const units = getAllItemUnits(item);
-  const cats = getItemCategories(item).map(c => CATEGORY_LABELS[c] || c).join(' • ');
-  const synced = computeSyncedStatus(units);
-  const cover = escapeHtml(item.cover_url || DEFAULT_COVER);
-  const ratingStr = (item.rating !== null && item.rating !== undefined && Number(item.rating) > 0)
-    ? `★ ${Number(item.rating).toFixed(1)} / 10`
-    : 'Unrated';
+      const catLabels = cats.map(c => CATEGORY_LABELS[c] || c).join(' / ');
+      const seasonTag = seasons.length > 0 ? `<span>• ${formatEntryBadgeLabel(seasons.length)}</span>` : '';
+      const repeatHtml = repeatCount > 0 ? `<span class="list-repeat-tag">• ↻ ${repeatCount}x</span>` : '';
 
-  setElText('detail-modal-title', item.title);
+      const editBtnHtml = isAdminLoggedIn ? `
+        <button type="button" class="list-edit-btn" onclick="event.stopPropagation(); openEditModal('${safeId}')" title="Edit Entry">
+          <ion-icon name="create-outline"></ion-icon>
+        </button>
+      ` : '';
 
-  const body = document.getElementById('media-detail-body');
-  if (body) {
-    body.innerHTML = `
-      <div class="detail-hero">
-        <img src="${cover}" alt="${escapeHtml(item.title)}" class="detail-poster">
-        <div class="detail-meta-col">
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <span class="status-pill ${synced.key}">${synced.label}</span>
-            <span class="badge-rating">${ratingStr}</span>
-            ${Number(item.repeat_count) > 0 ? `<span class="badge-repeat">↻ ${item.repeat_count}x</span>` : ''}
+      return `
+        <div class="media-list-row" onclick="openMediaDetailModal('${safeId}')">
+          <img class="list-thumb" src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/120x180/1e1e1f/888888?text=?'">
+          <div class="list-main-info">
+            <div class="list-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
+            <div class="list-sub-meta">
+              <span class="list-cat-tag">${escapeHtml(catLabels)}</span>
+              <span>•</span>
+              <span>${statusDateText}</span>
+              ${seasonTag}
+              ${repeatHtml}
+            </div>
           </div>
-          <p style="font-size:12px;color:var(--light-gray-70);">Categories: ${escapeHtml(cats)}</p>
-          <p style="font-size:11px;color:var(--light-gray-70);">Updated: ${formatStatusDate(item.updated_at || item.created_at)}</p>
+          <div class="list-right-meta">
+            <span class="status-pill ${synced.key} list-hide-mobile">${escapeHtml(synced.label)}</span>
+            <span class="progress-pill ${synced.key}">${combined.text}</span>
+            <span class="list-rating-pill">${ratingText}</span>
+            ${editBtnHtml}
+          </div>
         </div>
-      </div>
-      <div>
-        <div class="detail-section-title">Progress Breakdown</div>
-        <div class="detail-list">
-          ${units.map(u => {
-            const pText = u.total ? `${u.progress} / ${u.total} ${u.unit}` : `${u.progress} ${u.unit}`;
-            return `
-              <div class="detail-row-item">
-                <span><strong>${escapeHtml(u.title)}</strong> <small style="color:var(--light-gray-70);">(${escapeHtml(u.status)})</small></span>
-                <span style="font-weight:600;">${escapeHtml(pText)}</span>
-              </div>
-            `;
-          }).join('')}
+      `;
+    }).join('');
+    return;
+  }
+
+  // GRID VIEW RENDER
+  grid.innerHTML = displayedItems.map(item => {
+    const safeId = escapeHtml(String(item.id));
+    const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
+    const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
+    const repeatCount = Number(item.repeat_count) || 0;
+    const allUnits = getAllItemUnits(item);
+    const cats = getItemCategories(item);
+    const seasons = getItemSeasons(item);
+    const synced = computeSyncedStatus(allUnits);
+    const combined = computeCombinedProgress(allUnits, synced.key);
+
+    const catBadgesHtml = cats.map(c => `<span class="badge-cat">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('');
+    const extraBarClass = combined.isPlannedEmpty ? 'planned-empty' : '';
+    const statusDateText = formatStatusDate(item.updated_at || item.created_at);
+
+    const repeatBadgeHtml = repeatCount > 0
+      ? `<span class="badge-repeat" title="Rewatch / Reread count">↻ ${repeatCount}x</span>`
+      : '';
+
+    const seasonsBadgeHtml = seasons.length > 0
+      ? `<span class="badge-seasons">${formatEntryBadgeLabel(seasons.length)}</span>`
+      : '';
+
+    const coverEditHtml = isAdminLoggedIn ? `
+      <button type="button" class="cover-edit-btn" onclick="event.stopPropagation(); openEditModal('${safeId}')" title="Edit Entry">
+        <ion-icon name="create-outline"></ion-icon>
+      </button>
+    ` : '';
+
+    return `
+      <div class="media-card" onclick="openMediaDetailModal('${safeId}')">
+        <div class="media-cover-wrap">
+          <img src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=No+Cover'">
+          <div class="cover-left-badges">
+            <div class="badge-cat-row">${catBadgesHtml}</div>
+            <span class="badge-rating">${ratingText}</span>
+            ${repeatBadgeHtml}
+          </div>
+          ${seasonsBadgeHtml}
+          ${coverEditHtml}
+        </div>
+        <div class="media-body">
+          <h3 class="media-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h3>
+          <div class="media-bottom-stack">
+            <div class="media-meta-row">
+              <span class="status-pill ${synced.key}">${escapeHtml(synced.label)}</span>
+              <span class="progress-pill ${synced.key}">${combined.text}</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill ${synced.key} ${extraBarClass}" style="width: ${combined.percent}%"></div>
+            </div>
+            <div class="media-footer-row">
+              <span class="status-date-item" title="Last status update">
+                <ion-icon name="calendar-outline"></ion-icon>
+                <span>${statusDateText}</span>
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     `;
-  }
+  }).join('');
+}
 
-  document.getElementById('media-detail-modal')?.classList.add('active');
+// ==========================================
+// 4B. MEDIA DETAIL MODAL
+// ==========================================
+window.openMediaDetailModal = function (id) {
+  const item = allMediaLogs.find(m => String(m.id) === String(id));
+  if (!item) return;
+
+  const safeId = escapeHtml(String(item.id));
+  const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
+  const tracks = getItemTracks(item);
+  const seasons = getItemSeasons(item);
+  const allUnits = [...tracks, ...seasons];
+  const cats = getItemCategories(item);
+  const synced = computeSyncedStatus(allUnits);
+  const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : 'Unrated';
+  const repeatCount = Number(item.repeat_count) || 0;
+
+  setElText('detail-modal-title', item.title);
+
+  const tracksHtml = tracks.map(t => {
+    const hasTotal = t.total_units !== null && t.total_units > 0;
+    const unitShort = UNIT_SHORT_LABELS[t.unit_label] || t.unit_label || '';
+    const progStr = hasTotal ? `${t.progress} / ${t.total_units} ${unitShort}` : `${t.progress} / ? ${unitShort}`;
+    return `
+      <div class="detail-row-item">
+        <div>
+          <strong style="color: var(--white-1);">${escapeHtml(CATEGORY_LABELS[t.category] || t.category)}</strong>
+          <span style="color: var(--light-gray-70); margin-left: 8px;">${progStr}</span>
+        </div>
+        <span class="status-pill ${t.status}">${t.status}</span>
+      </div>
+    `;
+  }).join('');
+
+  const seasonsHtml = seasons.length > 0 ? `
+    <div>
+      <div class="detail-section-title">Entries & Parts (${seasons.length + 1} Total)</div>
+      <div class="detail-list">
+        ${seasons.map(s => {
+          const sStatus = (s.status || 'planned').toLowerCase().trim();
+          const sCatLabel = CATEGORY_LABELS[s.category] || s.category || 'TV Show';
+          const sUnit = UNIT_SHORT_LABELS[s.unit_label] || s.unit_label || 'Eps';
+          const sProg = (s.total_units && Number(s.total_units) > 0)
+            ? `${s.progress || 0}/${s.total_units} ${sUnit}`
+            : `${s.progress || 0}/? ${sUnit}`;
+          const sRating = (item.rating !== null && item.rating !== undefined)
+            ? ` · ★ ${Number(item.rating).toFixed(1)}`
+            : '';
+          return `
+            <div class="detail-row-item">
+              <div style="min-width: 0;">
+                <div style="font-weight: 600; color: var(--white-1);">${escapeHtml(s.name || 'Part')}</div>
+                <div style="font-size: 11px; color: var(--light-gray-70);">${escapeHtml(sCatLabel)} · ${sProg}${sRating}</div>
+              </div>
+              <span class="status-pill ${sStatus}">${sStatus}</span>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  ` : '';
+
+  const editActionHtml = isAdminLoggedIn ? `
+    <div class="modal-submit-row">
+      <button type="button" class="form-btn primary-submit" onclick="closeMediaDetailModal(); openEditModal('${safeId}');">
+        <ion-icon name="create-outline"></ion-icon>
+        <span>Edit Entry</span>
+      </button>
+    </div>
+  ` : '';
+
+  document.getElementById('media-detail-body').innerHTML = `
+    <div class="detail-hero">
+      <img class="detail-poster" src="${cover}" alt="${escapeHtml(item.title)}" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=No+Cover'">
+      <div class="detail-meta-col">
+        <div class="badge-cat-row">
+          ${cats.map(c => `<span class="badge-cat">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('')}
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+          <span class="status-pill ${synced.key}">${escapeHtml(synced.label)}</span>
+          <span class="badge-rating">${ratingText}</span>
+          ${repeatCount > 0 ? `<span class="badge-repeat">↻ ${repeatCount}x</span>` : ''}
+        </div>
+        <div style="font-size: 11px; color: var(--light-gray-70);">
+          Updated ${formatStatusDate(item.updated_at || item.created_at)}
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="detail-section-title">Progress Tracks</div>
+      <div class="detail-list">${tracksHtml}</div>
+    </div>
+
+    ${seasonsHtml}
+    ${editActionHtml}
+  `;
+
+  document.getElementById('media-detail-modal').classList.add('active');
 };
 
 window.closeMediaDetailModal = function () {
-  document.getElementById('media-detail-modal')?.classList.remove('active');
+  document.getElementById('media-detail-modal').classList.remove('active');
 };
 
-// Add / Edit Media Modal & Editors
-window.openMediaModal = function (mediaId = null) {
-  if (!isAdminLoggedIn) return;
+// ==========================================
+// 5. ADD / EDIT MODAL
+// ==========================================
+window.addMediaTrackRow = function (track = null) {
+  const container = document.getElementById('media-tracks-editor');
+  if (!container) return;
 
-  const tracksEditor = document.getElementById('media-tracks-editor');
-  const seasonsEditor = document.getElementById('media-seasons-editor');
-  const delBtn = document.getElementById('btn-modal-delete');
-  const apiResults = document.getElementById('api-search-results');
-
-  if (tracksEditor) tracksEditor.innerHTML = '';
-  if (seasonsEditor) seasonsEditor.innerHTML = '';
-  if (apiResults) apiResults.style.display = 'none';
-  setElText('cover-upload-status', '');
-
-  if (mediaId) {
-    const item = allMediaLogs.find(m => String(m.id) === String(mediaId));
-    if (!item) return;
-
-    setElText('media-modal-title', 'Edit Media');
-    document.getElementById('media-id').value = item.id;
-    document.getElementById('media-title').value = item.title || '';
-    document.getElementById('media-cover').value = item.cover_url || '';
-    document.getElementById('media-rating').value = item.rating ?? '';
-    document.getElementById('media-repeat').value = item.repeat_count ?? 0;
-    if (delBtn) delBtn.style.display = 'inline-block';
-
-    const tracks = Array.isArray(item.category_tracks) && item.category_tracks.length > 0
-      ? item.category_tracks
-      : [{
-          category: item.category || 'tv_show',
-          status: item.status || 'ongoing',
-          progress: item.progress || 0,
-          total: item.total ?? '',
-          unit: item.unit || 'Eps'
-        }];
-
-    tracks.forEach(t => addMediaTrackRow(t));
-    (Array.isArray(item.seasons) ? item.seasons : []).forEach(s => addSeasonItemRow(s));
-  } else {
-    setElText('media-modal-title', 'Add Media');
-    document.getElementById('media-id').value = '';
-    document.getElementById('media-title').value = '';
-    document.getElementById('media-cover').value = '';
-    document.getElementById('media-rating').value = '';
-    document.getElementById('media-repeat').value = 0;
-    if (delBtn) delBtn.style.display = 'none';
-    addMediaTrackRow();
-  }
-
-  document.getElementById('media-modal')?.classList.add('active');
-};
-
-window.closeMediaModal = function () {
-  document.getElementById('media-modal')?.classList.remove('active');
-};
-
-window.stepModalRepeat = function () {
-  const input = document.getElementById('media-repeat');
-  if (input) input.value = (Number(input.value) || 0) + 1;
-};
-
-window.addMediaTrackRow = function (data = {}) {
-  const editor = document.getElementById('media-tracks-editor');
-  if (!editor) return;
-
-  const cat = data.category || 'tv_show';
-  const status = data.status || 'ongoing';
-  const prog = data.progress ?? 0;
-  const total = data.total ?? '';
-  const unit = data.unit || 'Eps';
+  const cat = (track && track.category) ? track.category : 'tv_show';
+  const status = (track && track.status) ? track.status : 'completed';
+  const progress = (track && track.progress !== undefined) ? track.progress : 0;
+  const total = (track && track.total_units !== undefined) ? track.total_units : '';
+  const unit = (track && track.unit_label) ? track.unit_label : (DEFAULT_UNITS_BY_CAT[cat] || 'eps');
 
   const card = document.createElement('div');
   card.className = 'track-edit-card';
   card.innerHTML = `
     <div class="track-edit-top">
-      <select class="form-input track-cat">
-        ${Object.entries(CATEGORY_LABELS).map(([k, v]) => `<option value="${k}" ${k === cat ? 'selected' : ''}>${v}</option>`).join('')}
+      <select class="form-input track-cat-select" onchange="onTrackCategoryChange(this)">
+        <option value="tv_show" ${cat === 'tv_show' ? 'selected' : ''}>TV Show</option>
+        <option value="movie" ${cat === 'movie' ? 'selected' : ''}>Movie</option>
+        <option value="comic" ${cat === 'comic' ? 'selected' : ''}>Comic</option>
+        <option value="novel" ${cat === 'novel' ? 'selected' : ''}>Novel</option>
+        <option value="game" ${cat === 'game' ? 'selected' : ''}>Game</option>
+        <option value="music" ${cat === 'music' ? 'selected' : ''}>Music</option>
       </select>
-      <select class="form-input track-status">
-        <option value="ongoing" ${status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
-        <option value="completed" ${status === 'completed' ? 'selected' : ''}>Completed</option>
-        <option value="planned" ${status === 'planned' ? 'selected' : ''}>Planned</option>
-        <option value="dropped" ${status === 'dropped' ? 'selected' : ''}>Dropped</option>
-      </select>
-      <button type="button" class="social-remove-btn" onclick="if(document.querySelectorAll('#media-tracks-editor .track-edit-card').length > 1) this.closest('.track-edit-card').remove()" title="Remove">
+      <button type="button" class="social-remove-btn" onclick="removeMediaTrackRow(this)" title="Remove Category">
         <ion-icon name="trash-outline"></ion-icon>
       </button>
     </div>
     <div class="track-edit-grid">
-      <div class="progress-input-row">
-        <input type="number" class="form-input track-prog" min="0" value="${prog}" placeholder="Prog">
-        <button type="button" class="step-plus-btn" onclick="const inp=this.previousElementSibling; inp.value=(Number(inp.value)||0)+1;">+1</button>
-      </div>
-      <input type="number" class="form-input track-total" min="0" value="${total}" placeholder="Total">
-      <select class="form-input track-unit">
-        ${['Eps', 'Ch', 'Pages', 'Vol', 'Movie', 'Track', 'Item'].map(u => `<option value="${u}" ${u === unit ? 'selected' : ''}>${u}</option>`).join('')}
+      <select class="form-input track-status-select" onchange="onTrackStatusOrTotalChange(this)">
+        <option value="completed" ${status === 'completed' ? 'selected' : ''}>Completed</option>
+        <option value="ongoing" ${status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
+        <option value="planned" ${status === 'planned' ? 'selected' : ''}>Planned</option>
+        <option value="dropped" ${status === 'dropped' ? 'selected' : ''}>Dropped</option>
       </select>
-      <button type="button" class="form-btn" onclick="const c=this.closest('.track-edit-card'); const t=c.querySelector('.track-total').value; if(t) c.querySelector('.track-prog').value=t; c.querySelector('.track-status').value='completed';">Max</button>
+      <div class="progress-input-row">
+        <input type="number" class="form-input track-progress-input" min="0" value="${progress}" placeholder="Count">
+        <button type="button" class="step-plus-btn" onclick="stepTrackProgress(this)" title="+1">+1</button>
+      </div>
+      <input type="number" class="form-input track-total-input" min="0" value="${total !== null ? total : ''}" placeholder="Total" oninput="onTrackStatusOrTotalChange(this)">
+      <select class="form-input track-unit-select">
+        <option value="eps" ${unit === 'eps' ? 'selected' : ''}>Episode</option>
+        <option value="movie" ${unit === 'movie' ? 'selected' : ''}>Movie</option>
+        <option value="ch" ${unit === 'ch' ? 'selected' : ''}>Chapter</option>
+        <option value="vol" ${unit === 'vol' ? 'selected' : ''}>Volume</option>
+        <option value="pages" ${unit === 'pages' ? 'selected' : ''}>Pages</option>
+        <option value="track" ${unit === 'track' ? 'selected' : ''}>Track</option>
+        <option value="item" ${unit === 'item' ? 'selected' : ''}>Item</option>
+      </select>
     </div>
   `;
-  editor.appendChild(card);
+  container.appendChild(card);
 };
 
-window.addSeasonItemRow = function (data = {}) {
-  const editor = document.getElementById('media-seasons-editor');
-  if (!editor) return;
+window.removeMediaTrackRow = function (btn) {
+  const container = document.getElementById('media-tracks-editor');
+  if (container && container.children.length <= 1) {
+    showToast('At least 1 category track is required', 'info');
+    return;
+  }
+  const card = btn.closest('.track-edit-card');
+  if (card) card.remove();
+};
 
-  const title = data.title || '';
-  const status = data.status || 'planned';
-  const prog = data.progress ?? 0;
-  const total = data.total ?? '';
-  const unit = data.unit || 'Eps';
+window.onTrackCategoryChange = function (selectEl) {
+  const card = selectEl.closest('.track-edit-card');
+  const unitSelect = card ? card.querySelector('.track-unit-select') : null;
+  if (unitSelect && DEFAULT_UNITS_BY_CAT[selectEl.value]) {
+    unitSelect.value = DEFAULT_UNITS_BY_CAT[selectEl.value];
+  }
+};
+
+window.onTrackStatusOrTotalChange = function (el) {
+  const card = el.closest('.track-edit-card');
+  if (!card) return;
+  const statusEl = card.querySelector('.track-status-select');
+  const totalEl = card.querySelector('.track-total-input');
+  const progInput = card.querySelector('.track-progress-input');
+
+  const status = statusEl ? statusEl.value : '';
+  const totalVal = totalEl ? parseInt(totalEl.value, 10) : NaN;
+
+  if (status === 'completed' && totalVal > 0 && progInput) {
+    progInput.value = totalVal;
+  }
+};
+
+window.stepTrackProgress = function (btn) {
+  const card = btn.closest('.track-edit-card');
+  if (!card) return;
+  const progInput = card.querySelector('.track-progress-input');
+  const totalEl = card.querySelector('.track-total-input');
+  const statusSelect = card.querySelector('.track-status-select');
+
+  if (!progInput) return;
+  const totalVal = totalEl ? parseInt(totalEl.value, 10) : NaN;
+  const nextVal = (parseInt(progInput.value, 10) || 0) + 1;
+  progInput.value = nextVal;
+
+  if (totalVal > 0 && nextVal >= totalVal && statusSelect) {
+    statusSelect.value = 'completed';
+  }
+};
+
+window.addSeasonItemRow = function (season = null) {
+  const container = document.getElementById('media-seasons-editor');
+  if (!container) return;
+
+  const firstTrackCat = document.querySelector('#media-tracks-editor .track-cat-select')?.value || 'tv_show';
+  const name = (season && season.name) ? season.name : '';
+  const cat = (season && season.category) ? season.category : firstTrackCat;
+  const status = (season && season.status) ? season.status : 'completed';
+  const progress = (season && season.progress !== undefined) ? season.progress : 0;
+  const total = (season && season.total_units !== undefined && season.total_units !== null) ? season.total_units : '';
+  const unit = (season && season.unit_label) ? season.unit_label : (DEFAULT_UNITS_BY_CAT[cat] || 'eps');
 
   const card = document.createElement('div');
   card.className = 'season-edit-card';
   card.innerHTML = `
     <div class="season-edit-top">
-      <input type="text" class="form-input season-title" placeholder="Part / Season / OVA title" value="${escapeHtml(title)}">
-      <button type="button" class="social-remove-btn" onclick="this.closest('.season-edit-card').remove()" title="Remove">
+      <select class="form-input season-cat-select" style="max-width: 118px;" onchange="onSeasonCategoryChange(this)">
+        <option value="tv_show" ${cat === 'tv_show' ? 'selected' : ''}>TV Show</option>
+        <option value="movie" ${cat === 'movie' ? 'selected' : ''}>Movie</option>
+        <option value="comic" ${cat === 'comic' ? 'selected' : ''}>Comic</option>
+        <option value="novel" ${cat === 'novel' ? 'selected' : ''}>Novel</option>
+        <option value="game" ${cat === 'game' ? 'selected' : ''}>Game</option>
+        <option value="music" ${cat === 'music' ? 'selected' : ''}>Music</option>
+      </select>
+      <input type="text" class="form-input season-name-input" placeholder="e.g. OVA / Season 2 / Special" value="${escapeHtml(name)}">
+      <button type="button" class="social-remove-btn" onclick="this.closest('.season-edit-card').remove()" title="Remove Entry">
         <ion-icon name="trash-outline"></ion-icon>
       </button>
     </div>
     <div class="season-edit-grid">
-      <select class="form-input season-status">
-        <option value="ongoing" ${status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
+      <select class="form-input season-status-select" onchange="onSeasonStatusOrTotalChange(this)">
         <option value="completed" ${status === 'completed' ? 'selected' : ''}>Completed</option>
+        <option value="ongoing" ${status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
         <option value="planned" ${status === 'planned' ? 'selected' : ''}>Planned</option>
         <option value="dropped" ${status === 'dropped' ? 'selected' : ''}>Dropped</option>
       </select>
       <div class="progress-input-row">
-        <input type="number" class="form-input season-prog" min="0" value="${prog}" placeholder="Prog">
-        <button type="button" class="step-plus-btn" onclick="const inp=this.previousElementSibling; inp.value=(Number(inp.value)||0)+1;">+1</button>
+        <input type="number" class="form-input season-progress-input" min="0" value="${progress}" placeholder="Count">
+        <button type="button" class="step-plus-btn" onclick="stepSeasonProgress(this)" title="+1">+1</button>
       </div>
-      <input type="number" class="form-input season-total" min="0" value="${total}" placeholder="Total">
-      <select class="form-input season-unit">
-        ${['Eps', 'Ch', 'Pages', 'Vol', 'Movie', 'Track', 'Item'].map(u => `<option value="${u}" ${u === unit ? 'selected' : ''}>${u}</option>`).join('')}
+      <input type="number" class="form-input season-total-input" min="0" value="${total}" placeholder="Total" oninput="onSeasonStatusOrTotalChange(this)">
+      <select class="form-input season-unit-select">
+        <option value="eps" ${unit === 'eps' ? 'selected' : ''}>Episode</option>
+        <option value="movie" ${unit === 'movie' ? 'selected' : ''}>Movie</option>
+        <option value="ch" ${unit === 'ch' ? 'selected' : ''}>Chapter</option>
+        <option value="vol" ${unit === 'vol' ? 'selected' : ''}>Volume</option>
+        <option value="pages" ${unit === 'pages' ? 'selected' : ''}>Pages</option>
+        <option value="track" ${unit === 'track' ? 'selected' : ''}>Track</option>
+        <option value="item" ${unit === 'item' ? 'selected' : ''}>Item</option>
       </select>
     </div>
   `;
-  editor.appendChild(card);
+  container.appendChild(card);
+};
+
+window.onSeasonCategoryChange = function (selectEl) {
+  const card = selectEl.closest('.season-edit-card');
+  const unitSelect = card ? card.querySelector('.season-unit-select') : null;
+  if (unitSelect && DEFAULT_UNITS_BY_CAT[selectEl.value]) {
+    unitSelect.value = DEFAULT_UNITS_BY_CAT[selectEl.value];
+  }
+};
+
+window.onSeasonStatusOrTotalChange = function (el) {
+  const card = el.closest('.season-edit-card');
+  if (!card) return;
+  const statusEl = card.querySelector('.season-status-select');
+  const totalEl = card.querySelector('.season-total-input');
+  const progInput = card.querySelector('.season-progress-input');
+
+  const status = statusEl ? statusEl.value : '';
+  const totalVal = totalEl ? parseInt(totalEl.value, 10) : NaN;
+
+  if (status === 'completed' && totalVal > 0 && progInput) {
+    progInput.value = totalVal;
+  }
+};
+
+window.stepSeasonProgress = function (btn) {
+  const card = btn.closest('.season-edit-card');
+  if (!card) return;
+  const progInput = card.querySelector('.season-progress-input');
+  const totalEl = card.querySelector('.season-total-input');
+  const statusSelect = card.querySelector('.season-status-select');
+
+  if (!progInput) return;
+  const totalVal = totalEl ? parseInt(totalEl.value, 10) : NaN;
+  const nextVal = (parseInt(progInput.value, 10) || 0) + 1;
+  progInput.value = nextVal;
+
+  if (totalVal > 0 && nextVal >= totalVal && statusSelect) {
+    statusSelect.value = 'completed';
+  }
+};
+
+window.openMediaModal = function () {
+  pendingUploadedUrls = [];
+  document.getElementById('media-modal-title').textContent = 'Add Media';
+  document.getElementById('media-form').reset();
+  document.getElementById('media-id').value = '';
+  document.getElementById('media-repeat').value = 0;
+  document.getElementById('btn-modal-delete').style.display = 'none';
+  document.getElementById('api-search-results').style.display = 'none';
+  setElText('cover-upload-status', '');
+
+  const tracksEditor = document.getElementById('media-tracks-editor');
+  if (tracksEditor) {
+    tracksEditor.innerHTML = '';
+    addMediaTrackRow({ category: 'tv_show', status: 'completed', progress: 0, total_units: '', unit_label: 'eps' });
+  }
+
+  const seasonsEditor = document.getElementById('media-seasons-editor');
+  if (seasonsEditor) seasonsEditor.innerHTML = '';
+
+  document.getElementById('media-modal').classList.add('active');
+};
+
+window.openEditModal = function (id) {
+  const item = allMediaLogs.find(m => String(m.id) === String(id));
+  if (!item) {
+    showToast('Media entry not found', 'error');
+    return;
+  }
+
+  pendingUploadedUrls = [];
+  document.getElementById('media-modal-title').textContent = 'Edit Media';
+  document.getElementById('media-id').value = item.id;
+  document.getElementById('btn-modal-delete').style.display = 'inline-flex';
+
+  document.getElementById('media-title').value = item.title || '';
+  document.getElementById('media-cover').value = item.cover_url || '';
+  document.getElementById('media-rating').value = (item.rating !== null && item.rating !== undefined) ? item.rating : '';
+  document.getElementById('media-repeat').value = Number(item.repeat_count) || 0;
+  document.getElementById('api-search-results').style.display = 'none';
+  setElText('cover-upload-status', '');
+
+  const tracksEditor = document.getElementById('media-tracks-editor');
+  if (tracksEditor) {
+    tracksEditor.innerHTML = '';
+    const tracks = getItemTracks(item);
+    tracks.forEach(t => addMediaTrackRow(t));
+    const apiCatSelect = document.getElementById('api-search-cat');
+    if (apiCatSelect && tracks[0]) apiCatSelect.value = tracks[0].category || 'tv_show';
+  }
+
+  const seasonsEditor = document.getElementById('media-seasons-editor');
+  if (seasonsEditor) {
+    seasonsEditor.innerHTML = '';
+    getItemSeasons(item).forEach(s => addSeasonItemRow(s));
+  }
+
+  document.getElementById('media-modal').classList.add('active');
+};
+
+window.closeMediaModal = async function () {
+  document.getElementById('media-modal').classList.remove('active');
+  await cleanupPendingUploads([]);
 };
 
 window.handleMediaCoverUpload = async function (event) {
-  const file = event.target.files?.[0];
+  const file = event.target.files ? event.target.files[0] : null;
+  event.target.value = '';
   if (!file) return;
+
   setElText('cover-upload-status', 'Uploading cover...');
   try {
-    const publicUrl = await uploadImageToStorage(file, 'covers');
+    const publicUrl = await uploadImageToSupabase(file, 'covers');
     document.getElementById('media-cover').value = publicUrl;
-    setElText('cover-upload-status', 'Cover uploaded');
+    setElText('cover-upload-status', 'Cover uploaded successfully!');
+    showToast('Cover uploaded', 'success');
   } catch (err) {
-    setElText('cover-upload-status', '');
+    setElText('cover-upload-status', `Upload failed: ${err.message}`);
     showToast(err.message, 'error');
   }
 };
 
-window.searchExternalAPI = async function () {
-  const cat = document.getElementById('api-search-cat')?.value || 'tv_show';
-  const query = (document.getElementById('api-search-input')?.value || '').trim();
-  const listEl = document.getElementById('api-search-results');
-  if (!query || !listEl) return;
+window.stepModalRepeat = function () {
+  const repInput = document.getElementById('media-repeat');
+  const nextVal = (parseInt(repInput.value, 10) || 0) + 1;
+  repInput.value = nextVal;
+};
 
-  listEl.style.display = 'block';
-  listEl.innerHTML = `<p style="font-size:12px;color:var(--light-gray-70);">Searching...</p>`;
-
+async function fetchWithTimeout(url, options = {}, timeoutMs = 4500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    let items = [];
-    if (cat === 'tv_show' || cat === 'movie') {
-      const res = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=6`);
-      const json = await res.json();
-      items = (json.data || []).map(a => ({
-        title: a.title_english || a.title,
-        cover: a.images?.jpg?.large_image_url || a.images?.jpg?.image_url || '',
-        total: a.episodes || '',
-        unit: cat === 'movie' ? 'Movie' : 'Eps',
-        sub: `${a.type || 'Anime'} • ${a.episodes ? a.episodes + ' eps' : '?'}`
-      }));
-    } else if (cat === 'comic' || cat === 'novel') {
-      const res = await fetch(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=6`);
-      const json = await res.json();
-      items = (json.data || []).map(m => ({
-        title: m.title_english || m.title,
-        cover: m.images?.jpg?.large_image_url || m.images?.jpg?.image_url || '',
-        total: m.chapters || '',
-        unit: 'Ch',
-        sub: `${m.type || 'Manga'} • ${m.chapters ? m.chapters + ' ch' : '?'}`
-      }));
-    } else if (cat === 'music') {
-      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&limit=6&entity=album`);
-      const json = await res.json();
-      items = (json.results || []).map(al => ({
-        title: `${al.collectionName} - ${al.artistName}`,
-        cover: (al.artworkUrl100 || '').replace('100x100bb', '600x600bb'),
-        total: al.trackCount || '',
-        unit: 'Track',
-        sub: `${al.artistName} • ${al.trackCount || '?'} tracks`
-      }));
-    } else {
-      const res = await fetch(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
-      const json = await res.json();
-      items = (json || []).slice(0, 6).map(s => ({
-        title: s.show?.name || '',
-        cover: s.show?.image?.original || s.show?.image?.medium || '',
-        total: '',
-        unit: 'Item',
-        sub: s.show?.premiered || 'Show'
-      }));
-    }
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-    if (items.length === 0) {
-      listEl.innerHTML = `<p style="font-size:12px;color:var(--light-gray-70);">No results found.</p>`;
-      return;
+async function fetchAniListMedia(query, isNovel = false) {
+  const gql = `
+    query ($search: String) {
+      Page(perPage: 6) {
+        media(search: $search, type: MANGA, ${isNovel ? 'format: NOVEL' : 'format_not: NOVEL'}) {
+          title { english romaji }
+          coverImage { large medium }
+          chapters
+          volumes
+          countryOfOrigin
+        }
+      }
     }
+  `;
+  const res = await fetchWithTimeout('https://graphql.anilist.co', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ query: gql, variables: { search: query } })
+  });
+  const json = await res.json();
+  const mediaList = (json.data && json.data.Page && json.data.Page.media) ? json.data.Page.media : [];
+  return mediaList.map(m => {
+    const originMap = { JP: 'Manga', KR: 'Manhwa', CN: 'Manhua' };
+    const label = isNovel ? 'Novel' : (originMap[m.countryOfOrigin] || 'Comic');
+    const coverImg = m.coverImage ? (m.coverImage.large || m.coverImage.medium || '') : '';
+    return {
+      title: m.title.english || m.title.romaji,
+      cover: normalizeImageUrl(coverImg),
+      total: isNovel ? (m.volumes || m.chapters || null) : (m.chapters || null),
+      unit: isNovel ? (m.volumes ? 'vol' : 'ch') : 'ch',
+      meta: `${label} · ${isNovel ? (m.volumes || '?') + ' Volume' : (m.chapters || '?') + ' Chapter'}`
+    };
+  });
+}
 
-    listEl.innerHTML = items.map(it => `
-      <div class="api-result-item" onclick='applyApiAutofill(${JSON.stringify(it).replace(/'/g, "&#39;")}, "${cat}")'>
-        <img src="${escapeHtml(it.cover || DEFAULT_COVER)}" alt="">
-        <div class="api-result-info">
-          <h4>${escapeHtml(it.title)}</h4>
-          <p>${escapeHtml(it.sub)}</p>
-        </div>
+function deduplicateResults(list) {
+  const seen = new Set();
+  return list.filter(item => {
+    const key = item.title.toLowerCase().trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+window.searchExternalAPI = async function () {
+  const query = document.getElementById('api-search-input').value.trim();
+  const cat = document.getElementById('api-search-cat').value;
+  const resultsBox = document.getElementById('api-search-results');
+
+  if (!query) return;
+  resultsBox.style.display = 'block';
+  resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">Searching...</p>`;
+
+  let items = [];
+
+  if (cat === 'tv_show') {
+    const [jikanRes, tvmazeRes, tmdbRes] = await Promise.allSettled([
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=5&sfw=true`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || []).map(a => ({
+          title: a.title_english || a.title,
+          cover: normalizeImageUrl((a.images && a.images.jpg && (a.images.jpg.large_image_url || a.images.jpg.image_url)) || ''),
+          total: a.episodes || null,
+          unit: 'eps',
+          meta: `Anime TV · ${a.episodes || '?'} Episode`
+        }));
+      })(),
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        return (data || []).slice(0, 5).map(entry => ({
+          tvmazeId: entry.show.id,
+          title: entry.show.name,
+          cover: normalizeImageUrl((entry.show.image && (entry.show.image.original || entry.show.image.medium)) || ''),
+          total: null,
+          unit: 'eps',
+          meta: `TV Show · ${entry.show.premiered ? entry.show.premiered.slice(0, 4) : 'Show'}`
+        }));
+      })(),
+      (async () => {
+        if (!TMDB_API_KEY) return [];
+        const res = await fetchWithTimeout(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.results || []).slice(0, 5).map(t => ({
+          tmdbId: t.id,
+          title: t.name,
+          cover: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : '',
+          total: null,
+          unit: 'eps',
+          meta: `TV Show · ${t.first_air_date ? t.first_air_date.slice(0, 4) : 'TMDB'}`
+        }));
+      })()
+    ]);
+
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    if (tvmazeRes.status === 'fulfilled') items.push(...tvmazeRes.value);
+    if (tmdbRes.status === 'fulfilled') items.push(...tmdbRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'movie') {
+    const [jikanRes, itunesRes, tmdbRes] = await Promise.allSettled([
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=movie&limit=5&sfw=true`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || []).map(a => ({
+          title: a.title_english || a.title,
+          cover: normalizeImageUrl((a.images && a.images.jpg && (a.images.jpg.large_image_url || a.images.jpg.image_url)) || ''),
+          total: 1,
+          unit: 'movie',
+          meta: `Anime Movie · ${a.year || 'Film'}`
+        }));
+      })(),
+      (async () => {
+        const res = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=movie&limit=5`);
+        const data = await res.json();
+        return (data.results || []).map(m => ({
+          title: m.trackName,
+          cover: normalizeImageUrl(m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : ''),
+          total: 1,
+          unit: 'movie',
+          meta: `Movie · ${m.releaseDate ? m.releaseDate.slice(0, 4) : 'Film'}`
+        }));
+      })(),
+      (async () => {
+        if (!TMDB_API_KEY) return [];
+        const res = await fetchWithTimeout(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.results || []).slice(0, 5).map(m => ({
+          title: m.title,
+          cover: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : '',
+          total: 1,
+          unit: 'movie',
+          meta: `Movie · ${m.release_date ? m.release_date.slice(0, 4) : 'TMDB'}`
+        }));
+      })()
+    ]);
+
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    if (itunesRes.status === 'fulfilled') items.push(...itunesRes.value);
+    if (tmdbRes.status === 'fulfilled') items.push(...tmdbRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'comic') {
+    const [jikanRes, aniRes] = await Promise.allSettled([
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=6&sfw=true`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || [])
+          .filter(m => m.type !== 'Light Novel' && m.type !== 'Novel')
+          .map(m => ({
+            title: m.title_english || m.title,
+            cover: normalizeImageUrl((m.images && m.images.jpg && (m.images.jpg.large_image_url || m.images.jpg.image_url)) || ''),
+            total: m.chapters || null,
+            unit: 'ch',
+            meta: `${m.type} · ${m.chapters || '?'} Chapter`
+          }));
+      })(),
+      fetchAniListMedia(query, false)
+    ]);
+
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'novel') {
+    const [openLibRes, jikanRes, aniRes] = await Promise.allSettled([
+      (async () => {
+        const res = await fetchWithTimeout(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=6`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.docs || []).map(b => {
+          const author = b.author_name ? b.author_name[0] : 'Book';
+          const pages = b.number_of_pages_median || null;
+          return {
+            title: b.title,
+            cover: b.cover_i ? `https://covers.openlibrary.org/b/id/${b.cover_i}-L.jpg` : '',
+            total: pages,
+            unit: pages ? 'pages' : 'vol',
+            meta: `Novel (${author}) · ${pages ? pages + ' Pages' : 'Book'}`
+          };
+        });
+      })(),
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&type=lightnovel&limit=4&sfw=true`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || []).map(ln => ({
+          title: ln.title_english || ln.title,
+          cover: normalizeImageUrl((ln.images && ln.images.jpg && (ln.images.jpg.large_image_url || ln.images.jpg.image_url)) || ''),
+          total: ln.volumes || ln.chapters || null,
+          unit: ln.volumes ? 'vol' : 'ch',
+          meta: `Light Novel · ${ln.volumes || '?'} Volume`
+        }));
+      })(),
+      fetchAniListMedia(query, true)
+    ]);
+
+    if (openLibRes.status === 'fulfilled') items.push(...openLibRes.value);
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'game') {
+    const [wikiGameRes, vndbRes, rawgRes] = await Promise.allSettled([
+      (async () => {
+        const searchRes = await fetchWithTimeout(
+          `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=en&format=json&origin=*&limit=8`
+        );
+        if (!searchRes.ok) return [];
+        const searchData = await searchRes.json();
+        const candidates = (searchData.search || []).filter(item => {
+          const desc = (item.description || '').toLowerCase();
+          return desc.includes('video game') || desc.includes('game');
+        });
+        if (candidates.length === 0) return [];
+
+        const ids = candidates.map(c => c.id).join('|');
+        const entityRes = await fetchWithTimeout(
+          `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${ids}&props=claims|sitelinks|labels|descriptions&languages=en&format=json&origin=*`
+        );
+        const entityData = await entityRes.json();
+        const entities = entityData.entities || {};
+
+        const results = await Promise.all(
+          candidates.map(async c => {
+            const ent = entities[c.id];
+            if (!ent) return null;
+            const title = (ent.labels && ent.labels.en && ent.labels.en.value) || c.label;
+            const desc = (ent.descriptions && ent.descriptions.en && ent.descriptions.en.value) || 'Video Game';
+            let cover = '';
+            const p18 = ent.claims && ent.claims.P18 && ent.claims.P18[0] && ent.claims.P18[0].mainsnak && ent.claims.P18[0].mainsnak.datavalue && ent.claims.P18[0].mainsnak.datavalue.value;
+            if (p18) cover = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(p18)}?width=500`;
+            const enWikiTitle = ent.sitelinks && ent.sitelinks.enwiki && ent.sitelinks.enwiki.title;
+            if (!cover && enWikiTitle) {
+              try {
+                const wpRes = await fetchWithTimeout(
+                  `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(enWikiTitle)}&prop=pageimages&pithumbsize=500&format=json&origin=*`
+                );
+                const wpData = await wpRes.json();
+                const pagesObj = (wpData.query && wpData.query.pages) ? wpData.query.pages : {};
+                const pageObj = Object.values(pagesObj)[0];
+                if (pageObj && pageObj.thumbnail && pageObj.thumbnail.source) cover = normalizeImageUrl(pageObj.thumbnail.source);
+              } catch (_) {}
+            }
+            return { title, cover, total: 1, unit: 'item', meta: desc.charAt(0).toUpperCase() + desc.slice(1) };
+          })
+        );
+        return results.filter(Boolean);
+      })(),
+      (async () => {
+        const res = await fetchWithTimeout('https://api.vndb.org/kana/vn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filters: ['search', '=', query],
+            fields: 'title, image.url, released',
+            results: 5
+          })
+        });
+        const data = await res.json();
+        return (data.results || []).map(g => ({
+          title: g.title,
+          cover: normalizeImageUrl(g.image ? g.image.url : ''),
+          total: 1,
+          unit: 'item',
+          meta: `Visual Novel · ${g.released || ''}`
+        }));
+      })(),
+      (async () => {
+        if (!RAWG_API_KEY) return [];
+        const res = await fetchWithTimeout(`https://api.rawg.io/api/games?key=${RAWG_API_KEY}&search=${encodeURIComponent(query)}&page_size=5`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.results || []).map(g => ({
+          title: g.name,
+          cover: normalizeImageUrl(g.background_image || ''),
+          total: 1,
+          unit: 'item',
+          meta: `Game · ${g.released ? g.released.slice(0, 4) : ''}`
+        }));
+      })()
+    ]);
+
+    if (wikiGameRes.status === 'fulfilled') items.push(...wikiGameRes.value);
+    if (vndbRes.status === 'fulfilled') items.push(...vndbRes.value);
+    if (rawgRes.status === 'fulfilled') items.push(...rawgRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'music') {
+    try {
+      const res = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=album&limit=8`);
+      const data = await res.json();
+      items = (data.results || []).map(m => ({
+        title: `${m.collectionName} — ${m.artistName}`,
+        cover: normalizeImageUrl(m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : ''),
+        total: m.trackCount || 1,
+        unit: 'track',
+        meta: `Album · ${m.trackCount || '?'} Tracks · ${m.releaseDate ? m.releaseDate.slice(0, 4) : ''}`
+      }));
+      items = deduplicateResults(items);
+    } catch (e) {
+      console.error('Music search error:', e);
+    }
+  }
+
+  lastApiResults = items;
+
+  if (items.length === 0) {
+    resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">No results found. Please fill in the fields manually below.</p>`;
+    return;
+  }
+
+  resultsBox.innerHTML = items.map((it, idx) => `
+    <div class="api-result-item" onclick="applyApiResult(${idx})">
+      <img src="${it.cover || 'https://placehold.co/60x90/1e1e1f/888?text=?'}" alt="" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/60x90/1e1e1f/888?text=?'">
+      <div class="api-result-info">
+        <h4>${escapeHtml(it.title)}</h4>
+        <p>${escapeHtml(it.meta)}</p>
       </div>
-    `).join('');
-  } catch (err) {
-    listEl.innerHTML = `<p style="font-size:12px;color:#ff7b7b;">Search failed.</p>`;
-  }
+    </div>
+  `).join('');
 };
 
-window.applyApiAutofill = function (item, cat) {
-  document.getElementById('media-title').value = item.title || '';
-  if (item.cover) document.getElementById('media-cover').value = item.cover;
+window.applyApiResult = async function (idx) {
+  const item = lastApiResults[idx];
+  const searchedCat = document.getElementById('api-search-cat').value;
+  if (!item) return;
 
-  const firstCard = document.querySelector('#media-tracks-editor .track-edit-card');
-  if (firstCard) {
-    firstCard.querySelector('.track-cat').value = cat;
-    if (item.total) firstCard.querySelector('.track-total').value = item.total;
-    if (item.unit) firstCard.querySelector('.track-unit').value = item.unit;
+  if (!document.getElementById('media-title').value.trim()) {
+    document.getElementById('media-title').value = item.title;
   }
+  if (!document.getElementById('media-cover').value.trim() && item.cover) {
+    document.getElementById('media-cover').value = item.cover;
+  }
+
+  const trackCards = Array.from(document.querySelectorAll('#media-tracks-editor .track-edit-card'));
+  let targetCard = trackCards.find(c => {
+    const sel = c.querySelector('.track-cat-select');
+    return sel && sel.value === searchedCat;
+  }) || trackCards[0];
+
+  if (targetCard) {
+    targetCard.querySelector('.track-cat-select').value = searchedCat;
+    if (item.total) targetCard.querySelector('.track-total-input').value = item.total;
+    if (item.unit) targetCard.querySelector('.track-unit-select').value = item.unit;
+    onTrackStatusOrTotalChange(targetCard.querySelector('.track-total-input'));
+  }
+
   document.getElementById('api-search-results').style.display = 'none';
-};
 
-document.getElementById('media-form')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!isAdminLoggedIn) return;
-
-  const id = document.getElementById('media-id').value;
-  const title = document.getElementById('media-title').value.trim();
-  const coverUrl = document.getElementById('media-cover').value.trim() || null;
-  const ratingRaw = document.getElementById('media-rating').value;
-  const rating = ratingRaw !== '' ? Number(ratingRaw) : null;
-  const repeatCount = Number(document.getElementById('media-repeat').value) || 0;
-
-  const trackCards = document.querySelectorAll('#media-tracks-editor .track-edit-card');
-  const categoryTracks = [];
-  trackCards.forEach(c => {
-    const category = c.querySelector('.track-cat').value;
-    const status = c.querySelector('.track-status').value;
-    const progress = Number(c.querySelector('.track-prog').value) || 0;
-    const totalRaw = c.querySelector('.track-total').value;
-    const total = totalRaw !== '' ? Number(totalRaw) : null;
-    const unit = c.querySelector('.track-unit').value;
-    categoryTracks.push({ category, status, progress, total, unit });
-  });
-
-  const seasonCards = document.querySelectorAll('#media-seasons-editor .season-edit-card');
-  const seasons = [];
-  seasonCards.forEach(c => {
-    const sTitle = c.querySelector('.season-title').value.trim();
-    if (!sTitle) return;
-    seasons.push({
-      title: sTitle,
-      category: categoryTracks[0]?.category || 'tv_show',
-      status: c.querySelector('.season-status').value,
-      progress: Number(c.querySelector('.season-prog').value) || 0,
-      total: c.querySelector('.season-total').value !== '' ? Number(c.querySelector('.season-total').value) : null,
-      unit: c.querySelector('.season-unit').value
-    });
-  });
-
-  const primary = categoryTracks[0];
-  const synced = computeSyncedStatus(getAllItemUnits({ category_tracks: categoryTracks, seasons }));
-  const nowIso = new Date().toISOString();
-
-  const payload = {
-    title,
-    cover_url: coverUrl,
-    category: primary.category,
-    status: synced.key,
-    progress: primary.progress,
-    total: primary.total,
-    unit: primary.unit,
-    rating,
-    repeat_count: repeatCount,
-    category_tracks: categoryTracks,
-    seasons,
-    updated_at: nowIso
-  };
-
-  if (id) {
-    const { error } = await supabaseClient.from('media_logs').update(payload).eq('id', id);
-    if (error) {
-      showToast(error.message, 'error');
-      return;
-    }
-    showToast('Media updated', 'success');
-  } else {
-    payload.created_at = nowIso;
-    const { error } = await supabaseClient.from('media_logs').insert([payload]);
-    if (error) {
-      showToast(error.message, 'error');
-      return;
-    }
-    showToast('Media added', 'success');
+  if (item.tvmazeId && targetCard) {
+    try {
+      const epRes = await fetchWithTimeout(`https://api.tvmaze.com/shows/${item.tvmazeId}/episodes`);
+      const epData = await epRes.json();
+      if (Array.isArray(epData) && epData.length > 0) {
+        targetCard.querySelector('.track-total-input').value = epData.length;
+        onTrackStatusOrTotalChange(targetCard.querySelector('.track-total-input'));
+      }
+    } catch (_) {}
   }
 
-  closeMediaModal();
-  await fetchMediaLogs();
-});
+  if (item.tmdbId && TMDB_API_KEY && targetCard) {
+    try {
+      const detailRes = await fetchWithTimeout(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}`);
+      const detailData = await detailRes.json();
+      if (detailData.number_of_episodes) {
+        targetCard.querySelector('.track-total-input').value = detailData.number_of_episodes;
+        onTrackStatusOrTotalChange(targetCard.querySelector('.track-total-input'));
+      }
+    } catch (_) {}
+  }
+};
+
+// ==========================================
+// 6. SUPABASE MEDIA CRUD + AUTO-CLEANUP
+// ==========================================
+const mediaForm = document.getElementById('media-form');
+if (mediaForm) {
+  mediaForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const id = document.getElementById('media-id').value;
+    const existingItem = id ? allMediaLogs.find(m => String(m.id) === String(id)) : null;
+    const oldCover = existingItem ? existingItem.cover_url : null;
+    const newCover = normalizeImageUrl(document.getElementById('media-cover').value) || null;
+
+    const trackCards = document.querySelectorAll('#media-tracks-editor .track-edit-card');
+    const tracks = [];
+    trackCards.forEach(card => {
+      const cat = card.querySelector('.track-cat-select').value;
+      const status = card.querySelector('.track-status-select').value;
+      const totalRaw = card.querySelector('.track-total-input').value;
+      const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
+      let progressVal = parseInt(card.querySelector('.track-progress-input').value, 10) || 0;
+      const unitLabel = card.querySelector('.track-unit-select').value;
+
+      if (status === 'completed' && totalUnits && totalUnits > 0) {
+        progressVal = totalUnits;
+      }
+
+      tracks.push({
+        category: cat,
+        status,
+        progress: progressVal,
+        total_units: totalUnits,
+        unit_label: unitLabel
+      });
+    });
+
+    if (tracks.length === 0) {
+      showToast('Please add at least 1 category track', 'error');
+      return;
+    }
+
+    const ratingRaw = document.getElementById('media-rating').value;
+    const inheritedRating = ratingRaw !== '' ? parseFloat(ratingRaw) : null;
+
+    const seasonCards = document.querySelectorAll('#media-seasons-editor .season-edit-card');
+    const seasons = [];
+    seasonCards.forEach(card => {
+      const name = card.querySelector('.season-name-input').value.trim();
+      if (!name) return;
+      const cat = card.querySelector('.season-cat-select')?.value || tracks[0].category;
+      const status = card.querySelector('.season-status-select').value;
+      const totalRaw = card.querySelector('.season-total-input').value;
+      const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
+      let progressVal = parseInt(card.querySelector('.season-progress-input').value, 10) || 0;
+      const unitLabel = card.querySelector('.season-unit-select')?.value || 'eps';
+
+      if (status === 'completed' && totalUnits && totalUnits > 0) {
+        progressVal = totalUnits;
+      }
+
+      seasons.push({
+        name,
+        category: cat,
+        status,
+        progress: progressVal,
+        total_units: totalUnits,
+        unit_label: unitLabel,
+        rating: inheritedRating
+      });
+    });
+
+    const allCombinedUnits = [...tracks, ...seasons];
+    const categories = Array.from(new Set(allCombinedUnits.map(t => t.category)));
+    const primaryTrack = tracks[0];
+    const syncedStatus = computeSyncedStatus(allCombinedUnits);
+    const repeatVal = Math.max(0, parseInt(document.getElementById('media-repeat').value, 10) || 0);
+
+    const payload = {
+      title: document.getElementById('media-title').value.trim(),
+      category: primaryTrack.category,
+      categories,
+      tracks,
+      seasons,
+      sub_category: null,
+      cover_url: newCover,
+      status: syncedStatus.key,
+      progress: primaryTrack.progress,
+      total_units: primaryTrack.total_units,
+      unit_label: primaryTrack.unit_label,
+      rating: inheritedRating,
+      repeat_count: repeatVal,
+      updated_at: new Date().toISOString()
+    };
+
+    let error;
+    if (id) {
+      ({ error } = await supabaseClient.from('media_logs').update(payload).eq('id', id));
+    } else {
+      ({ error } = await supabaseClient.from('media_logs').insert([payload]));
+    }
+
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      await cleanupPendingUploads([newCover]);
+      if (oldCover && oldCover !== newCover) {
+        await deleteOldStorageFile(oldCover);
+      }
+      document.getElementById('media-modal').classList.remove('active');
+      await fetchMediaLogs();
+      showToast(id ? 'Media entry updated' : 'Media entry added', 'success');
+    }
+  });
+}
 
 window.deleteCurrentModalMedia = async function () {
-  const id = document.getElementById('media-id')?.value;
-  if (!id || !isAdminLoggedIn) return;
+  const id = document.getElementById('media-id').value;
+  if (!id) return;
 
-  const res = await Swal.fire({
-    text: 'Delete this media entry?',
+  const existingItem = allMediaLogs.find(m => String(m.id) === String(id));
+
+  const confirm = await Swal.fire({
+    text: 'Remove this entry from your library?',
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#ff5f5f',
@@ -1648,398 +2288,276 @@ window.deleteCurrentModalMedia = async function () {
     color: '#fff'
   });
 
-  if (!res.isConfirmed) return;
-
-  const { error } = await supabaseClient.from('media_logs').delete().eq('id', id);
-  if (error) {
-    showToast(error.message, 'error');
-    return;
+  if (confirm.isConfirmed) {
+    const { error } = await supabaseClient.from('media_logs').delete().eq('id', id);
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      await cleanupPendingUploads([]);
+      if (existingItem && existingItem.cover_url) {
+        await deleteOldStorageFile(existingItem.cover_url);
+      }
+      document.getElementById('media-modal').classList.remove('active');
+      await fetchMediaLogs();
+      showToast('Entry deleted', 'info');
+    }
   }
-
-  closeMediaModal();
-  await fetchMediaLogs();
-  showToast('Media deleted', 'info');
 };
 
 // ==========================================
-// 8. ADMIN AI WORKSPACE (GROQ FULL-AUTO + DB TOGGLE)
+// 7. PERSONAL NOTES / POSTS + AUTOMATIC LINK PREVIEW CARD
 // ==========================================
-const GROQ_AUTO_POOL = [
-  'openai/gpt-oss-120b',
-  'openai/gpt-oss-20b',
-  'qwen/qwen3.8-27b',
-  'allam-2-7b'
-];
+function formatPostDateTime(createdIso, updatedIso) {
+  if (!createdIso) return '';
+  const created = new Date(createdIso);
+  if (Number.isNaN(created.getTime())) return '';
 
-let groqPoolCursor = 0;
-let isAiDbContextEnabled = false;
+  const dateStr = created.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+  const timeStr = created.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
 
-function initGroqKeyInput() {
-  const savedKey = (localStorage.getItem(GROQ_KEY_STORAGE) || '').trim();
-  const inputEl = document.getElementById('groq-api-key-input');
-  if (inputEl && savedKey) inputEl.value = savedKey;
-  setElText('ai-model-subtitle', 'Groq • Full Auto');
-  syncAiDbToggleUI();
+  const isEdited = updatedIso && Math.abs(new Date(updatedIso) - created) > 10000;
+  return `${dateStr} · ${timeStr}${isEdited ? ' (edited)' : ''}`;
 }
 
-function syncAiDbToggleUI() {
-  const btn = document.getElementById('btn-toggle-ai-db');
-  const label = document.getElementById('ai-db-toggle-text');
-  if (btn) btn.classList.toggle('active', isAiDbContextEnabled);
-  if (label) label.textContent = isAiDbContextEnabled ? 'Read Database: ON' : 'Read Database: OFF';
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text == null ? '' : String(text);
+  return div.innerHTML;
 }
 
-window.toggleAiDatabaseContext = function () {
-  isAiDbContextEnabled = !isAiDbContextEnabled;
-  syncAiDbToggleUI();
-  showToast(
-    isAiDbContextEnabled
-      ? 'Database context ON (Library & Notes included)'
-      : 'Database context OFF (Token-saver mode)',
-    'info'
-  );
-};
+function extractFirstUrl(text) {
+  const match = (text || '').match(/https?:\/\/[^\s<>"']+/i);
+  return match ? match[0] : null;
+}
 
-window.toggleAiSettings = function () {
-  const panel = document.getElementById('ai-settings-panel');
-  if (!panel) return;
-  const isHidden = panel.style.display === 'none' || panel.style.display === '';
-  panel.style.display = isHidden ? 'flex' : 'none';
-};
+function formatTextWithLinks(rawText) {
+  const escaped = escapeHtml(rawText || '');
+  return escaped.replace(/(https?:\/\/[^\s<>"']+)/gi, (url) => {
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="inline-note-link">${url}</a>`;
+  });
+}
 
-window.saveGroqApiKey = function () {
-  const inputEl = document.getElementById('groq-api-key-input');
-  if (!inputEl) return;
+function buildLinkPreviewCard(url) {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    const domain = parsed.hostname.replace(/^www\./, '');
+    const iconName = detectSocialIcon(url);
+    const pathClean = decodeURIComponent(parsed.pathname).replace(/^\/|\/$/g, '').replace(/[-_]/g, ' ');
+    const displayTitle = pathClean ? `${domain} — ${pathClean}` : url;
 
-  const keyVal = inputEl.value.replace(/\s+/g, '').trim();
-
-  if (!keyVal) {
-    localStorage.removeItem(GROQ_KEY_STORAGE);
-    showToast('Groq API key cleared', 'info');
-  } else {
-    localStorage.setItem(GROQ_KEY_STORAGE, keyVal);
-    setElText('ai-model-subtitle', 'Groq • Full Auto');
-    showToast('Groq API key saved', 'success');
+    return `
+      <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="link-preview-card">
+        <div class="link-preview-icon">
+          <ion-icon name="${iconName}"></ion-icon>
+        </div>
+        <div class="link-preview-info">
+          <span class="link-preview-domain">${escapeHtml(domain)}</span>
+          <span class="link-preview-title">${escapeHtml(displayTitle)}</span>
+        </div>
+        <ion-icon name="open-outline" style="color: var(--light-gray-70); font-size: 16px; flex-shrink: 0;"></ion-icon>
+      </a>
+    `;
+  } catch (_) {
+    return '';
   }
-
-  const panel = document.getElementById('ai-settings-panel');
-  if (panel) panel.style.display = 'none';
-};
-
-function updateAiContextSidebar() {
-  setElText('ai-ctx-library-count', `${allMediaLogs.length} Library entries`);
-  setElText('ai-ctx-notes-count', `${allBlogPosts.length} Personal notes`);
 }
 
-function scrollAiToBottom() {
-  const listEl = document.getElementById('ai-messages-list');
-  if (listEl) listEl.scrollTop = listEl.scrollHeight;
-}
-
-function formatAiMarkdown(rawText) {
-  let text = escapeHtml(rawText || '');
-  text = text.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-  text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
-  text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  text = text.replace(/\n/g, '<br>');
-  return text;
-}
-
-async function fetchAiChatHistory() {
-  if (!isAdminLoggedIn) return;
-
+async function fetchBlogPosts() {
   const { data, error } = await supabaseClient
-    .from('ai_chat_history')
+    .from('blog_posts')
     .select('*')
-    .order('created_at', { ascending: true })
-    .limit(60);
+    .order('created_at', { ascending: false });
 
   if (error) {
-    console.warn('AI chat history fetch warning:', error.message);
+    const listEl = document.getElementById('blog-feed-list');
+    if (listEl) listEl.innerHTML = `<p class="empty-state">Failed to load posts: ${escapeHtml(error.message)}</p>`;
     return;
   }
 
-  aiChatMessages = data || [];
-  renderAiMessages();
+  allBlogPosts = data || [];
+  renderBlogPosts();
 }
 
-function renderAiMessages(showTyping = false) {
-  const listEl = document.getElementById('ai-messages-list');
+function renderBlogPosts() {
+  const listEl = document.getElementById('blog-feed-list');
   if (!listEl) return;
 
-  if (aiChatMessages.length === 0 && !showTyping) {
-    listEl.innerHTML = `
-      <div class="ai-empty-welcome">
-        <ion-icon name="sparkles-outline"></ion-icon>
-        <h4>Hello, Admin</h4>
-        <p>Token-saver mode is active. Turn on <strong>Read Database</strong> above when you want me to read your Library & Notes.</p>
-      </div>
-    `;
+  if (allBlogPosts.length === 0) {
+    listEl.innerHTML = `<p class="empty-state">No notes yet.</p>`;
     return;
   }
 
-  let html = aiChatMessages.map((msg, idx) => {
-    const isUser = msg.role === 'user';
-    const timeStr = msg.created_at
-      ? new Date(msg.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
-      : '';
+  const avatarSrc = normalizeImageUrl(currentProfile.avatar_url) || TRANSPARENT_PIXEL;
+  const authorName = escapeHtml(currentProfile.name || '');
 
-    const saveBtnHtml = !isUser ? `
-      <button type="button" class="ai-save-note-btn" onclick="saveAiReplyToNotes(${idx})" title="Publish this reply to Notes">
-        <ion-icon name="bookmark-outline"></ion-icon>
-        <span>Save to Notes</span>
-      </button>
+  listEl.innerHTML = allBlogPosts.map(post => {
+    const safePostId = escapeHtml(String(post.id));
+    const postImg = normalizeImageUrl(post.image_url);
+    const timeLabel = formatPostDateTime(post.created_at, post.updated_at);
+    const detectedUrl = extractFirstUrl(post.content);
+    const linkPreviewHtml = detectedUrl ? buildLinkPreviewCard(detectedUrl) : '';
+
+    const adminControls = isAdminLoggedIn ? `
+      <div class="blog-post-actions">
+        <button type="button" class="blog-icon-btn" onclick="openEditPostModal('${safePostId}')" title="Edit Post">
+          <ion-icon name="create-outline"></ion-icon>
+        </button>
+        <button type="button" class="blog-icon-btn delete" onclick="deleteBlogPost('${safePostId}')" title="Delete Post">
+          <ion-icon name="trash-outline"></ion-icon>
+        </button>
+      </div>
+    ` : '';
+
+    const imageBlock = postImg ? `
+      <div class="blog-post-image-wrap">
+        <img src="${postImg}" alt="Post attachment" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'">
+      </div>
     ` : '';
 
     return `
-      <div class="ai-msg-row ${isUser ? 'user' : 'model'}">
-        <div class="ai-msg-bubble">${isUser ? escapeHtml(msg.content).replace(/\n/g, '<br>') : formatAiMarkdown(msg.content)}</div>
-        <div class="ai-msg-footer">
-          <span>${timeStr}</span>
-          ${saveBtnHtml}
+      <article class="blog-post-card">
+        <div class="blog-post-header">
+          <div class="blog-post-author">
+            <img class="blog-post-avatar" src="${avatarSrc}" alt="" onerror="this.src='${TRANSPARENT_PIXEL}'">
+            <div class="blog-post-meta">
+              <span class="blog-post-name">${authorName}</span>
+              <span class="blog-post-time">${timeLabel}</span>
+            </div>
+          </div>
+          ${adminControls}
         </div>
-      </div>
+        <div class="blog-post-text">${formatTextWithLinks(post.content)}</div>
+        ${linkPreviewHtml}
+        ${imageBlock}
+      </article>
     `;
   }).join('');
-
-  if (showTyping) {
-    html += `
-      <div class="ai-msg-row model">
-        <div class="ai-msg-bubble">
-          <div class="ai-typing-dots"><span></span><span></span><span></span></div>
-        </div>
-      </div>
-    `;
-  }
-
-  listEl.innerHTML = html;
-  scrollAiToBottom();
 }
 
-function buildArchiveSystemContext() {
-  const adminName = currentProfile.name || 'Admin';
-
-  if (!isAiDbContextEnabled) {
-    return `You are a concise, helpful personal AI assistant for ${adminName}. Reply in the same language as the user.`;
-  }
-
-  const totalMedia = allMediaLogs.length;
-  const completedCount = allMediaLogs.filter(item => computeSyncedStatus(getAllItemUnits(item)).key === 'completed').length;
-
-  const mediaSummaryLines = allMediaLogs.slice(0, 40).map(item => {
-    const allUnits = getAllItemUnits(item);
-    const cats = getItemCategories(item).map(c => CATEGORY_LABELS[c] || c).join('/');
-    const synced = computeSyncedStatus(allUnits);
-    const r = (item.rating !== null && item.rating !== undefined) ? `${item.rating}/10` : '-';
-    return `${item.title} [${cats}|${synced.label}|${r}]`;
-  }).join('; ');
-
-  const notesSummaryLines = allBlogPosts.slice(0, 10).map(post => {
-    const cleanText = (post.content || '').replace(/\s+/g, ' ').slice(0, 120);
-    return `- ${cleanText}`;
-  }).join('\n');
-
-  return `You are ${adminName}'s personal AI assistant. Reply in the user's language.
-Archive Stats: ${totalMedia} total, ${completedCount} completed.
-Media (latest 40): ${mediaSummaryLines || 'None'}
-Notes (latest 10):
-${notesSummaryLines || 'None'}`;
-}
-
-window.handleAiInputKeydown = function (e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    const form = document.getElementById('ai-composer-form');
-    if (form) form.dispatchEvent(new Event('submit'));
-  }
+window.openPostModal = function () {
+  pendingUploadedUrls = [];
+  document.getElementById('post-modal-title').textContent = 'New Post';
+  document.getElementById('post-form').reset();
+  document.getElementById('post-id').value = '';
+  setElText('post-upload-status', '');
+  document.getElementById('post-modal').classList.add('active');
 };
 
-window.triggerQuickPrompt = function (promptText, forceReadDb = false) {
-  if (forceReadDb && !isAiDbContextEnabled) {
-    isAiDbContextEnabled = true;
-    syncAiDbToggleUI();
-  }
-  const inputEl = document.getElementById('ai-prompt-input');
-  if (!inputEl) return;
-  inputEl.value = promptText;
-  sendAiMessage(promptText);
+window.openEditPostModal = function (id) {
+  const post = allBlogPosts.find(p => String(p.id) === String(id));
+  if (!post) return;
+
+  pendingUploadedUrls = [];
+  document.getElementById('post-modal-title').textContent = 'Edit Post';
+  document.getElementById('post-id').value = post.id;
+  document.getElementById('post-content').value = post.content || '';
+  document.getElementById('post-image').value = post.image_url || '';
+  setElText('post-upload-status', '');
+  document.getElementById('post-modal').classList.add('active');
 };
 
-window.handleAiFormSubmit = function (e) {
-  e.preventDefault();
-  const inputEl = document.getElementById('ai-prompt-input');
-  if (!inputEl) return;
-  const text = inputEl.value.trim();
-  if (!text || isAiSending) return;
-  inputEl.value = '';
-  sendAiMessage(text);
+window.closePostModal = async function () {
+  document.getElementById('post-modal').classList.remove('active');
+  await cleanupPendingUploads([]);
 };
 
-async function sendGroqFullAuto(apiKey, messagesPayload) {
-  const orderedModels = [];
-  for (let i = 0; i < GROQ_AUTO_POOL.length; i++) {
-    orderedModels.push(GROQ_AUTO_POOL[(groqPoolCursor + i) % GROQ_AUTO_POOL.length]);
-  }
-  groqPoolCursor = (groqPoolCursor + 1) % GROQ_AUTO_POOL.length;
+window.clearPostImageInput = function () {
+  document.getElementById('post-image').value = '';
+  setElText('post-upload-status', 'Photo removed (click Publish to save).');
+};
 
-  let lastErrorMsg = 'All Groq models are currently busy or rate-limited.';
+window.handlePostImageUpload = async function (event) {
+  const file = event.target.files ? event.target.files[0] : null;
+  event.target.value = '';
+  if (!file) return;
 
-  for (const modelId of orderedModels) {
-    try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: modelId,
-          messages: messagesPayload,
-          temperature: 0.7,
-          max_tokens: 900
-        })
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (response.ok) {
-        setElText('ai-model-subtitle', `Groq • Auto (${modelId})`);
-        return data?.choices?.[0]?.message?.content || 'No response received.';
-      }
-
-      lastErrorMsg = data?.error?.message || `Error ${response.status}`;
-
-      if (response.status === 401) {
-        throw new Error(lastErrorMsg);
-      }
-
-      continue;
-    } catch (networkErr) {
-      if (networkErr.message.toLowerCase().includes('invalid api key')) {
-        throw networkErr;
-      }
-      lastErrorMsg = networkErr.message;
-      continue;
-    }
-  }
-
-  throw new Error(lastErrorMsg);
-}
-
-async function sendAiMessage(userText) {
-  if (!isAdminLoggedIn) return;
-
-  const apiKey = (localStorage.getItem(GROQ_KEY_STORAGE) || '').replace(/\s+/g, '').trim();
-  if (!apiKey) {
-    const panel = document.getElementById('ai-settings-panel');
-    if (panel) panel.style.display = 'flex';
-    showToast('Please enter your Groq API Key first', 'info');
-    return;
-  }
-
-  isAiSending = true;
-  const sendBtn = document.getElementById('btn-send-ai');
-  if (sendBtn) sendBtn.disabled = true;
-
-  const nowIso = new Date().toISOString();
-  const userMsg = { role: 'user', content: userText, created_at: nowIso };
-  aiChatMessages.push(userMsg);
-  renderAiMessages(true);
-
-  await supabaseClient.from('ai_chat_history').insert([{
-    role: 'user',
-    content: userText,
-    created_at: nowIso
-  }]);
-
+  setElText('post-upload-status', 'Uploading photo...');
   try {
-    const recentHistory = aiChatMessages.slice(-4).map(m => ({
-      role: m.role === 'user' ? 'user' : 'assistant',
-      content: (m.content || '').slice(0, 800)
-    }));
-
-    const messagesPayload = [
-      { role: 'system', content: buildArchiveSystemContext() },
-      ...recentHistory
-    ];
-
-    const aiReplyText = await sendGroqFullAuto(apiKey, messagesPayload);
-    const replyIso = new Date().toISOString();
-
-    aiChatMessages.push({
-      role: 'model',
-      content: aiReplyText,
-      created_at: replyIso
-    });
-
-    await supabaseClient.from('ai_chat_history').insert([{
-      role: 'model',
-      content: aiReplyText,
-      created_at: replyIso
-    }]);
-
+    const publicUrl = await uploadImageToSupabase(file, 'posts');
+    document.getElementById('post-image').value = publicUrl;
+    setElText('post-upload-status', 'Photo uploaded!');
+    showToast('Photo uploaded', 'success');
   } catch (err) {
-    console.error('Groq AI error:', err);
-    showToast(err.message, 'error', 4000);
-    aiChatMessages.push({
-      role: 'model',
-      content: `⚠️ Error: ${err.message}`,
-      created_at: new Date().toISOString()
-    });
-  } finally {
-    isAiSending = false;
-    if (sendBtn) sendBtn.disabled = false;
-    renderAiMessages(false);
-  }
-}
-
-window.saveAiReplyToNotes = async function (msgIndex) {
-  if (!isAdminLoggedIn) return;
-  const msg = aiChatMessages[msgIndex];
-  if (!msg || !msg.content) return;
-
-  const nowIso = new Date().toISOString();
-  const { error } = await supabaseClient.from('blog_posts').insert([{
-    content: msg.content,
-    image_url: null,
-    created_at: nowIso,
-    updated_at: nowIso
-  }]);
-
-  if (error) {
-    showToast(error.message, 'error');
-  } else {
-    await fetchBlogPosts();
-    showToast('Saved to Personal Notes', 'success');
+    setElText('post-upload-status', `Upload failed: ${err.message}`);
+    showToast(err.message, 'error');
   }
 };
 
-window.clearAiChatHistory = async function () {
-  if (!isAdminLoggedIn) return;
+const postForm = document.getElementById('post-form');
+if (postForm) {
+  postForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const id = document.getElementById('post-id').value;
+    const existingPost = id ? allBlogPosts.find(p => String(p.id) === String(id)) : null;
+    const oldImage = existingPost ? existingPost.image_url : null;
+    const newImage = normalizeImageUrl(document.getElementById('post-image').value) || null;
+    const contentVal = document.getElementById('post-content').value.trim();
+
+    if (!contentVal) return;
+
+    const nowIso = new Date().toISOString();
+    const payload = {
+      content: contentVal,
+      image_url: newImage,
+      updated_at: nowIso
+    };
+
+    let error;
+    if (id) {
+      ({ error } = await supabaseClient.from('blog_posts').update(payload).eq('id', id));
+    } else {
+      payload.created_at = nowIso;
+      ({ error } = await supabaseClient.from('blog_posts').insert([payload]));
+    }
+
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      await cleanupPendingUploads([newImage]);
+      if (oldImage && oldImage !== newImage) {
+        await deleteOldStorageFile(oldImage);
+      }
+      document.getElementById('post-modal').classList.remove('active');
+      await fetchBlogPosts();
+      showToast(id ? 'Post updated' : 'Post published', 'success');
+    }
+  });
+}
+
+window.deleteBlogPost = async function (id) {
+  const existingPost = allBlogPosts.find(p => String(p.id) === String(id));
 
   const confirm = await Swal.fire({
-    text: 'Clear all AI chat history?',
+    text: 'Delete this post permanently?',
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#ff5f5f',
-    confirmButtonText: 'Clear',
+    confirmButtonText: 'Delete',
     cancelButtonText: 'Cancel',
     background: '#1e1e1f',
     color: '#fff'
   });
 
-  if (!confirm.isConfirmed) return;
-
-  const { error } = await supabaseClient
-    .from('ai_chat_history')
-    .delete()
-    .neq('id', '00000000-0000-0000-0000-000000000000');
-
-  if (error) {
-    showToast(error.message, 'error');
-  } else {
-    aiChatMessages = [];
-    renderAiMessages(false);
-    showToast('Chat history cleared', 'info');
+  if (confirm.isConfirmed) {
+    const { error } = await supabaseClient.from('blog_posts').delete().eq('id', id);
+    if (error) {
+      showToast(error.message, 'error');
+    } else {
+      if (existingPost && existingPost.image_url) {
+        await deleteOldStorageFile(existingPost.image_url);
+      }
+      await fetchBlogPosts();
+      showToast('Post deleted', 'info');
+    }
   }
 };
