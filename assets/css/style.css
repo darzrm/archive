@@ -714,6 +714,13 @@ button {
   }
 }
 
+.main-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
 .minimal-add-btn {
   display: inline-flex;
   align-items: center;
@@ -737,6 +744,11 @@ button {
   background: rgba(255, 255, 255, 0.12);
   border-color: var(--white-1);
   transform: translateY(-1px);
+}
+
+.minimal-add-btn.is-private {
+  border-color: rgba(255, 212, 59, 0.45);
+  color: var(--status-planned);
 }
 
 .category-tabs {
@@ -1022,13 +1034,6 @@ button {
   gap: 4px;
 }
 
-.multi-progress-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  justify-content: flex-end;
-}
-
 .status-pill,
 .progress-pill {
   display: inline-flex;
@@ -1074,11 +1079,6 @@ button {
   border-color: rgba(255, 135, 135, 0.35);
 }
 
-.status-pill.mixed {
-  color: var(--white-1);
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
 .progress-track {
   width: 100%;
   height: 4px;
@@ -1113,10 +1113,6 @@ button {
 
 .progress-fill.dropped {
   background: var(--status-dropped);
-}
-
-.progress-fill.mixed {
-  background: linear-gradient(90deg, var(--status-completed), var(--status-ongoing));
 }
 
 .media-footer-row {
