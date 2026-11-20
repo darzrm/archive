@@ -156,7 +156,6 @@ window.toggleToolbarPopover = function (type) {
   closeAllToolbarPopovers();
 
   if (willOpen && menuEl && btnEl) {
-    // Reset inline style agar mengikuti rule CSS (Mobile <= 680px: left 0 | Desktop > 680px: right 0)
     menuEl.style.left = '';
     menuEl.style.right = '';
     menuEl.classList.add('open');
@@ -168,16 +167,12 @@ window.toggleToolbarPopover = function (type) {
     const btnRect = btnEl.getBoundingClientRect();
 
     if (isMobileLayout) {
-      // Mode Mobile: Default rata kiri (membuka ke kanan)
-      // Jika menu melewati tepi kanan layar, geser ke kiri secukupnya
       if (rect.right > viewportWidth - 14) {
         const overflowRight = rect.right - (viewportWidth - 14);
         const safeShift = Math.min(overflowRight, Math.max(0, btnRect.left - 14));
         menuEl.style.left = `-${safeShift}px`;
       }
     } else {
-      // Mode Desktop/Laptop: Default rata kanan (membuka ke kiri)
-      // Jika posisi tombol agak ke tengah sehingga menu melewati tepi kiri, geser ke kanan secukupnya
       if (rect.left < 14) {
         const overflowLeft = 14 - rect.left;
         menuEl.style.right = `-${overflowLeft}px`;
@@ -197,13 +192,11 @@ window.switchMainView = function (viewName) {
 
   currentMainView = viewName;
 
-  document.querySelectorAll('.main-view-btn').forEach(btn => {
+  document.querySelectorAll('.bottom-nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === viewName);
   });
 
-  document.querySelectorAll('.mini-tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.view === viewName);
-  });
+  setElText('sticky-active-view-badge', viewName === 'library' ? 'Library' : 'Notes');
 
   const libView = document.getElementById('view-library');
   const blogView = document.getElementById('view-blog');
@@ -232,12 +225,10 @@ function updateLibraryTabVisibility() {
   const isPrivate = Boolean(currentProfile.is_library_private);
   const canViewLibrary = !isPrivate || isAdminLoggedIn;
 
-  const mainLibBtn = document.getElementById('main-tab-library');
-  const miniLibBtn = document.getElementById('mini-tab-library');
+  const bottomLibBtn = document.getElementById('bottom-tab-library');
   const lockBadge = document.getElementById('library-private-lock');
 
-  if (mainLibBtn) mainLibBtn.style.display = canViewLibrary ? 'inline-flex' : 'none';
-  if (miniLibBtn) miniLibBtn.style.display = canViewLibrary ? 'inline-flex' : 'none';
+  if (bottomLibBtn) bottomLibBtn.style.display = canViewLibrary ? 'inline-flex' : 'none';
   if (lockBadge) lockBadge.style.display = (isPrivate && isAdminLoggedIn) ? 'inline-block' : 'none';
 
   if (!canViewLibrary && currentMainView === 'library') {
@@ -245,32 +236,13 @@ function updateLibraryTabVisibility() {
   }
 }
 
-window.toggleLibraryPrivacy = async function () {
+window.handleCenterActionClick = function () {
   if (!isAdminLoggedIn) return;
-
-  const nextState = !currentProfile.is_library_private;
-  const { error } = await supabaseClient
-    .from('profile_settings')
-    .upsert([{
-      id: 1,
-      name: currentProfile.name,
-      bio: currentProfile.bio,
-      avatar_url: currentProfile.avatar_url,
-      banner_url: currentProfile.banner_url,
-      social_links: currentProfile.social_links,
-      is_library_private: nextState,
-      updated_at: new Date().toISOString()
-    }]);
-
-  if (error) {
-    showToast(error.message, 'error');
-    return;
+  if (currentMainView === 'library') {
+    openMediaModal();
+  } else {
+    openPostModal();
   }
-
-  currentProfile.is_library_private = nextState;
-  updateLibraryTabVisibility();
-  updateAdminActionButtons();
-  showToast(nextState ? 'Library set to Private' : 'Library set to Public', 'info');
 };
 
 window.setLibraryViewMode = function (mode) {
@@ -322,30 +294,24 @@ window.toggleLibraryStats = function () {
 };
 
 function updateAdminActionButtons() {
-  const addMediaBtn = document.getElementById('btn-add-media');
-  const addPostBtn = document.getElementById('btn-add-post');
-  const privacyBtn = document.getElementById('btn-toggle-library-privacy');
-  const privacyIcon = document.getElementById('library-privacy-icon');
-  const privacyText = document.getElementById('library-privacy-text');
+  const centerActionBtn = document.getElementById('btn-center-action');
+  const centerActionIcon = document.getElementById('center-action-icon');
+
+  if (!centerActionBtn) return;
 
   if (!isAdminLoggedIn) {
-    if (addMediaBtn) addMediaBtn.style.display = 'none';
-    if (addPostBtn) addPostBtn.style.display = 'none';
-    if (privacyBtn) privacyBtn.style.display = 'none';
+    centerActionBtn.style.display = 'none';
     return;
   }
 
+  centerActionBtn.style.display = 'inline-flex';
   const inLibrary = currentMainView === 'library';
 
-  if (privacyBtn) {
-    privacyBtn.style.display = inLibrary ? 'inline-flex' : 'none';
-    const isPriv = Boolean(currentProfile.is_library_private);
-    if (privacyIcon) privacyIcon.setAttribute('name', isPriv ? 'eye-off-outline' : 'eye-outline');
-    if (privacyText) privacyText.textContent = isPriv ? 'Private' : 'Public';
+  if (centerActionIcon) {
+    centerActionIcon.setAttribute('name', inLibrary ? 'add-outline' : 'create-outline');
   }
-
-  if (addMediaBtn) addMediaBtn.style.display = inLibrary ? 'inline-flex' : 'none';
-  if (addPostBtn) addPostBtn.style.display = currentMainView === 'blog' ? 'inline-flex' : 'none';
+  centerActionBtn.title = inLibrary ? 'Add Media' : 'New Post';
+  centerActionBtn.setAttribute('aria-label', inLibrary ? 'Add Media' : 'New Post');
 }
 
 async function checkAdminSession() {
@@ -650,6 +616,12 @@ window.openProfileModal = function () {
   document.getElementById('edit-profile-bio').value = currentProfile.bio;
   document.getElementById('edit-profile-avatar').value = currentProfile.avatar_url;
   document.getElementById('edit-profile-banner').value = currentProfile.banner_url;
+
+  const privateCheckbox = document.getElementById('edit-library-private');
+  if (privateCheckbox) {
+    privateCheckbox.checked = Boolean(currentProfile.is_library_private);
+  }
+
   setElText('profile-upload-status', '');
   setElText('banner-upload-status', '');
 
@@ -671,7 +643,7 @@ window.closeProfileModal = async function () {
 
 window.clearBannerInput = function () {
   document.getElementById('edit-profile-banner').value = '';
-  setElText('banner-upload-status', 'Banner removed (click Save Profile).');
+  setElText('banner-upload-status', 'Banner removed (click Save Settings).');
 };
 
 window.handleBannerImageUpload = async function (event) {
@@ -683,7 +655,7 @@ window.handleBannerImageUpload = async function (event) {
   try {
     const publicUrl = await uploadImageToSupabase(file, 'banners');
     document.getElementById('edit-profile-banner').value = publicUrl;
-    setElText('banner-upload-status', 'Banner uploaded! Click Save Profile.');
+    setElText('banner-upload-status', 'Banner uploaded! Click Save Settings.');
     showToast('Banner uploaded', 'success');
   } catch (err) {
     setElText('banner-upload-status', `Upload failed: ${err.message}`);
@@ -700,7 +672,7 @@ window.handleProfileImageUpload = async function (event) {
   try {
     const publicUrl = await uploadImageToSupabase(file, 'avatars');
     document.getElementById('edit-profile-avatar').value = publicUrl;
-    setElText('profile-upload-status', 'Avatar uploaded! Click Save Profile.');
+    setElText('profile-upload-status', 'Avatar uploaded! Click Save Settings.');
     showToast('Avatar uploaded', 'success');
   } catch (err) {
     setElText('profile-upload-status', `Upload failed: ${err.message}`);
@@ -717,6 +689,7 @@ if (profileForm) {
     const oldBanner = currentProfile.banner_url;
     const newAvatar = document.getElementById('edit-profile-avatar').value.trim();
     const newBanner = document.getElementById('edit-profile-banner').value.trim();
+    const isPrivate = Boolean(document.getElementById('edit-library-private')?.checked);
 
     const socialRows = document.querySelectorAll('#social-links-editor .social-edit-row');
     const collectedLinks = [];
@@ -737,7 +710,7 @@ if (profileForm) {
       avatar_url: newAvatar,
       banner_url: newBanner,
       social_links: collectedLinks,
-      is_library_private: Boolean(currentProfile.is_library_private),
+      is_library_private: isPrivate,
       updated_at: new Date().toISOString()
     };
 
@@ -758,7 +731,7 @@ if (profileForm) {
       currentProfile = updatedProfile;
       applyProfileToUI();
       document.getElementById('profile-modal').classList.remove('active');
-      showToast('Profile updated', 'success');
+      showToast('Settings saved', 'success');
     }
   });
 }
