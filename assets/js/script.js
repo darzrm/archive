@@ -156,24 +156,31 @@ window.toggleToolbarPopover = function (type) {
   closeAllToolbarPopovers();
 
   if (willOpen && menuEl && btnEl) {
-    // Reset alignment ke arah kanan (left: 0) terlebih dahulu
-    menuEl.classList.remove('align-right');
+    // Reset inline style agar mengikuti rule CSS (Mobile <= 680px: left 0 | Desktop > 680px: right 0)
     menuEl.style.left = '';
     menuEl.style.right = '';
     menuEl.classList.add('open');
     btnEl.classList.add('active');
 
-    // Pastikan menu tidak pernah terpotong kanan/kiri viewport layar
-    const rect = menuEl.getBoundingClientRect();
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-    if (rect.right > viewportWidth - 14) {
-      const overflowRight = rect.right - (viewportWidth - 14);
-      const btnRect = btnEl.getBoundingClientRect();
-      // Jika digeser ke kiri masih aman dari tepi kiri layar, geser secukupnya
-      if (btnRect.left - overflowRight >= 14) {
-        menuEl.style.left = `-${overflowRight}px`;
-      } else {
-        menuEl.style.left = `-${Math.max(0, btnRect.left - 14)}px`;
+    const isMobileLayout = viewportWidth <= 680;
+    const rect = menuEl.getBoundingClientRect();
+    const btnRect = btnEl.getBoundingClientRect();
+
+    if (isMobileLayout) {
+      // Mode Mobile: Default rata kiri (membuka ke kanan)
+      // Jika menu melewati tepi kanan layar, geser ke kiri secukupnya
+      if (rect.right > viewportWidth - 14) {
+        const overflowRight = rect.right - (viewportWidth - 14);
+        const safeShift = Math.min(overflowRight, Math.max(0, btnRect.left - 14));
+        menuEl.style.left = `-${safeShift}px`;
+      }
+    } else {
+      // Mode Desktop/Laptop: Default rata kanan (membuka ke kiri)
+      // Jika posisi tombol agak ke tengah sehingga menu melewati tepi kiri, geser ke kanan secukupnya
+      if (rect.left < 14) {
+        const overflowLeft = 14 - rect.left;
+        menuEl.style.right = `-${overflowLeft}px`;
       }
     }
   }
