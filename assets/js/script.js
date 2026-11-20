@@ -2595,15 +2595,20 @@ window.deleteBlogPost = async function (id) {
   }
 };
 
+
 // ==========================================
-// 8. ADMIN AI WORKSPACE (GROQ + DATABASE CONTEXT)
+// 8. ADMIN AI WORKSPACE (GROQ + AUTO MODEL FALLBACK)
 // ==========================================
+const GROQ_MODEL_STORAGE = 'archive_groq_model';
+
 function initGroqKeyInput() {
   const savedKey = localStorage.getItem(GROQ_KEY_STORAGE) || '';
+  const savedModel = localStorage.getItem(GROQ_MODEL_STORAGE) || 'auto';
   const inputEl = document.getElementById('groq-api-key-input');
-  if (inputEl && savedKey) {
-    inputEl.value = savedKey;
-  }
+  const selectEl = document.getElementById('groq-model-select');
+  if (inputEl && savedKey) inputEl.value = savedKey;
+  if (selectEl) selectEl.value = savedModel;
+  setElText('ai-model-subtitle', `Groq • ${savedModel === 'auto' ? 'Auto Model' : savedModel}`);
 }
 
 window.toggleAiSettings = function () {
@@ -2615,15 +2620,20 @@ window.toggleAiSettings = function () {
 
 window.saveGroqApiKey = function () {
   const inputEl = document.getElementById('groq-api-key-input');
+  const selectEl = document.getElementById('groq-model-select');
   if (!inputEl) return;
+
   const keyVal = inputEl.value.trim();
+  const modelVal = selectEl ? selectEl.value : 'auto';
 
   if (!keyVal) {
     localStorage.removeItem(GROQ_KEY_STORAGE);
     showToast('Groq API key cleared', 'info');
   } else {
     localStorage.setItem(GROQ_KEY_STORAGE, keyVal);
-    showToast('Groq API key saved locally', 'success');
+    localStorage.setItem(GROQ_MODEL_STORAGE, modelVal);
+    setElText('ai-model-subtitle', `Groq • ${modelVal === 'auto' ? 'Auto Model' : modelVal}`);
+    showToast('Groq settings saved', 'success');
   }
 
   const panel = document.getElementById('ai-settings-panel');
@@ -2637,9 +2647,7 @@ function updateAiContextSidebar() {
 
 function scrollAiToBottom() {
   const listEl = document.getElementById('ai-messages-list');
-  if (listEl) {
-    listEl.scrollTop = listEl.scrollHeight;
-  }
+  if (listEl) listEl.scrollTop = listEl.scrollHeight;
 }
 
 function formatAiMarkdown(rawText) {
@@ -2743,7 +2751,7 @@ function buildArchiveSystemContext() {
   }).join('\n');
 
   return `You are a helpful, intelligent personal AI assistant integrated into ${adminName}'s private Archive website.
-Always communicate strictly in natural, fluent English.
+Always communicate strictly in natural, fluent English unless the user explicitly writes in another language.
 You can assist with everyday tasks, brainstorming, coding, planning, and answering questions about the user's Supabase archive database below.
 
 === LIVE DATABASE SNAPSHOT ===
@@ -2755,9 +2763,7 @@ MEDIA LIBRARY ENTRIES:
 ${mediaSummaryLines || '(No media entries yet)'}
 
 RECENT PERSONAL NOTES:
-${notesSummaryLines || '(No personal notes yet)'}
-
-When answering questions about the user's library or notes, cite exact titles, ratings, and statuses from the snapshot above accurately.`;
+${notesSummaryLines || '(No personal notes yet)'}`;
 }
 
 window.handleAiInputKeydown = function (e) {
@@ -2785,10 +2791,46 @@ window.handleAiFormSubmit = function (e) {
   sendAiMessage(text);
 };
 
+async function resolveActiveGroqModel(apiKey, preferredModel) {
+  if (preferredModel && preferredModel !== 'auto') {
+    return preferredModel;
+  }
+
+  const res = await fetch('https://api.groq.com/openai/v1/models', {
+    headers: { 'Authorization': `Bearer ${apiKey}` }
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.error?.message || 'Invalid Groq API Key');
+  }
+
+  const data = await res.json();
+  const availableIds = (data.data || [])
+    .map(m => m.id)
+    .filter(id => !id.includes('whisper') && !id.includes('guard') && !id.includes('tts') && !id.includes('safeguard'));
+
+  const priorityOrder = [
+    'llama-3.3-70b-versatile',
+    'llama-3.1-8b-instant',
+    'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    'qwen/qwen3-32b',
+    'gemma2-9b-it'
+  ];
+
+  for (const candidate of priorityOrder) {
+    if (availableIds.includes(candidate)) return candidate;
+  }
+
+  if (availableIds.length > 0) return availableIds[0];
+  throw new Error('No active text generation models available on your Groq account.');
+}
+
 async function sendAiMessage(userText) {
   if (!isAdminLoggedIn) return;
 
-  const apiKey = localStorage.getItem(GROQ_KEY_STORAGE) || '';
+  const apiKey = (localStorage.getItem(GROQ_KEY_STORAGE) || '').trim();
   if (!apiKey) {
     const panel = document.getElementById('ai-settings-panel');
     if (panel) panel.style.display = 'flex';
@@ -2812,6 +2854,10 @@ async function sendAiMessage(userText) {
   }]);
 
   try {
+    const preferredModel = localStorage.getItem(GROQ_MODEL_STORAGE) || 'auto';
+    const activeModel = await resolveActiveGroqModel(apiKey, preferredModel);
+    setElText('ai-model-subtitle', `Groq • ${activeModel}`);
+
     const recentHistory = aiChatMessages.slice(-16).map(m => ({
       role: m.role === 'user' ? 'user' : 'assistant',
       content: m.content
@@ -2824,7 +2870,7 @@ async function sendAiMessage(userText) {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: GROQ_MODEL,
+        model: activeModel,
         messages: [
           { role: 'system', content: buildArchiveSystemContext() },
           ...recentHistory
