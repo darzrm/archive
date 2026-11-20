@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=303">
+  <link rel="stylesheet" href="./assets/css/style.css?v=305">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -63,7 +63,7 @@
           </div>
 
           <div class="header-actions">
-            <button type="button" id="btn-edit-profile" class="header-pill-btn" style="display: none;" onclick="openProfileModal()">
+            <button type="button" id="btn-edit-profile" class="header-pill-btn" style="display: none;" onclick="openSettingsRoot()">
               <ion-icon name="settings-outline"></ion-icon>
               <span>Settings</span>
             </button>
@@ -441,15 +441,20 @@
   <div class="modal-overlay" id="media-modal">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 id="media-modal-title">Add Media</h3>
+        <div class="modal-title-group">
+          <div class="modal-icon-badge">
+            <ion-icon name="albums-outline"></ion-icon>
+          </div>
+          <h3 id="media-modal-title">Add Media</h3>
+        </div>
         <button type="button" class="close-modal-btn" onclick="closeMediaModal()">&times;</button>
       </div>
 
       <!-- Auto Search API Helper -->
       <div class="api-search-section">
-        <label class="form-label">Auto-Fill Metadata (Optional)</label>
+        <label class="form-label">Auto-Fill Metadata</label>
         <div class="api-search-bar">
-          <select id="api-search-cat" class="form-input" style="max-width: 120px;">
+          <select id="api-search-cat" class="form-input" style="max-width: 115px;">
             <option value="tv_show">TV Show</option>
             <option value="movie">Movie</option>
             <option value="comic">Comic</option>
@@ -472,15 +477,17 @@
         </div>
 
         <div class="form-group">
-          <label>Cover Image (Upload or Paste URL)</label>
-          <div class="upload-input-row">
-            <input type="url" id="media-cover" class="form-input" placeholder="https://...">
-            <label class="file-upload-btn" title="Upload image from device">
+          <label>Cover Image</label>
+          <div class="clean-upload-card">
+            <label class="clean-upload-trigger" title="Upload cover from device">
               <ion-icon name="cloud-upload-outline"></ion-icon>
-              <span>Upload</span>
+              <span>Upload Cover Image</span>
               <input type="file" id="media-cover-file" accept="image/*" hidden onchange="handleMediaCoverUpload(event)">
             </label>
+            <span class="upload-badge-ok" id="media-cover-ready" style="display: none;">Image Ready</span>
           </div>
+          <!-- Hidden URL input kept for API auto-fill & database storage -->
+          <input type="url" id="media-cover" class="form-input url-fallback-input" placeholder="https://...">
           <span class="upload-status-text" id="cover-upload-status"></span>
         </div>
 
@@ -495,10 +502,10 @@
           <div id="media-tracks-editor" class="tracks-editor-list"></div>
         </div>
 
-        <!-- OPTIONAL ADDITIONAL ENTRIES / PARTS (OVA, SEASON, SEQUEL, ETC.) -->
+        <!-- OPTIONAL ADDITIONAL ENTRIES / PARTS -->
         <div class="form-group">
           <div class="social-editor-header">
-            <label style="margin: 0;">Additional Entries / Parts (OVA, Season, Sequel)</label>
+            <label style="margin: 0;">Additional Entries / Parts</label>
             <button type="button" class="add-social-btn" onclick="addSeasonItemRow()">
               <ion-icon name="add-outline"></ion-icon> Add Entry
             </button>
@@ -535,7 +542,12 @@
   <div class="modal-overlay" id="media-detail-modal">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 id="detail-modal-title">Media Details</h3>
+        <div class="modal-title-group">
+          <div class="modal-icon-badge">
+            <ion-icon name="information-circle-outline"></ion-icon>
+          </div>
+          <h3 id="detail-modal-title">Media Details</h3>
+        </div>
         <button type="button" class="close-modal-btn" onclick="closeMediaDetailModal()">&times;</button>
       </div>
       <div id="media-detail-body" class="detail-modal-body"></div>
@@ -548,7 +560,12 @@
   <div class="modal-overlay" id="post-modal">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 id="post-modal-title">New Post</h3>
+        <div class="modal-title-group">
+          <div class="modal-icon-badge">
+            <ion-icon name="create-outline"></ion-icon>
+          </div>
+          <h3 id="post-modal-title">New Post</h3>
+        </div>
         <button type="button" class="close-modal-btn" onclick="closePostModal()">&times;</button>
       </div>
 
@@ -561,18 +578,18 @@
         </div>
 
         <div class="form-group">
-          <label>Attach Photo (Optional)</label>
-          <div class="upload-input-row">
-            <input type="url" id="post-image" class="form-input" placeholder="https://... or upload photo">
-            <label class="file-upload-btn" title="Upload photo from device">
+          <label>Attachment (Optional)</label>
+          <div class="clean-upload-card">
+            <label class="clean-upload-trigger" title="Upload photo from device">
               <ion-icon name="image-outline"></ion-icon>
-              <span>Photo</span>
+              <span>Upload Photo</span>
               <input type="file" id="post-image-file" accept="image/*" hidden onchange="handlePostImageUpload(event)">
             </label>
-            <button type="button" class="file-upload-btn" onclick="clearPostImageInput()" title="Remove photo">
+            <button type="button" class="clean-clear-btn" onclick="clearPostImageInput()" title="Remove photo">
               <ion-icon name="trash-outline"></ion-icon>
             </button>
           </div>
+          <input type="url" id="post-image" class="form-input url-fallback-input" placeholder="https://...">
           <span class="upload-status-text" id="post-upload-status"></span>
         </div>
 
@@ -584,81 +601,130 @@
   </div>
 
   <!-- ========================================== -->
-  <!-- MODAL 3: SETTINGS (PROFILE & PRIVACY)      -->
+  <!-- MODAL 3: SETTINGS (MULTI-STEP: ROOT > PROFILE) -->
   <!-- ========================================== -->
   <div class="modal-overlay" id="profile-modal">
     <div class="modal-box">
       <div class="modal-header">
-        <h3>Settings</h3>
+        <div class="modal-title-group">
+          <button type="button" id="btn-settings-back" class="modal-back-btn" style="display: none;" onclick="navigateSettingsStep('root')" title="Back to Settings">
+            <ion-icon name="arrow-back-outline"></ion-icon>
+          </button>
+          <div class="modal-icon-badge" id="settings-header-icon">
+            <ion-icon name="settings-outline"></ion-icon>
+          </div>
+          <h3 id="settings-modal-title">Settings</h3>
+        </div>
         <button type="button" class="close-modal-btn" onclick="closeProfileModal()">&times;</button>
       </div>
 
       <form id="profile-form" class="modal-form">
-        <div class="form-group">
-          <label>Display Name *</label>
-          <input type="text" id="edit-profile-name" class="form-input" required>
-        </div>
 
-        <div class="form-group">
-          <label>Bio / Subtitle</label>
-          <input type="text" id="edit-profile-bio" class="form-input">
-        </div>
-
-        <div class="form-group">
-          <label>Profile Avatar</label>
-          <div class="upload-input-row">
-            <input type="url" id="edit-profile-avatar" class="form-input" placeholder="https://... or upload image">
-            <label class="file-upload-btn" title="Upload avatar from device">
-              <ion-icon name="cloud-upload-outline"></ion-icon>
-              <span>Upload</span>
-              <input type="file" id="profile-avatar-file" accept="image/*" hidden onchange="handleProfileImageUpload(event)">
-            </label>
-          </div>
-          <span class="upload-status-text" id="profile-upload-status"></span>
-        </div>
-
-        <div class="form-group">
-          <label>Header Banner (Optional)</label>
-          <div class="upload-input-row">
-            <input type="url" id="edit-profile-banner" class="form-input" placeholder="Leave empty to hide banner">
-            <label class="file-upload-btn" title="Upload banner from device">
-              <ion-icon name="image-outline"></ion-icon>
-              <span>Upload</span>
-              <input type="file" id="profile-banner-file" accept="image/*" hidden onchange="handleBannerImageUpload(event)">
-            </label>
-            <button type="button" class="file-upload-btn" onclick="clearBannerInput()" title="Remove banner">
-              <ion-icon name="trash-outline"></ion-icon>
-            </button>
-          </div>
-          <span class="upload-status-text" id="banner-upload-status"></span>
-        </div>
-
-        <!-- Library Visibility Setting -->
-        <div class="settings-card-row">
-          <div class="settings-card-info">
-            <div class="settings-card-title">
-              <ion-icon name="eye-off-outline"></ion-icon>
-              <span>Private Library</span>
+        <!-- STEP 1: SETTINGS MENU (ROOT) -->
+        <div id="settings-step-root" class="settings-step-panel">
+          <button type="button" class="settings-nav-item" onclick="navigateSettingsStep('profile')">
+            <div class="settings-nav-left">
+              <div class="settings-nav-icon">
+                <ion-icon name="person-outline"></ion-icon>
+              </div>
+              <div class="settings-nav-text">
+                <span class="settings-nav-title">Profile</span>
+                <span class="settings-nav-sub">Edit display name, bio, avatar, banner & social links</span>
+              </div>
             </div>
-            <p class="settings-card-desc">Hide Library tab from public visitors (visible only when logged in as Admin).</p>
+            <ion-icon name="chevron-forward-outline" class="settings-chevron"></ion-icon>
+          </button>
+
+          <!-- Library Visibility Setting -->
+          <div class="settings-card-row">
+            <div class="settings-card-info">
+              <div class="settings-card-title">
+                <ion-icon name="eye-off-outline"></ion-icon>
+                <span>Private Library</span>
+              </div>
+              <p class="settings-card-desc">Hide Library tab from public visitors (visible only when logged in as Admin).</p>
+            </div>
+            <label class="toggle-switch" aria-label="Toggle Private Library">
+              <input type="checkbox" id="edit-library-private">
+              <span class="toggle-slider"></span>
+            </label>
           </div>
-          <label class="toggle-switch" aria-label="Toggle Private Library">
-            <input type="checkbox" id="edit-library-private">
-            <span class="toggle-slider"></span>
-          </label>
+
+          <!-- Toggle Manual Image URL Inputs in Modals -->
+          <div class="settings-card-row">
+            <div class="settings-card-info">
+              <div class="settings-card-title">
+                <ion-icon name="link-outline"></ion-icon>
+                <span>Manual Image URLs</span>
+              </div>
+              <p class="settings-card-desc">Show manual URL text fields alongside device upload buttons.</p>
+            </div>
+            <label class="toggle-switch" aria-label="Toggle Manual Image URLs">
+              <input type="checkbox" id="toggle-manual-urls" onchange="toggleManualUrlMode(this.checked)">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <button type="submit" class="form-btn primary-submit">Save Settings</button>
         </div>
 
-        <div class="form-group">
-          <div class="social-editor-header">
-            <label style="margin: 0;">Social Links</label>
-            <button type="button" class="add-social-btn" onclick="addSocialLinkRow()">
-              <ion-icon name="add-outline"></ion-icon> Add Link
-            </button>
+        <!-- STEP 2: SETTINGS > PROFILE -->
+        <div id="settings-step-profile" class="settings-step-panel" style="display: none;">
+          <div class="form-group">
+            <label>Display Name *</label>
+            <input type="text" id="edit-profile-name" class="form-input" required>
           </div>
-          <div id="social-links-editor" class="social-links-editor"></div>
+
+          <div class="form-group">
+            <label>Bio / Subtitle</label>
+            <input type="text" id="edit-profile-bio" class="form-input">
+          </div>
+
+          <div class="form-group">
+            <label>Profile Avatar</label>
+            <div class="clean-upload-card">
+              <label class="clean-upload-trigger" title="Upload avatar from device">
+                <ion-icon name="person-circle-outline"></ion-icon>
+                <span>Upload Avatar</span>
+                <input type="file" id="profile-avatar-file" accept="image/*" hidden onchange="handleProfileImageUpload(event)">
+              </label>
+            </div>
+            <input type="url" id="edit-profile-avatar" class="form-input url-fallback-input" placeholder="https://...">
+            <span class="upload-status-text" id="profile-upload-status"></span>
+          </div>
+
+          <div class="form-group">
+            <label>Header Banner (Optional)</label>
+            <div class="clean-upload-card">
+              <label class="clean-upload-trigger" title="Upload banner from device">
+                <ion-icon name="image-outline"></ion-icon>
+                <span>Upload Banner</span>
+                <input type="file" id="profile-banner-file" accept="image/*" hidden onchange="handleBannerImageUpload(event)">
+              </label>
+              <button type="button" class="clean-clear-btn" onclick="clearBannerInput()" title="Remove banner">
+                <ion-icon name="trash-outline"></ion-icon>
+              </button>
+            </div>
+            <input type="url" id="edit-profile-banner" class="form-input url-fallback-input" placeholder="https://...">
+            <span class="upload-status-text" id="banner-upload-status"></span>
+          </div>
+
+          <div class="form-group">
+            <div class="social-editor-header">
+              <label style="margin: 0;">Social Links</label>
+              <button type="button" class="add-social-btn" onclick="addSocialLinkRow()">
+                <ion-icon name="add-outline"></ion-icon> Add Link
+              </button>
+            </div>
+            <div id="social-links-editor" class="social-links-editor"></div>
+          </div>
+
+          <div class="modal-submit-row">
+            <button type="button" class="form-btn" onclick="navigateSettingsStep('root')">Back</button>
+            <button type="submit" class="form-btn primary-submit">Save Profile</button>
+          </div>
         </div>
 
-        <button type="submit" class="form-btn primary-submit">Save Settings</button>
       </form>
     </div>
   </div>
@@ -669,7 +735,12 @@
   <div class="modal-overlay" id="login-modal">
     <div class="modal-box" style="max-width: 380px;">
       <div class="modal-header">
-        <h3>Admin Login</h3>
+        <div class="modal-title-group">
+          <div class="modal-icon-badge">
+            <ion-icon name="lock-closed-outline"></ion-icon>
+          </div>
+          <h3>Admin Login</h3>
+        </div>
         <button type="button" class="close-modal-btn" onclick="closeLoginModal()">&times;</button>
       </div>
       <form id="admin-login-form" class="modal-form">
@@ -693,7 +764,7 @@
   <!-- Main JS -->
   <script src="./assets/js/script.js?v=53"></script>
 
-  <!-- Sync Helper for Navigation, Minimalist Compact List & Responsive Page Sizes -->
+  <!-- Sync Helper for Grid Layout [X] Title [Y], Settings Navigation & Clean Modals -->
   <script>
     (function () {
       let activeSizePreset = 'small';
@@ -729,6 +800,53 @@
         }
       };
 
+      // Settings Multi-Step Navigation (Settings > Profile)
+      window.navigateSettingsStep = function (step) {
+        const rootPanel = document.getElementById('settings-step-root');
+        const profilePanel = document.getElementById('settings-step-profile');
+        const backBtn = document.getElementById('btn-settings-back');
+        const headerIcon = document.getElementById('settings-header-icon');
+        const titleEl = document.getElementById('settings-modal-title');
+
+        if (!rootPanel || !profilePanel) return;
+
+        if (step === 'profile') {
+          rootPanel.style.display = 'none';
+          profilePanel.style.display = 'flex';
+          if (backBtn) backBtn.style.display = 'inline-flex';
+          if (headerIcon) headerIcon.style.display = 'none';
+          if (titleEl) titleEl.textContent = 'Edit Profile';
+        } else {
+          profilePanel.style.display = 'none';
+          rootPanel.style.display = 'flex';
+          if (backBtn) backBtn.style.display = 'none';
+          if (headerIcon) headerIcon.style.display = 'inline-flex';
+          if (titleEl) titleEl.textContent = 'Settings';
+        }
+      };
+
+      window.openSettingsRoot = function () {
+        window.navigateSettingsStep('root');
+        if (typeof window.openProfileModal === 'function') {
+          window.openProfileModal();
+        }
+      };
+
+      // Optional Toggle for Manual Image URLs inside Settings
+      window.toggleManualUrlMode = function (enabled) {
+        document.body.classList.toggle('show-manual-urls', !!enabled);
+        try {
+          localStorage.setItem('archive_show_manual_urls', enabled ? '1' : '0');
+        } catch (e) {}
+      };
+
+      try {
+        const savedUrlPref = localStorage.getItem('archive_show_manual_urls') === '1';
+        const toggleEl = document.getElementById('toggle-manual-urls');
+        if (toggleEl) toggleEl.checked = savedUrlPref;
+        document.body.classList.toggle('show-manual-urls', savedUrlPref);
+      } catch (e) {}
+
       const origSwitch = window.switchMainView;
       window.switchMainView = function (view) {
         if (typeof origSwitch === 'function') {
@@ -756,35 +874,113 @@
         });
       }
 
-      // Clean Compact List View: remove status, count, and progress bar for a pure minimalist row
-      function cleanCompactListRows() {
+      // Status Icon Helper
+      function getStatusIconName(statusClass) {
+        switch (statusClass) {
+          case 'completed': return 'checkmark-circle';
+          case 'ongoing': return 'play-circle';
+          case 'planned': return 'time';
+          case 'dropped': return 'close-circle';
+          default: return 'ellipse';
+        }
+      }
+
+      // Transform Grid Cards into:
+      // {POSTER}
+      // [X] Judul Disini... [Y]
+      // -----------------------
+      function formatMediaItems() {
         const grid = document.getElementById('media-grid');
-        if (!grid || !grid.classList.contains('list-view')) return;
+        if (!grid) return;
 
-        grid.querySelectorAll('.media-list-row').forEach(row => {
-          if (row.dataset.cleaned === '1') return;
-          row.dataset.cleaned = '1';
+        if (grid.classList.contains('list-view')) {
+          grid.querySelectorAll('.media-list-row').forEach(row => {
+            if (row.dataset.cleaned === '1') return;
+            row.dataset.cleaned = '1';
 
-          const subMeta = row.querySelector('.list-sub-meta');
-          if (subMeta) {
-            const statusEl = subMeta.querySelector('.status-pill');
-            if (statusEl) statusEl.remove();
+            const subMeta = row.querySelector('.list-sub-meta');
+            if (subMeta) {
+              const catTag = subMeta.querySelector('.list-cat-tag');
+              const repeatTag = subMeta.querySelector('.list-repeat-tag');
+              const cleanItems = [];
+              if (catTag) cleanItems.push(catTag);
+              if (repeatTag) cleanItems.push(repeatTag);
 
-            subMeta.childNodes.forEach(node => {
-              if (node.nodeType === Node.TEXT_NODE) {
-                node.textContent = node.textContent
-                  .replace(/•/g, '')
-                  .replace(/(\d+(?:\s*\/\s*\d+)?\s*(?:Eps|Ch|Vol|Pages|Movies|Tracks|Items)?)/gi, '')
-                  .trim();
-              }
-            });
+              subMeta.innerHTML = '';
+              cleanItems.forEach((el, idx) => {
+                if (idx > 0) {
+                  const sep = document.createElement('span');
+                  sep.className = 'list-meta-sep';
+                  sep.textContent = '•';
+                  subMeta.appendChild(sep);
+                }
+                subMeta.appendChild(el);
+              });
+            }
+
+            const rightMeta = row.querySelector('.list-right-meta');
+            if (rightMeta) {
+              const ratingEl = rightMeta.querySelector('.list-rating-pill');
+              const editBtn = rightMeta.querySelector('.list-edit-btn');
+              rightMeta.innerHTML = '';
+              if (ratingEl) rightMeta.appendChild(ratingEl);
+              if (editBtn) rightMeta.appendChild(editBtn);
+            }
+          });
+          return;
+        }
+
+        // Grid View Transformation: [X] Title [Y] + Progress Bar
+        grid.querySelectorAll('.media-card').forEach(card => {
+          if (card.dataset.gridFormatted === '1') return;
+          card.dataset.gridFormatted = '1';
+
+          const body = card.querySelector('.media-body');
+          const titleEl = card.querySelector('.media-title');
+          const statusEl = card.querySelector('.status-pill');
+          const progressPillEl = card.querySelector('.progress-pill');
+          const trackEl = card.querySelector('.progress-track');
+
+          if (!body || !titleEl) return;
+
+          const statusClass = statusEl
+            ? Array.from(statusEl.classList).find(c => ['completed', 'ongoing', 'planned', 'dropped'].includes(c)) || 'ongoing'
+            : 'ongoing';
+          const statusLabel = statusEl ? statusEl.textContent.trim() : statusClass;
+          const countText = progressPillEl ? progressPillEl.textContent.trim() : '';
+
+          const headerLine = document.createElement('div');
+          headerLine.className = 'card-compact-line';
+
+          const iconWrap = document.createElement('span');
+          iconWrap.className = 'card-status-icon';
+          iconWrap.title = statusLabel;
+          iconWrap.innerHTML = `<ion-icon name="${getStatusIconName(statusClass)}"></ion-icon>`;
+
+          const cleanTitle = document.createElement('h3');
+          cleanTitle.className = 'card-inline-title';
+          cleanTitle.textContent = titleEl.textContent.trim();
+          cleanTitle.title = titleEl.textContent.trim();
+
+          const countWrap = document.createElement('span');
+          countWrap.className = 'card-inline-count';
+          countWrap.textContent = countText;
+
+          headerLine.appendChild(iconWrap);
+          headerLine.appendChild(cleanTitle);
+          if (countText) headerLine.appendChild(countWrap);
+
+          body.innerHTML = '';
+          body.appendChild(headerLine);
+          if (trackEl) {
+            body.appendChild(trackEl);
           }
         });
       }
 
       const mediaGridEl = document.getElementById('media-grid');
       if (mediaGridEl) {
-        new MutationObserver(cleanCompactListRows).observe(mediaGridEl, {
+        new MutationObserver(formatMediaItems).observe(mediaGridEl, {
           childList: true,
           attributes: true,
           attributeFilter: ['class']
