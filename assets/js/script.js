@@ -1,1945 +1,2256 @@
-/* ==========================================
-   VARIABLES & BASE RESET
-========================================== */
-:root {
-  --smoky-black: #0f0f10;
-  --eerie-black-1: #161618;
-  --eerie-black-2: #1e1e20;
-  --onyx: #28282b;
-  --jet: #36363a;
-  --white-1: #ffffff;
-  --white-2: #f4f4f6;
-  --light-gray: #c8c8cf;
-  --light-gray-70: rgba(200, 200, 207, 0.7);
-  --bittersweet-shimmer: #ff5f5f;
-
-  --ff-poppins: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
-  --shadow-1: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-2: 0 16px 40px rgba(0, 0, 0, 0.55);
-  --transition-1: 0.22s ease;
-}
-
-*,
-*::before,
-*::after {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-html {
-  font-family: var(--ff-poppins);
-  scroll-behavior: smooth;
-  background-color: var(--smoky-black);
-  color: var(--white-2);
-}
-
-body {
-  min-height: 100vh;
-  background: var(--smoky-black);
-  line-height: 1.5;
-  overflow-x: hidden;
-  padding: 20px 16px 48px;
-}
-
-a {
-  text-decoration: none;
-  color: inherit;
-}
-
-button,
-input,
-select,
-textarea {
-  font: inherit;
-  color: inherit;
-}
-
-button {
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-img {
-  display: block;
-  max-width: 100%;
-}
-
-/* ==========================================
-   TOAST NOTIFICATION
-========================================== */
-.toast-container {
-  position: fixed;
-  bottom: 22px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  pointer-events: none;
-  width: max-content;
-  max-width: calc(100vw - 32px);
-}
-
-.toast-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border-radius: 12px;
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  color: var(--white-1);
-  font-size: 12px;
-  font-weight: 500;
-  box-shadow: var(--shadow-2);
-  animation: toastSlideUp 0.22s ease forwards;
-}
-
-.toast-item.success ion-icon { color: #4ade80; font-size: 16px; }
-.toast-item.error ion-icon { color: #ff5f5f; font-size: 16px; }
-.toast-item.info ion-icon { color: #60a5fa; font-size: 16px; }
-
-.toast-item.hide {
-  opacity: 0;
-  transform: translateY(8px);
-  transition: 0.2s ease;
-}
-
-@keyframes toastSlideUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ==========================================
-   STICKY MINI HEADER (ON SCROLL)
-========================================== */
-.sticky-mini-header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 90;
-  background: rgba(22, 22, 24, 0.88);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--jet);
-  transform: translateY(-100%);
-  opacity: 0;
-  transition: transform 0.25s ease, opacity 0.25s ease;
-  pointer-events: none;
-}
-
-.sticky-mini-header.visible {
-  transform: translateY(0);
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.sticky-mini-inner {
-  max-width: 920px;
-  margin: 0 auto;
-  padding: 10px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.sticky-mini-profile {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  min-width: 0;
-}
-
-.sticky-mini-profile img {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 1px solid var(--jet);
-  background: var(--onyx);
-}
-
-.sticky-mini-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--white-1);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sticky-mini-tabs {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.mini-tab-btn {
-  padding: 5px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--light-gray-70);
-  transition: var(--transition-1);
-}
-
-.mini-tab-btn:hover {
-  color: var(--white-1);
-}
-
-.mini-tab-btn.active {
-  background: var(--onyx);
-  color: var(--white-1);
-  border: 1px solid var(--jet);
-}
-
-/* ==========================================
-   MAIN CONTAINER & CARD SECTIONS
-========================================== */
-.single-page-container {
-  max-width: 920px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.card-section {
-  background: var(--eerie-black-1);
-  border: 1px solid var(--jet);
-  border-radius: 20px;
-  box-shadow: var(--shadow-1);
-  position: relative;
-}
-
-/* ==========================================
-   1. PROFILE HEADER & DYNAMIC BANNER
-========================================== */
-.profile-header {
-  overflow: hidden;
-}
-
-.profile-banner-wrap {
-  position: relative;
-  width: 100%;
-  height: 170px;
-  background: var(--onyx);
-  overflow: hidden;
-}
-
-.profile-banner-wrap img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.profile-banner-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to bottom, rgba(15, 15, 16, 0.15), rgba(22, 22, 24, 0.92));
-}
-
-.profile-top-actions {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pill-btn,
-.icon-pill-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 7px 13px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--white-1);
-  background: rgba(30, 30, 32, 0.85);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--jet);
-  transition: var(--transition-1);
-}
-
-.icon-pill-btn {
-  padding: 7px 9px;
-}
-
-.pill-btn:hover,
-.icon-pill-btn:hover {
-  border-color: var(--white-1);
-  background: var(--onyx);
-}
-
-.primary-btn {
-  background: var(--onyx);
-  border-color: rgba(255, 255, 255, 0.22);
-}
-
-.profile-content-body {
-  padding: 24px;
-  position: relative;
-}
-
-.profile-header.has-banner .profile-content-body {
-  padding-top: 0;
-  margin-top: -42px;
-}
-
-.profile-main {
-  display: flex;
-  align-items: flex-end;
-  gap: 18px;
-}
-
-.profile-avatar {
-  width: 88px;
-  height: 88px;
-  border-radius: 22px;
-  overflow: hidden;
-  border: 3px solid var(--eerie-black-1);
-  background: var(--onyx);
-  flex-shrink: 0;
-  box-shadow: var(--shadow-1);
-}
-
-.profile-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.profile-details {
-  flex: 1;
-  min-width: 0;
-  padding-bottom: 2px;
-}
-
-.profile-name {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--white-1);
-  line-height: 1.25;
-}
-
-.profile-bio {
-  font-size: 13px;
-  color: var(--light-gray);
-  margin-top: 4px;
-  word-break: break-word;
-}
-
-.profile-socials {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.social-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 11px;
-  border-radius: 9px;
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--light-gray);
-  transition: var(--transition-1);
-}
-
-.social-chip:hover {
-  color: var(--white-1);
-  border-color: var(--white-1);
-  transform: translateY(-1px);
-}
-
-.social-chip ion-icon {
-  font-size: 14px;
-}
-
-/* ==========================================
-   2. MAIN SWITCHER BAR & TABS
-========================================== */
-.library-section {
-  padding: 20px 24px 26px;
-}
-
-.main-switcher-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 16px;
-  margin-bottom: 18px;
-  border-bottom: 1px solid var(--jet);
-  flex-wrap: wrap;
-}
-
-.main-view-tabs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.main-view-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 15px;
-  border-radius: 11px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--light-gray-70);
-  background: transparent;
-  border: 1px solid transparent;
-  transition: var(--transition-1);
-}
-
-.main-view-btn:hover {
-  color: var(--white-1);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.main-view-btn.active {
-  color: var(--white-1);
-  background: var(--eerie-black-2);
-  border-color: var(--jet);
-}
-
-.main-right-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.minimal-add-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 7px 12px;
-  border-radius: 9px;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
-  color: var(--white-1);
-  background: var(--onyx);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  transition: var(--transition-1);
-}
-
-.minimal-add-btn ion-icon {
-  font-size: 15px;
-  color: var(--white-1);
-}
-
-.minimal-add-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: var(--white-1);
-  transform: translateY(-1px);
-}
-
-.tab-view-panel.active-view {
-  animation: tabFadeSlide 0.22s ease forwards;
-}
-
-@keyframes tabFadeSlide {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.empty-state {
-  text-align: center;
-  padding: 42px 16px;
-  font-size: 13px;
-  color: var(--light-gray-70);
-  grid-column: 1 / -1;
-}
-
-/* ==========================================
-   3. PERSONAL NOTES / BLOG FEED
-========================================== */
-.blog-feed-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.blog-post-card {
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  border-radius: 16px;
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.blog-post-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.blog-post-author {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.blog-post-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: var(--onyx);
-  border: 1px solid var(--jet);
-  flex-shrink: 0;
-}
-
-.blog-post-meta {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.blog-post-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--white-1);
-}
-
-.blog-post-time {
-  font-size: 11px;
-  color: var(--light-gray-70);
-}
-
-.blog-post-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.blog-icon-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--light-gray-70);
-  background: var(--onyx);
-  border: 1px solid var(--jet);
-  transition: var(--transition-1);
-}
-
-.blog-icon-btn:hover {
-  color: var(--white-1);
-  border-color: var(--white-1);
-}
-
-.blog-icon-btn.delete:hover {
-  color: #ff5f5f;
-  border-color: #ff5f5f;
-}
-
-.blog-post-text {
-  font-size: 13.5px;
-  color: var(--white-2);
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.6;
-}
-
-.inline-note-link {
-  color: #7dd3fc;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.link-preview-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 14px;
-  border-radius: 12px;
-  background: var(--onyx);
-  border: 1px solid var(--jet);
-  transition: var(--transition-1);
-}
-
-.link-preview-card:hover {
-  border-color: var(--white-1);
-}
-
-.link-preview-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: var(--eerie-black-1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  color: var(--white-1);
-  flex-shrink: 0;
-}
-
-.link-preview-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.link-preview-domain {
-  font-size: 11px;
-  color: var(--light-gray-70);
-}
-
-.link-preview-title {
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--white-1);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.blog-post-image-wrap {
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid var(--jet);
-  max-height: 440px;
-}
-
-.blog-post-image-wrap img {
-  width: 100%;
-  max-height: 440px;
-  object-fit: cover;
-}
-
-/* ==========================================
-   4. LIBRARY STATS & CONTROLS BAR
-========================================== */
-.library-stats-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-}
-
-.stats-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 12px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--light-gray);
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  transition: var(--transition-1);
-  white-space: nowrap;
-}
-
-.stats-toggle-btn:hover,
-.stats-toggle-btn.active {
-  color: var(--white-1);
-  border-color: var(--white-1);
-}
-
-.library-right-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.stats-total-badge {
-  display: inline-flex;
-  align-items: center;
-  height: 32px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--light-gray);
-  padding: 0 10px;
-  border-radius: 9px;
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  white-space: nowrap;
-}
-
-.per-page-select {
-  appearance: none;
-  -webkit-appearance: none;
-  height: 32px;
-  background-color: var(--eerie-black-2);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23c8c8cf' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 9px center;
-  border: 1px solid var(--jet);
-  border-radius: 9px;
-  padding: 0 26px 0 10px;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--light-gray);
-  outline: none;
-  cursor: pointer;
-  transition: var(--transition-1);
-  white-space: nowrap;
-}
-
-.per-page-select:hover,
-.per-page-select:focus {
-  border-color: var(--white-1);
-  color: var(--white-1);
-}
-
-.per-page-select option {
-  background: var(--eerie-black-2);
-  color: var(--white-1);
-}
-
-.view-mode-switch {
-  display: inline-flex;
-  align-items: center;
-  height: 32px;
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  border-radius: 9px;
-  padding: 2px;
-  gap: 2px;
-}
-
-.view-mode-btn {
-  width: 28px;
-  height: 26px;
-  border-radius: 7px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--light-gray-70);
-  font-size: 15px;
-  transition: var(--transition-1);
-}
-
-.view-mode-btn:hover {
-  color: var(--white-1);
-}
-
-.view-mode-btn.active {
-  background: var(--onyx);
-  color: var(--white-1);
-}
-
-/* Collapsible Stats Grid */
-.collapsible-stats-panel {
-  margin-bottom: 16px;
-  animation: tabFadeSlide 0.2s ease forwards;
-}
-
-.stats-modern-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-}
-
-.stat-card-modern {
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  border-radius: 14px;
-  padding: 12px 14px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.stat-icon-box {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: var(--onyx);
-  border: 1px solid var(--jet);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  color: var(--white-1);
-  flex-shrink: 0;
-}
-
-.stat-info-modern {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.stat-val-modern {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--white-1);
-  line-height: 1.2;
-}
-
-.stat-name-modern {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--light-gray);
-}
-
-.stat-sub-modern {
-  font-size: 10px;
-  color: var(--light-gray-70);
-}
-
-/* Category Tabs */
-.library-top-bar {
-  margin-bottom: 12px;
-}
-
-.category-tabs {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  scrollbar-width: none;
-}
-
-.category-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.cat-tab {
-  padding: 6px 13px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--light-gray-70);
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  white-space: nowrap;
-  transition: var(--transition-1);
-}
-
-.cat-tab:hover {
-  color: var(--white-1);
-}
-
-.cat-tab.active {
-  background: var(--white-1);
-  color: var(--smoky-black);
-  border-color: var(--white-1);
-  font-weight: 600;
-}
-
-/* ==========================================
-   SEARCHBAR + FILTER & SORT TOOLBAR
-========================================== */
-.library-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 18px;
-  width: 100%;
-}
-
-.search-box {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  border-radius: 11px;
-  padding: 0 12px;
-  transition: var(--transition-1);
-}
-
-.search-box:focus-within {
-  border-color: var(--white-1);
-}
-
-.search-box ion-icon {
-  font-size: 16px;
-  color: var(--light-gray-70);
-  flex-shrink: 0;
-}
-
-.search-box input {
-  flex: 1 1 auto;
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  background: transparent;
-  border: none;
-  outline: none;
-  font-size: 12.5px;
-  color: var(--white-1);
-}
-
-.toolbar-btn-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.popover-wrapper {
-  position: relative;
-}
-
-.toolbar-action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 38px;
-  padding: 0 12px;
-  border-radius: 11px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--light-gray);
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  transition: var(--transition-1);
-  white-space: nowrap;
-}
-
-.toolbar-action-btn ion-icon {
-  font-size: 15px;
-  flex-shrink: 0;
-}
-
-.toolbar-action-btn:hover,
-.toolbar-action-btn.active {
-  color: var(--white-1);
-  border-color: var(--white-1);
-  background: var(--onyx);
-}
-
-.active-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #38bdf8;
-  flex-shrink: 0;
-}
-
-/* Popover Dropdown Menu */
-.toolbar-popover-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  width: 248px;
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  border-radius: 14px;
-  padding: 14px;
-  box-shadow: var(--shadow-2);
-  z-index: 75;
-  display: none;
-  flex-direction: column;
-  gap: 12px;
-  animation: tabFadeSlide 0.18s ease forwards;
-}
-
-.toolbar-popover-menu.open {
-  display: flex;
-}
-
-.popover-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-}
-
-.popover-field > label:first-child {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--light-gray-70);
-}
-
-.control-select {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 100%;
-  height: 34px;
-  background-color: var(--onyx);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23c8c8cf' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  border: 1px solid var(--jet);
-  border-radius: 9px;
-  padding: 0 28px 0 10px;
-  font-size: 12px;
-  color: var(--white-1);
-  outline: none;
-  cursor: pointer;
-}
-
-.control-select:focus {
-  border-color: var(--white-1);
-}
-
-.control-select option {
-  background: var(--eerie-black-2);
-  color: var(--white-1);
-}
-
-.range-input-row {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-}
-
-.range-sep {
-  font-size: 12px;
-  color: var(--light-gray-70);
-  text-align: center;
-}
-
-.range-num-input {
-  width: 100%;
-  min-width: 0;
-  height: 34px;
-  background: var(--onyx);
-  border: 1px solid var(--jet);
-  border-radius: 9px;
-  padding: 0 8px;
-  font-size: 12px;
-  color: var(--white-1);
-  text-align: center;
-  outline: none;
-  -moz-appearance: textfield;
-}
-
-.range-num-input::-webkit-outer-spin-button,
-.range-num-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.range-num-input:focus {
-  border-color: var(--white-1);
-}
-
-.range-num-input:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.checkbox-inline-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--light-gray);
-  cursor: pointer;
-  margin-top: 2px;
-}
-
-.checkbox-inline-label input[type="checkbox"] {
-  accent-color: var(--white-1);
-  width: 13px;
-  height: 13px;
-  cursor: pointer;
-}
-
-.popover-reset-btn {
-  width: 100%;
-  height: 32px;
-  border-radius: 9px;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--light-gray);
-  background: var(--onyx);
-  border: 1px solid var(--jet);
-  transition: var(--transition-1);
-}
-
-.popover-reset-btn:hover {
-  color: var(--white-1);
-  border-color: var(--white-1);
-}
-
-.sort-dir-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-.sort-dir-btn {
-  height: 32px;
-  padding: 0 8px;
-  border-radius: 9px;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--light-gray-70);
-  background: var(--onyx);
-  border: 1px solid var(--jet);
-  transition: var(--transition-1);
-}
-
-.sort-dir-btn:hover {
-  color: var(--white-1);
-}
-
-.sort-dir-btn.active {
-  background: var(--white-1);
-  color: var(--smoky-black);
-  border-color: var(--white-1);
-  font-weight: 600;
-}
-
-/* ==========================================
-   5. MEDIA GRID & COMPACT LIST VIEW
-========================================== */
-.media-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-}
-
-.media-card {
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  border-radius: 15px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease;
-}
-
-.media-card:hover {
-  transform: translateY(-3px);
-  border-color: rgba(255, 255, 255, 0.32);
-}
-
-.media-cover-wrap {
-  position: relative;
-  aspect-ratio: 2 / 3;
-  background: var(--onyx);
-  overflow: hidden;
-}
-
-.media-cover-wrap img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.3s ease;
-}
-
-.media-card:hover .media-cover-wrap img {
-  transform: scale(1.03);
-}
-
-.cover-left-badges {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  max-width: calc(100% - 44px);
-}
-
-.badge-cat-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.badge-cat,
-.badge-rating,
-.badge-repeat,
-.badge-seasons {
-  padding: 3px 7px;
-  border-radius: 6px;
-  font-size: 10px;
-  font-weight: 600;
-  background: rgba(15, 15, 16, 0.82);
-  backdrop-filter: blur(6px);
-  color: var(--white-1);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-}
-
-.badge-rating {
-  color: #fbbf24;
-}
-
-.badge-repeat {
-  color: #38bdf8;
-}
-
-.badge-seasons {
-  position: absolute;
-  bottom: 8px;
-  left: 8px;
-}
-
-.cover-edit-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: rgba(15, 15, 16, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: var(--white-1);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  transition: var(--transition-1);
-}
-
-.cover-edit-btn:hover {
-  background: var(--white-1);
-  color: var(--smoky-black);
-}
-
-.media-body {
-  padding: 11px 12px 12px;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 9px;
-}
-
-.media-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--white-1);
-  line-height: 1.35;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.media-bottom-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.media-meta-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-.status-pill {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 7px;
-  border-radius: 6px;
-  text-transform: capitalize;
-}
-
-.status-pill.completed { background: rgba(74, 222, 128, 0.16); color: #4ade80; }
-.status-pill.ongoing { background: rgba(56, 189, 248, 0.16); color: #38bdf8; }
-.status-pill.planned { background: rgba(168, 162, 158, 0.18); color: #d6d3d1; }
-.status-pill.dropped { background: rgba(248, 113, 113, 0.16); color: #f87171; }
-
-.progress-pill {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--light-gray);
-}
-
-.progress-track {
-  width: 100%;
-  height: 4px;
-  border-radius: 99px;
-  background: var(--onyx);
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  border-radius: 99px;
-  transition: width 0.3s ease;
-}
-
-.progress-fill.completed { background: #4ade80; }
-.progress-fill.ongoing { background: #38bdf8; }
-.progress-fill.planned { background: #78716c; }
-.progress-fill.planned.planned-empty { opacity: 0.35; }
-.progress-fill.dropped { background: #f87171; }
-
-.media-footer-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 10.5px;
-  color: var(--light-gray-70);
-}
-
-.status-date-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-/* Compact List Mode */
-.media-grid.list-view {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.media-list-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 9px 12px;
-  border-radius: 12px;
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  cursor: pointer;
-  transition: var(--transition-1);
-}
-
-.media-list-row:hover {
-  border-color: rgba(255, 255, 255, 0.32);
-}
-
-.list-thumb {
-  width: 36px;
-  height: 50px;
-  border-radius: 7px;
-  object-fit: cover;
-  background: var(--onyx);
-  flex-shrink: 0;
-}
-
-.list-main-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.list-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--white-1);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.list-sub-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--light-gray-70);
-  margin-top: 2px;
-}
-
-.list-cat-tag {
-  color: var(--light-gray);
-  font-weight: 500;
-}
-
-.list-repeat-tag {
-  color: #38bdf8;
-}
-
-.list-right-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.list-rating-pill {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: #fbbf24;
-  min-width: 46px;
-  text-align: right;
-}
-
-.list-edit-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: var(--onyx);
-  border: 1px solid var(--jet);
-  color: var(--light-gray);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: var(--transition-1);
-}
-
-.list-edit-btn:hover {
-  color: var(--white-1);
-  border-color: var(--white-1);
-}
-
-/* Load More */
-.load-more-wrap {
-  display: flex;
-  justify-content: center;
-  margin-top: 20px;
-}
-
-.load-more-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 18px;
-  border-radius: 11px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--white-1);
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  transition: var(--transition-1);
-}
-
-.load-more-btn:hover {
-  border-color: var(--white-1);
-  background: var(--onyx);
-}
-
-/* ==========================================
-   6. FOOTER & BACK TO TOP
-========================================== */
-.section-footer {
-  margin-top: 8px;
-  padding: 0 6px;
-}
-
-.footer-divider {
-  height: 1px;
-  background: var(--jet);
-  margin-bottom: 14px;
-}
-
-.footer-container {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 11.5px;
-  color: var(--light-gray-70);
-}
-
-.footer-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.brand-name {
-  font-weight: 700;
-  color: var(--white-1);
-  letter-spacing: 0.6px;
-}
-
-.back-to-top-btn {
-  position: fixed;
-  bottom: 22px;
-  right: 22px;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  color: var(--white-1);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  box-shadow: var(--shadow-2);
-  opacity: 0;
-  transform: translateY(12px);
-  pointer-events: none;
-  transition: var(--transition-1);
-  z-index: 80;
-}
-
-.back-to-top-btn.visible {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
-
-.back-to-top-btn:hover {
-  border-color: var(--white-1);
-  background: var(--onyx);
-}
-
-/* ==========================================
-   7. MODALS & FORMS
-========================================== */
-.custom-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-}
-
-.custom-modal.active {
-  display: flex;
-}
-
-.custom-modal-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(4px);
-}
-
-.custom-modal-box {
-  position: relative;
-  z-index: 2;
-  width: 100%;
-  max-width: 440px;
-  max-height: 90vh;
-  overflow-y: auto;
-  background: var(--eerie-black-1);
-  border: 1px solid var(--jet);
-  border-radius: 18px;
-  padding: 20px 22px;
-  box-shadow: var(--shadow-2);
-  animation: tabFadeSlide 0.2s ease forwards;
-}
-
-.custom-modal-box.modal-lg {
-  max-width: 580px;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 14px;
-  margin-bottom: 16px;
-  border-bottom: 1px solid var(--jet);
-}
-
-.modal-header .h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--white-1);
-}
-
-.modal-close {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  color: var(--light-gray);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  transition: var(--transition-1);
-}
-
-.modal-close:hover {
-  color: var(--white-1);
-  border-color: var(--white-1);
-}
-
-.modal-form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-group label {
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--light-gray);
-}
-
-.form-input {
-  width: 100%;
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  border-radius: 10px;
-  padding: 9px 12px;
-  font-size: 12.5px;
-  color: var(--white-1);
-  outline: none;
-  transition: var(--transition-1);
-}
-
-.form-input:focus {
-  border-color: var(--white-1);
-}
-
-.form-row-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.api-search-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.api-results-list {
-  margin-top: 6px;
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  border-radius: 11px;
-  max-height: 210px;
-  overflow-y: auto;
-}
-
-.api-result-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--jet);
-  cursor: pointer;
-  transition: var(--transition-1);
-}
-
-.api-result-item:last-child {
-  border-bottom: none;
-}
-
-.api-result-item:hover {
-  background: var(--onyx);
-}
-
-.api-result-item img {
-  width: 34px;
-  height: 48px;
-  border-radius: 6px;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.api-result-info h4 {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--white-1);
-}
-
-.api-result-info p {
-  font-size: 11px;
-  color: var(--light-gray-70);
-}
-
-/* Tracks, Seasons & Social Link Editors */
-.tracks-editor-list,
-.seasons-editor-list,
-.social-links-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.track-edit-card,
-.season-edit-card {
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  border-radius: 12px;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.track-edit-top,
-.season-edit-top,
-.social-edit-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.track-edit-grid,
-.season-edit-grid {
-  display: grid;
-  grid-template-columns: 1.15fr 1.15fr 0.85fr 0.95fr;
-  gap: 6px;
-}
-
-.progress-input-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.step-plus-btn {
-  padding: 0 9px;
-  height: 36px;
-  border-radius: 9px;
-  background: var(--onyx);
-  border: 1px solid var(--jet);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--white-1);
-  flex-shrink: 0;
-  transition: var(--transition-1);
-}
-
-.step-plus-btn:hover {
-  border-color: var(--white-1);
-}
-
-.social-remove-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: var(--onyx);
-  border: 1px solid var(--jet);
-  color: #ff6b6b;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: var(--transition-1);
-}
-
-.social-remove-btn:hover {
-  border-color: #ff6b6b;
-}
-
-.modal-submit-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 6px;
-}
-
-.form-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 10px 18px;
-  border-radius: 11px;
-  font-size: 12.5px;
-  font-weight: 600;
-  transition: var(--transition-1);
-}
-
-.primary-submit {
-  background: var(--white-1);
-  color: var(--smoky-black);
-}
-
-.primary-submit:hover {
-  opacity: 0.9;
-}
-
-.danger-submit {
-  background: rgba(255, 95, 95, 0.14);
-  color: #ff5f5f;
-  border: 1px solid rgba(255, 95, 95, 0.35);
-}
-
-.danger-submit:hover {
-  background: #ff5f5f;
-  color: var(--white-1);
-}
-
-/* Media Detail Modal */
-.media-detail-body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.detail-hero {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-}
-
-.detail-poster {
-  width: 110px;
-  aspect-ratio: 2 / 3;
-  border-radius: 12px;
-  object-fit: cover;
-  border: 1px solid var(--jet);
-  flex-shrink: 0;
-}
-
-.detail-meta-col {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-
-.detail-section-title {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--light-gray-70);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 6px;
-}
-
-.detail-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.detail-row-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 9px 12px;
-  border-radius: 10px;
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  font-size: 12.5px;
-}
-
-/* ==========================================
-   8. RESPONSIVE BREAKPOINTS
-========================================== */
-@media (max-width: 768px) {
-  .media-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
+'use strict';
+
+// ==========================================
+// 1. SUPABASE & EXTERNAL API CONFIGURATION
+// ==========================================
+const SUPABASE_URL = 'https://uendrdxiixmikkeanlod.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_IdPLjwQhVQwXGGxUnBVblg_oIQ5Zz89';
+const TMDB_API_KEY = '727a00da59cd2b9873f7636a5bde9561';
+const RAWG_API_KEY = '';
+const STORAGE_BUCKET = 'media-assets';
+const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Application State
+let allMediaLogs = [];
+let allBlogPosts = [];
+let lastApiResults = [];
+let pendingUploadedUrls = [];
+let currentCategory = 'all';
+let currentMainView = 'blog'; // Default tab priority: Notes
+let libraryViewMode = 'grid'; // 'grid' or 'list'
+let itemsPerPage = 8;
+let visibleMediaLimit = 8;
+let sortDirection = 'desc'; // 'desc' or 'asc'
+let isStatsExpanded = false;
+let isAdminLoggedIn = false;
+let isProfileLoaded = false;
+
+let currentProfile = {
+  name: '',
+  bio: '',
+  avatar_url: '',
+  banner_url: '',
+  social_links: []
+};
+
+function setElText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+// ==========================================
+// 1B. MINIMALIST TOAST & SHARE HELPER
+// ==========================================
+window.showToast = function (message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const iconMap = {
+    success: 'checkmark-circle-outline',
+    error: 'alert-circle-outline',
+    info: 'information-circle-outline'
+  };
+
+  const toast = document.createElement('div');
+  toast.className = `toast-item ${type}`;
+  toast.innerHTML = `
+    <ion-icon name="${iconMap[type] || iconMap.info}"></ion-icon>
+    <span>${escapeHtml(message)}</span>
+  `;
+
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('hide');
+    setTimeout(() => toast.remove(), 240);
+  }, 2400);
+};
+
+window.shareCurrentPage = async function () {
+  const url = window.location.href;
+  const title = document.title || 'Archive';
+
+  try {
+    if (navigator.share) {
+      await navigator.share({ title, url });
+    } else if (navigator.clipboard) {
+      await navigator.clipboard.writeText(url);
+      showToast('Link copied to clipboard!', 'success');
+    } else {
+      showToast(url, 'info');
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      showToast('Failed to share link', 'error');
+    }
+  }
+};
+
+// ==========================================
+// 2. INITIALIZATION, SCROLL LISTENERS & VIEW TABS
+// ==========================================
+document.addEventListener('DOMContentLoaded', async () => {
+  setupScrollListeners();
+  setupPopoverOutsideClick();
+  await checkAdminSession();
+  await fetchProfileSettings();
+  await Promise.all([fetchBlogPosts(), fetchMediaLogs()]);
+  setupFilterListeners();
+});
+
+function setupScrollListeners() {
+  const stickyHeader = document.getElementById('sticky-mini-header');
+  const backToTopBtn = document.getElementById('btn-back-to-top');
+  const profileCard = document.getElementById('profile-header-card');
+
+  window.addEventListener('scroll', () => {
+    const scrollY = window.scrollY || document.documentElement.scrollTop;
+    const triggerHeight = profileCard ? (profileCard.offsetTop + profileCard.offsetHeight - 20) : 180;
+
+    if (stickyHeader) {
+      stickyHeader.classList.toggle('visible', scrollY > triggerHeight);
+    }
+
+    if (backToTopBtn) {
+      backToTopBtn.classList.toggle('visible', scrollY > 360);
+    }
+  }, { passive: true });
+}
+
+window.scrollToTopSmooth = function () {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.switchMainView = function (viewName) {
+  currentMainView = viewName;
+
+  document.querySelectorAll('.main-view-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === viewName);
+  });
+
+  document.querySelectorAll('.mini-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === viewName);
+  });
+
+  const libView = document.getElementById('view-library');
+  const blogView = document.getElementById('view-blog');
+
+  if (libView && blogView) {
+    libView.classList.remove('active-view');
+    blogView.classList.remove('active-view');
+
+    if (viewName === 'library') {
+      blogView.style.display = 'none';
+      libView.style.display = 'block';
+      void libView.offsetWidth;
+      libView.classList.add('active-view');
+    } else {
+      libView.style.display = 'none';
+      blogView.style.display = 'block';
+      void blogView.offsetWidth;
+      blogView.classList.add('active-view');
+    }
   }
 
-  .stats-modern-grid {
-    grid-template-columns: repeat(2, 1fr);
+  updateAdminActionButtons();
+};
+
+window.setLibraryViewMode = function (mode) {
+  libraryViewMode = mode;
+  document.getElementById('btn-view-grid')?.classList.toggle('active', mode === 'grid');
+  document.getElementById('btn-view-list')?.classList.toggle('active', mode === 'list');
+  renderMediaGrid();
+};
+
+window.handlePerPageChange = function () {
+  const val = document.getElementById('per-page-select')?.value || '8';
+  if (val === 'all') {
+    itemsPerPage = Infinity;
+    visibleMediaLimit = Infinity;
+  } else {
+    itemsPerPage = parseInt(val, 10) || 8;
+    visibleMediaLimit = itemsPerPage;
+  }
+  renderMediaGrid();
+};
+
+window.loadMoreMedia = function () {
+  if (itemsPerPage !== Infinity) {
+    visibleMediaLimit += itemsPerPage;
+  }
+  renderMediaGrid();
+};
+
+window.toggleLibraryStats = function () {
+  isStatsExpanded = !isStatsExpanded;
+  const panel = document.getElementById('collapsible-stats-panel');
+  const toggleBtn = document.getElementById('btn-toggle-stats');
+  const textEl = document.getElementById('stats-toggle-text');
+  const iconEl = document.getElementById('stats-chevron-icon');
+
+  if (panel) panel.style.display = isStatsExpanded ? 'block' : 'none';
+  if (toggleBtn) toggleBtn.classList.toggle('active', isStatsExpanded);
+  if (textEl) textEl.textContent = isStatsExpanded ? 'Hide Stats' : 'Show Stats';
+  if (iconEl) iconEl.setAttribute('name', isStatsExpanded ? 'chevron-up-outline' : 'chevron-down-outline');
+};
+
+function updateAdminActionButtons() {
+  const addMediaBtn = document.getElementById('btn-add-media');
+  const addPostBtn = document.getElementById('btn-add-post');
+
+  if (!isAdminLoggedIn) {
+    if (addMediaBtn) addMediaBtn.style.display = 'none';
+    if (addPostBtn) addPostBtn.style.display = 'none';
+    return;
+  }
+
+  if (addMediaBtn) addMediaBtn.style.display = currentMainView === 'library' ? 'inline-flex' : 'none';
+  if (addPostBtn) addPostBtn.style.display = currentMainView === 'blog' ? 'inline-flex' : 'none';
+}
+
+async function checkAdminSession() {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  isAdminLoggedIn = !!session;
+  updateAdminUI();
+}
+
+function updateAdminUI() {
+  const editProfileBtn = document.getElementById('btn-edit-profile');
+  const lockIcon = document.getElementById('admin-lock-icon');
+  const btnText = document.getElementById('admin-btn-text');
+
+  if (isAdminLoggedIn) {
+    if (editProfileBtn) editProfileBtn.style.display = 'inline-flex';
+    if (lockIcon) lockIcon.setAttribute('name', 'log-out-outline');
+    if (btnText) btnText.textContent = 'Logout';
+  } else {
+    if (editProfileBtn) editProfileBtn.style.display = 'none';
+    if (lockIcon) lockIcon.setAttribute('name', 'lock-closed-outline');
+    if (btnText) btnText.textContent = 'Admin';
+  }
+
+  updateAdminActionButtons();
+  renderMediaGrid();
+  if (isProfileLoaded) renderBlogPosts();
+}
+
+window.handleAdminAuthClick = async function () {
+  if (isAdminLoggedIn) {
+    const confirm = await Swal.fire({
+      text: 'Exit Admin mode?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Logout',
+      cancelButtonText: 'Cancel',
+      background: '#1e1e1f',
+      color: '#fff'
+    });
+    if (confirm.isConfirmed) {
+      await supabaseClient.auth.signOut();
+      isAdminLoggedIn = false;
+      updateAdminUI();
+      showToast('Logged out', 'info');
+    }
+  } else {
+    document.getElementById('login-modal').classList.add('active');
+  }
+};
+
+window.closeLoginModal = function () {
+  document.getElementById('login-modal').classList.remove('active');
+};
+
+document.getElementById('admin-login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
+  } else {
+    isAdminLoggedIn = true;
+    closeLoginModal();
+    updateAdminUI();
+    showToast('Admin login successful', 'success');
+  }
+});
+
+// ==========================================
+// 2B. IMAGE COMPRESSION & STORAGE UPLOAD/CLEANUP
+// ==========================================
+function compressImageFile(file, maxWidth = 800, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Image compression failed'));
+          },
+          'image/webp',
+          quality
+        );
+      };
+      img.onerror = () => reject(new Error('Invalid image file'));
+      img.src = event.target.result;
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadImageToSupabase(file, folder = 'covers') {
+  const maxWidth = folder === 'avatars' ? 400 : (folder === 'banners' ? 1200 : (folder === 'posts' ? 900 : 600));
+  const compressedBlob = await compressImageFile(file, maxWidth, 0.82);
+  const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.webp`;
+
+  const { error } = await supabaseClient.storage
+    .from(STORAGE_BUCKET)
+    .upload(fileName, compressedBlob, {
+      contentType: 'image/webp',
+      upsert: false
+    });
+
+  if (error) throw error;
+
+  const { data: publicData } = supabaseClient.storage
+    .from(STORAGE_BUCKET)
+    .getPublicUrl(fileName);
+
+  pendingUploadedUrls.push(publicData.publicUrl);
+  return publicData.publicUrl;
+}
+
+async function deleteOldStorageFile(fileUrl) {
+  if (!fileUrl) return;
+  const marker = `/storage/v1/object/public/${STORAGE_BUCKET}/`;
+  const idx = fileUrl.indexOf(marker);
+  if (idx === -1) return;
+
+  const filePath = decodeURIComponent(fileUrl.substring(idx + marker.length).split('?')[0]);
+  if (!filePath) return;
+
+  const { data, error } = await supabaseClient.storage
+    .from(STORAGE_BUCKET)
+    .remove([filePath]);
+
+  if (error) {
+    console.warn('Storage delete warning:', error.message);
+  } else if (!data || data.length === 0) {
+    console.warn('File not found or blocked by RLS policy:', filePath);
   }
 }
 
-@media (max-width: 560px) {
-  body {
-    padding: 12px 10px 40px;
+async function cleanupPendingUploads(keepUrls = []) {
+  const keepSet = new Set((Array.isArray(keepUrls) ? keepUrls : [keepUrls]).filter(Boolean));
+  for (const tempUrl of pendingUploadedUrls) {
+    if (!keepSet.has(tempUrl)) {
+      await deleteOldStorageFile(tempUrl);
+    }
+  }
+  pendingUploadedUrls = [];
+}
+
+// ==========================================
+// 2C. PROFILE SETTINGS, BANNER & SOCIAL LINKS
+// ==========================================
+function detectSocialIcon(url) {
+  const lower = (url || '').toLowerCase();
+  if (lower.includes('instagram.com')) return 'logo-instagram';
+  if (lower.includes('twitter.com') || lower.includes('x.com')) return 'logo-twitter';
+  if (lower.includes('github.com')) return 'logo-github';
+  if (lower.includes('youtube.com') || lower.includes('youtu.be')) return 'logo-youtube';
+  if (lower.includes('tiktok.com')) return 'logo-tiktok';
+  if (lower.includes('discord.gg') || lower.includes('discord.com')) return 'logo-discord';
+  if (lower.includes('twitch.tv')) return 'logo-twitch';
+  if (lower.includes('linkedin.com')) return 'logo-linkedin';
+  if (lower.includes('reddit.com')) return 'logo-reddit';
+  if (lower.includes('facebook.com')) return 'logo-facebook';
+  if (lower.includes('spotify.com')) return 'musical-notes-outline';
+  if (lower.includes('steamcommunity.com') || lower.includes('store.steampowered.com')) return 'logo-steam';
+  if (lower.includes('letterboxd.com')) return 'film-outline';
+  if (lower.includes('myanimelist.net') || lower.includes('anilist.co')) return 'tv-outline';
+  return 'link-outline';
+}
+
+async function fetchProfileSettings() {
+  const { data, error } = await supabaseClient
+    .from('profile_settings')
+    .select('*')
+    .eq('id', 1)
+    .single();
+
+  if (!error && data) {
+    currentProfile = {
+      name: data.name || '',
+      bio: data.bio || '',
+      avatar_url: data.avatar_url || '',
+      banner_url: data.banner_url || '',
+      social_links: Array.isArray(data.social_links) ? data.social_links : []
+    };
+  }
+  isProfileLoaded = true;
+  applyProfileToUI();
+}
+
+function applyProfileToUI() {
+  setElText('profile-name-text', currentProfile.name);
+  setElText('profile-bio-text', currentProfile.bio);
+  setElText('sticky-name-text', currentProfile.name);
+
+  if (currentProfile.name) {
+    document.title = `${currentProfile.name} — Archive`;
+    setElText('footer-brand-name', currentProfile.name.toUpperCase());
   }
 
-  .library-section {
-    padding: 16px 14px 22px;
+  // Banner Header
+  const headerCard = document.getElementById('profile-header-card');
+  const bannerWrap = document.getElementById('profile-banner-wrap');
+  const bannerImg = document.getElementById('profile-banner-img');
+
+  if (headerCard && bannerWrap && bannerImg) {
+    if (currentProfile.banner_url) {
+      const cleanBanner = normalizeImageUrl(currentProfile.banner_url);
+      bannerImg.onerror = () => {
+        bannerWrap.style.display = 'none';
+        headerCard.classList.remove('has-banner');
+      };
+      bannerImg.src = cleanBanner;
+      bannerWrap.style.display = 'block';
+      headerCard.classList.add('has-banner');
+    } else {
+      bannerImg.src = '';
+      bannerWrap.style.display = 'none';
+      headerCard.classList.remove('has-banner');
+    }
   }
 
-  .profile-banner-wrap {
-    height: 130px;
+  // Avatar & Sticky Avatar & Favicon
+  const avatarEl = document.getElementById('profile-avatar-img');
+  const stickyAvatarEl = document.getElementById('sticky-avatar-img');
+  const faviconEl = document.getElementById('favicon-link');
+
+  if (avatarEl) {
+    if (currentProfile.avatar_url) {
+      const cleanUrl = normalizeImageUrl(currentProfile.avatar_url);
+      avatarEl.onerror = () => {
+        avatarEl.src = 'https://placehold.co/200x200/1e1e1f/ffffff?text=?';
+      };
+      avatarEl.src = cleanUrl;
+      if (stickyAvatarEl) stickyAvatarEl.src = cleanUrl;
+      if (faviconEl) faviconEl.href = cleanUrl;
+    } else {
+      avatarEl.src = TRANSPARENT_PIXEL;
+      if (stickyAvatarEl) stickyAvatarEl.src = TRANSPARENT_PIXEL;
+    }
   }
 
-  .profile-content-body {
-    padding: 16px;
+  // Social Links Bar
+  const socialsBar = document.getElementById('profile-socials-bar');
+  if (socialsBar) {
+    const validLinks = (currentProfile.social_links || []).filter(s => s && s.url);
+    if (validLinks.length > 0) {
+      socialsBar.style.display = 'flex';
+      socialsBar.innerHTML = validLinks.map(s => {
+        const href = s.url.startsWith('http') ? s.url : `https://${s.url}`;
+        const label = escapeHtml(s.label || s.url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]);
+        const iconName = detectSocialIcon(href);
+        return `
+          <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="social-chip">
+            <ion-icon name="${iconName}"></ion-icon>
+            <span>${label}</span>
+          </a>
+        `;
+      }).join('');
+    } else {
+      socialsBar.style.display = 'none';
+      socialsBar.innerHTML = '';
+    }
   }
 
-  .profile-main {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
+  renderBlogPosts();
+}
+
+window.addSocialLinkRow = function (label = '', url = '') {
+  const container = document.getElementById('social-links-editor');
+  if (!container) return;
+
+  const row = document.createElement('div');
+  row.className = 'social-edit-row';
+  row.innerHTML = `
+    <input type="text" class="form-input social-label-input" placeholder="Label (e.g. GitHub)" value="${escapeHtml(label)}">
+    <input type="url" class="form-input social-url-input" placeholder="https://..." value="${escapeHtml(url)}">
+    <button type="button" class="social-remove-btn" onclick="this.parentElement.remove()" title="Remove">
+      <ion-icon name="trash-outline"></ion-icon>
+    </button>
+  `;
+  container.appendChild(row);
+};
+
+window.openProfileModal = function () {
+  pendingUploadedUrls = [];
+  document.getElementById('edit-profile-name').value = currentProfile.name;
+  document.getElementById('edit-profile-bio').value = currentProfile.bio;
+  document.getElementById('edit-profile-avatar').value = currentProfile.avatar_url;
+  document.getElementById('edit-profile-banner').value = currentProfile.banner_url;
+  setElText('profile-upload-status', '');
+  setElText('banner-upload-status', '');
+
+  const editor = document.getElementById('social-links-editor');
+  if (editor) {
+    editor.innerHTML = '';
+    (currentProfile.social_links || []).forEach(link => {
+      addSocialLinkRow(link.label || '', link.url || '');
+    });
   }
 
-  .profile-avatar {
-    width: 74px;
-    height: 74px;
+  document.getElementById('profile-modal').classList.add('active');
+};
+
+window.closeProfileModal = async function () {
+  document.getElementById('profile-modal').classList.remove('active');
+  await cleanupPendingUploads([]);
+};
+
+window.clearBannerInput = function () {
+  document.getElementById('edit-profile-banner').value = '';
+  setElText('banner-upload-status', 'Banner removed (click Save Profile).');
+};
+
+window.handleBannerImageUpload = async function (event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  setElText('banner-upload-status', 'Uploading banner...');
+  try {
+    const publicUrl = await uploadImageToSupabase(file, 'banners');
+    document.getElementById('edit-profile-banner').value = publicUrl;
+    setElText('banner-upload-status', 'Banner uploaded! Click Save Profile.');
+  } catch (err) {
+    setElText('banner-upload-status', `Upload failed: ${err.message}`);
+  } finally {
+    event.target.value = '';
+  }
+};
+
+window.handleProfileImageUpload = async function (event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  setElText('profile-upload-status', 'Uploading avatar...');
+  try {
+    const publicUrl = await uploadImageToSupabase(file, 'avatars');
+    document.getElementById('edit-profile-avatar').value = publicUrl;
+    setElText('profile-upload-status', 'Avatar uploaded! Click Save Profile.');
+  } catch (err) {
+    setElText('profile-upload-status', `Upload failed: ${err.message}`);
+  } finally {
+    event.target.value = '';
+  }
+};
+
+document.getElementById('profile-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const oldAvatar = currentProfile.avatar_url;
+  const oldBanner = currentProfile.banner_url;
+  const newAvatar = document.getElementById('edit-profile-avatar').value.trim();
+  const newBanner = document.getElementById('edit-profile-banner').value.trim();
+
+  const socialRows = document.querySelectorAll('#social-links-editor .social-edit-row');
+  const collectedLinks = [];
+  socialRows.forEach(row => {
+    const label = row.querySelector('.social-label-input')?.value.trim() || '';
+    const url = row.querySelector('.social-url-input')?.value.trim() || '';
+    if (url) {
+      collectedLinks.push({ label, url });
+    }
+  });
+
+  const updatedProfile = {
+    id: 1,
+    name: document.getElementById('edit-profile-name').value.trim(),
+    bio: document.getElementById('edit-profile-bio').value.trim(),
+    avatar_url: newAvatar,
+    banner_url: newBanner,
+    social_links: collectedLinks,
+    updated_at: new Date().toISOString()
+  };
+
+  const { error } = await supabaseClient
+    .from('profile_settings')
+    .upsert([updatedProfile]);
+
+  if (error) {
+    Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
+  } else {
+    await cleanupPendingUploads([newAvatar, newBanner]);
+    if (oldAvatar && oldAvatar !== newAvatar) {
+      await deleteOldStorageFile(oldAvatar);
+    }
+    if (oldBanner && oldBanner !== newBanner) {
+      await deleteOldStorageFile(oldBanner);
+    }
+    currentProfile = updatedProfile;
+    applyProfileToUI();
+    document.getElementById('profile-modal').classList.remove('active');
+    showToast('Profile updated', 'success');
+  }
+});
+
+// ==========================================
+// 3. MULTI-CATEGORY PARSING & STATS CALCULATION
+// ==========================================
+function normalizeSingleCategory(raw) {
+  const c = (raw || '').toLowerCase().trim();
+  if (c === 'series' || c === 'tv_show') return 'tv_show';
+  return c || 'tv_show';
+}
+
+function getItemCategories(item) {
+  let cats = [];
+
+  if (Array.isArray(item.categories) && item.categories.length > 0) {
+    cats = item.categories.map(normalizeSingleCategory);
+  } else if (typeof item.category === 'string' && item.category.trim()) {
+    cats = item.category
+      .split(',')
+      .map(s => normalizeSingleCategory(s))
+      .filter(Boolean);
   }
 
-  .library-controls {
-    flex-wrap: wrap;
+  if (item.sub_category) {
+    const sub = item.sub_category.toLowerCase().trim();
+    if (sub === 'light_novel' && !cats.includes('novel')) cats.push('novel');
+    else if (sub && sub !== 'other' && !cats.includes(sub)) cats.push(normalizeSingleCategory(sub));
   }
 
-  .search-box {
-    flex: 1 1 100%;
+  cats = cats.filter(c => c !== 'other');
+  if (cats.length === 0) cats = ['tv_show'];
+  return [...new Set(cats)];
+}
+
+function getNormalizedCategory(item) {
+  return getItemCategories(item)[0];
+}
+
+function parseJsonArrayField(val) {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string' && val.trim()) {
+    try {
+      const parsed = JSON.parse(val);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+  return [];
+}
+
+async function fetchMediaLogs() {
+  const { data, error } = await supabaseClient
+    .from('media_logs')
+    .select('*')
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    document.getElementById('media-grid').innerHTML = `<p class="empty-state">Failed to load data: ${error.message}</p>`;
+    return;
   }
 
-  .toolbar-btn-group {
-    width: 100%;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+  allMediaLogs = data || [];
+  updateStatsUI();
+  renderMediaGrid();
+}
+
+function updateStatsUI() {
+  const tvItems = allMediaLogs.filter(i => getItemCategories(i).includes('tv_show'));
+  const movieItems = allMediaLogs.filter(i => getItemCategories(i).includes('movie'));
+  const comicItems = allMediaLogs.filter(i => getItemCategories(i).includes('comic'));
+  const novelItems = allMediaLogs.filter(i => getItemCategories(i).includes('novel'));
+  const gameItems = allMediaLogs.filter(i => getItemCategories(i).includes('game'));
+  const musicItems = allMediaLogs.filter(i => getItemCategories(i).includes('music'));
+
+  const totalTvEps = tvItems.reduce((sum, i) => sum + (Number(i.progress) || 0), 0);
+  const completedMovies = movieItems.filter(i => (i.status || '').toLowerCase().trim() === 'completed').length;
+  const totalComicCh = comicItems.reduce((sum, i) => sum + (Number(i.progress) || 0), 0);
+  const completedNovels = novelItems.filter(i => (i.status || '').toLowerCase().trim() === 'completed').length;
+  const completedGames = gameItems.filter(i => (i.status || '').toLowerCase().trim() === 'completed').length;
+  const totalMusicTracks = musicItems.reduce((sum, i) => sum + (Number(i.progress) || 0), 0);
+
+  const totalEntries = allMediaLogs.length;
+  const totalCompleted = allMediaLogs.filter(i => (i.status || '').toLowerCase().trim() === 'completed').length;
+  const completionRate = totalEntries > 0 ? Math.round((totalCompleted / totalEntries) * 100) : 0;
+
+  const ratedItems = allMediaLogs.filter(i => i.rating !== null && i.rating !== undefined && i.rating !== '');
+  const avgRating = ratedItems.length
+    ? (ratedItems.reduce((sum, i) => sum + Number(i.rating), 0) / ratedItems.length).toFixed(2)
+    : '0.0';
+
+  setElText('total-entries-label', `${totalEntries} Entries`);
+
+  setElText('stat-tv-eps', totalTvEps.toLocaleString('en-US'));
+  setElText('stat-tv-count', `${tvItems.length} Show`);
+
+  setElText('stat-movies-total', movieItems.length.toLocaleString('en-US'));
+  setElText('stat-movies-done', `${completedMovies} Completed`);
+
+  setElText('stat-comic-ch', totalComicCh.toLocaleString('en-US'));
+  setElText('stat-comic-count', `${comicItems.length} Comic`);
+
+  setElText('stat-novel-total', novelItems.length.toLocaleString('en-US'));
+  setElText('stat-novel-done', `${completedNovels} Completed`);
+
+  setElText('stat-game-total', gameItems.length.toLocaleString('en-US'));
+  setElText('stat-game-done', `${completedGames} Completed`);
+
+  setElText('stat-music-total', musicItems.length.toLocaleString('en-US'));
+  setElText('stat-music-tracks', `${totalMusicTracks.toLocaleString('en-US')} Track`);
+
+  setElText('stat-completed-total', totalCompleted.toLocaleString('en-US'));
+  setElText('stat-completion-rate', `${completionRate}% Rate`);
+
+  setElText('stat-avg-rating', avgRating);
+  setElText('stat-rated-count', `${ratedItems.length} Rated`);
+}
+
+// ==========================================
+// 4. POPOVER FILTER, SORT, PAGINATION & RENDER
+// ==========================================
+window.toggleToolbarPopover = function (type, event) {
+  if (event) event.stopPropagation();
+  const filterMenu = document.getElementById('filter-popover-menu');
+  const sortMenu = document.getElementById('sort-popover-menu');
+  const filterBtn = document.getElementById('btn-toggle-filter-menu');
+  const sortBtn = document.getElementById('btn-toggle-sort-menu');
+
+  if (type === 'filter') {
+    const willOpen = !filterMenu?.classList.contains('open');
+    filterMenu?.classList.toggle('open', willOpen);
+    filterBtn?.classList.toggle('active', willOpen);
+    sortMenu?.classList.remove('open');
+    sortBtn?.classList.remove('active');
+  } else if (type === 'sort') {
+    const willOpen = !sortMenu?.classList.contains('open');
+    sortMenu?.classList.toggle('open', willOpen);
+    sortBtn?.classList.toggle('active', willOpen);
+    filterMenu?.classList.remove('open');
+    filterBtn?.classList.remove('active');
+  }
+};
+
+function setupPopoverOutsideClick() {
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.popover-wrapper')) {
+      document.getElementById('filter-popover-menu')?.classList.remove('open');
+      document.getElementById('sort-popover-menu')?.classList.remove('open');
+      document.getElementById('btn-toggle-filter-menu')?.classList.remove('active');
+      document.getElementById('btn-toggle-sort-menu')?.classList.remove('active');
+    }
+  });
+}
+
+window.setSortDirection = function (dir) {
+  sortDirection = dir;
+  document.getElementById('btn-sort-desc')?.classList.toggle('active', dir === 'desc');
+  document.getElementById('btn-sort-asc')?.classList.toggle('active', dir === 'asc');
+  updateToolbarIndicators();
+  resetPaginationAndRender();
+};
+
+window.handleUnratedCheckboxChange = function () {
+  const unratedOnly = document.getElementById('filter-unrated-only')?.checked || false;
+  const minInput = document.getElementById('filter-rating-min');
+  const maxInput = document.getElementById('filter-rating-max');
+  if (minInput) minInput.disabled = unratedOnly;
+  if (maxInput) maxInput.disabled = unratedOnly;
+  resetPaginationAndRender();
+};
+
+window.resetLibraryFilters = function () {
+  const statusEl = document.getElementById('filter-status');
+  const rMinEl = document.getElementById('filter-rating-min');
+  const rMaxEl = document.getElementById('filter-rating-max');
+  const unratedEl = document.getElementById('filter-unrated-only');
+  const pMinEl = document.getElementById('filter-progress-min');
+  const pMaxEl = document.getElementById('filter-progress-max');
+
+  if (statusEl) statusEl.value = 'all';
+  if (rMinEl) { rMinEl.value = ''; rMinEl.disabled = false; }
+  if (rMaxEl) { rMaxEl.value = ''; rMaxEl.disabled = false; }
+  if (unratedEl) unratedEl.checked = false;
+  if (pMinEl) pMinEl.value = '';
+  if (pMaxEl) pMaxEl.value = '';
+
+  resetPaginationAndRender();
+};
+
+function updateToolbarIndicators() {
+  const statusVal = document.getElementById('filter-status')?.value || 'all';
+  const rMin = document.getElementById('filter-rating-min')?.value.trim() || '';
+  const rMax = document.getElementById('filter-rating-max')?.value.trim() || '';
+  const unratedOnly = document.getElementById('filter-unrated-only')?.checked || false;
+  const pMin = document.getElementById('filter-progress-min')?.value.trim() || '';
+  const pMax = document.getElementById('filter-progress-max')?.value.trim() || '';
+
+  const hasFilter = statusVal !== 'all' || rMin !== '' || rMax !== '' || unratedOnly || pMin !== '' || pMax !== '';
+  const filterDot = document.getElementById('filter-active-dot');
+  if (filterDot) filterDot.style.display = hasFilter ? 'inline-block' : 'none';
+
+  const sortField = document.getElementById('sort-field')?.value || 'updated';
+  const hasCustomSort = sortField !== 'updated' || sortDirection !== 'desc';
+  const sortDot = document.getElementById('sort-active-dot');
+  if (sortDot) sortDot.style.display = hasCustomSort ? 'inline-block' : 'none';
+}
+
+function resetPaginationAndRender() {
+  visibleMediaLimit = itemsPerPage;
+  updateToolbarIndicators();
+  renderMediaGrid();
+}
+
+function setupFilterListeners() {
+  document.querySelectorAll('.cat-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentCategory = btn.dataset.category;
+      resetPaginationAndRender();
+    });
+  });
+
+  document.getElementById('search-library')?.addEventListener('input', resetPaginationAndRender);
+  document.getElementById('filter-status')?.addEventListener('change', resetPaginationAndRender);
+  document.getElementById('filter-rating-min')?.addEventListener('input', resetPaginationAndRender);
+  document.getElementById('filter-rating-max')?.addEventListener('input', resetPaginationAndRender);
+  document.getElementById('filter-progress-min')?.addEventListener('input', resetPaginationAndRender);
+  document.getElementById('filter-progress-max')?.addEventListener('input', resetPaginationAndRender);
+  document.getElementById('sort-field')?.addEventListener('change', resetPaginationAndRender);
+}
+
+function formatCategoryLabel(cat) {
+  const labelMap = {
+    tv_show: 'TV Show',
+    movie: 'Movie',
+    comic: 'Comic',
+    novel: 'Novel',
+    game: 'Game',
+    music: 'Music'
+  };
+  return labelMap[cat] || cat;
+}
+
+function formatCategoryBadgesHtml(item) {
+  return getItemCategories(item)
+    .map(c => `<span class="badge-cat">${formatCategoryLabel(c)}</span>`)
+    .join('');
+}
+
+function normalizeImageUrl(url) {
+  if (!url) return '';
+  return url.trim().replace(/^http:\/\//i, 'https://');
+}
+
+function formatStatusDate(isoString) {
+  if (!isoString) return '—';
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+}
+
+function matchesAdvancedFilters(item) {
+  const statusFilter = document.getElementById('filter-status')?.value || 'all';
+  const unratedOnly = document.getElementById('filter-unrated-only')?.checked || false;
+  const rMinRaw = document.getElementById('filter-rating-min')?.value.trim() || '';
+  const rMaxRaw = document.getElementById('filter-rating-max')?.value.trim() || '';
+  const pMinRaw = document.getElementById('filter-progress-min')?.value.trim() || '';
+  const pMaxRaw = document.getElementById('filter-progress-max')?.value.trim() || '';
+
+  const normStatus = (item.status || '').toLowerCase().trim();
+  if (statusFilter !== 'all' && normStatus !== statusFilter) return false;
+
+  const hasRating = item.rating !== null && item.rating !== undefined && item.rating !== '';
+  const rVal = Number(item.rating);
+
+  if (unratedOnly) {
+    if (hasRating && !Number.isNaN(rVal)) return false;
+  } else {
+    if (rMinRaw !== '') {
+      const minR = parseFloat(rMinRaw);
+      if (!hasRating || Number.isNaN(rVal) || rVal < minR) return false;
+    }
+    if (rMaxRaw !== '') {
+      const maxR = parseFloat(rMaxRaw);
+      if (!hasRating || Number.isNaN(rVal) || rVal > maxR) return false;
+    }
   }
 
-  .toolbar-action-btn {
-    width: 100%;
+  const progVal = Number(item.progress) || 0;
+  if (pMinRaw !== '') {
+    const minP = parseFloat(pMinRaw);
+    if (progVal < minP) return false;
+  }
+  if (pMaxRaw !== '') {
+    const maxP = parseFloat(pMaxRaw);
+    if (progVal > maxP) return false;
   }
 
-  #filter-popover-menu {
-    left: 0;
-    right: auto;
-    width: min(260px, calc(100vw - 48px));
+  return true;
+}
+
+function renderMediaGrid() {
+  const grid = document.getElementById('media-grid');
+  const loadMoreWrap = document.getElementById('load-more-wrap');
+  const loadMoreText = document.getElementById('load-more-text');
+
+  const query = (document.getElementById('search-library')?.value || '').toLowerCase().trim();
+  const sortField = document.getElementById('sort-field')?.value || 'updated';
+  const dirMult = sortDirection === 'asc' ? 1 : -1;
+
+  grid.classList.toggle('list-view', libraryViewMode === 'list');
+
+  let filtered = allMediaLogs.filter(item => {
+    const cats = getItemCategories(item);
+    const matchCat = currentCategory === 'all' || cats.includes(currentCategory);
+    const matchQuery = !query || item.title.toLowerCase().includes(query);
+    return matchCat && matchQuery && matchesAdvancedFilters(item);
+  });
+
+  filtered.sort((a, b) => {
+    if (sortField === 'rating') {
+      const rA = (a.rating !== null && a.rating !== undefined && a.rating !== '') ? Number(a.rating) : -1;
+      const rB = (b.rating !== null && b.rating !== undefined && b.rating !== '') ? Number(b.rating) : -1;
+      return (rA - rB) * dirMult;
+    }
+    if (sortField === 'progress') {
+      const pA = Number(a.progress) || 0;
+      const pB = Number(b.progress) || 0;
+      return (pA - pB) * dirMult;
+    }
+    if (sortField === 'title') {
+      return a.title.localeCompare(b.title) * (sortDirection === 'asc' ? 1 : -1);
+    }
+    const tA = new Date(a.updated_at || a.created_at || 0).getTime();
+    const tB = new Date(b.updated_at || b.created_at || 0).getTime();
+    return (tA - tB) * dirMult;
+  });
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `<p class="empty-state">No media found matching these filters.</p>`;
+    if (loadMoreWrap) loadMoreWrap.style.display = 'none';
+    return;
   }
 
-  #sort-popover-menu {
-    right: 0;
-    left: auto;
-    width: min(240px, calc(100vw - 48px));
+  const displayedItems = itemsPerPage === Infinity ? filtered : filtered.slice(0, visibleMediaLimit);
+  const remainingCount = filtered.length - displayedItems.length;
+
+  if (loadMoreWrap) {
+    if (remainingCount > 0) {
+      loadMoreWrap.style.display = 'flex';
+      if (loadMoreText) loadMoreText.textContent = `Load More (${remainingCount} remaining)`;
+    } else {
+      loadMoreWrap.style.display = 'none';
+    }
   }
 
-  .media-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
+  // COMPACT LIST VIEW RENDER
+  if (libraryViewMode === 'list') {
+    grid.innerHTML = displayedItems.map(item => {
+      const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/120x180/1e1e1f/888888?text=?';
+      const ratingText = (item.rating !== null && item.rating !== undefined && item.rating !== '') ? `★ ${Number(item.rating).toFixed(1)}` : '—';
+      const hasTotal = item.total_units !== null && item.total_units !== undefined && Number(item.total_units) > 0;
+      const progressText = hasTotal ? `${item.progress || 0}/${item.total_units}` : `${item.progress || 0}/?`;
+      const statusKey = (item.status || 'planned').toLowerCase().trim();
+      const repeatCount = Number(item.repeat_count) || 0;
+      const statusDateText = formatStatusDate(item.status_updated_at || item.updated_at || item.created_at);
+      const catsLabel = getItemCategories(item).map(formatCategoryLabel).join(' · ');
+
+      const repeatHtml = repeatCount > 0
+        ? `<span class="list-repeat-tag" title="Rewatch / Reread count">↻ ${repeatCount}x</span>`
+        : '';
+
+      const editBtnHtml = isAdminLoggedIn ? `
+        <button type="button" class="list-edit-btn" onclick="event.stopPropagation(); openEditModal('${item.id}')" title="Edit Entry">
+          <ion-icon name="create-outline"></ion-icon>
+        </button>
+      ` : '';
+
+      return `
+        <div class="media-list-row" onclick="openMediaDetailModal('${item.id}')">
+          <img class="list-thumb" src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/120x180/1e1e1f/888888?text=?'">
+          <div class="list-main-info">
+            <div class="list-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
+            <div class="list-sub-meta">
+              <span class="list-cat-tag">${catsLabel}</span>
+              <span>•</span>
+              <span>${statusDateText}</span>
+              ${repeatHtml}
+            </div>
+          </div>
+          <div class="list-right-meta">
+            <span class="status-pill ${statusKey} list-hide-mobile">${statusKey}</span>
+            <span class="progress-pill ${statusKey}">${progressText}</span>
+            <span class="list-rating-pill">${ratingText}</span>
+            ${editBtnHtml}
+          </div>
+        </div>
+      `;
+    }).join('');
+    return;
   }
 
-  .list-hide-mobile {
-    display: none;
+  // GRID VIEW RENDER
+  grid.innerHTML = displayedItems.map(item => {
+    const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
+    const ratingText = (item.rating !== null && item.rating !== undefined && item.rating !== '') ? `★ ${Number(item.rating).toFixed(1)}` : '—';
+    const repeatCount = Number(item.repeat_count) || 0;
+    const seasons = parseJsonArrayField(item.seasons);
+
+    const hasTotal = item.total_units !== null && item.total_units !== undefined && Number(item.total_units) > 0;
+    const progressText = hasTotal
+      ? `${item.progress || 0}/${item.total_units}`
+      : `${item.progress || 0}/?`;
+
+    const statusKey = (item.status || 'planned').toLowerCase().trim();
+    let percent = 0;
+    let extraBarClass = '';
+
+    if (statusKey === 'completed') {
+      percent = 100;
+    } else if (hasTotal) {
+      percent = Math.min(100, Math.max(0, Math.round(((item.progress || 0) / Number(item.total_units)) * 100)));
+      if (statusKey === 'planned' && percent === 0) {
+        percent = 100;
+        extraBarClass = 'planned-empty';
+      }
+    } else {
+      if (statusKey === 'planned') {
+        percent = 100;
+        extraBarClass = 'planned-empty';
+      } else {
+        percent = (item.progress || 0) > 0 ? 45 : 0;
+      }
+    }
+
+    const statusDateText = formatStatusDate(item.status_updated_at || item.updated_at || item.created_at);
+
+    const repeatBadgeHtml = repeatCount > 0
+      ? `<span class="badge-repeat" title="Rewatch / Reread count">↻ ${repeatCount}x</span>`
+      : '';
+
+    const seasonBadgeHtml = seasons.length > 0
+      ? `<span class="badge-seasons">${seasons.length} Season${seasons.length > 1 ? 's' : ''}</span>`
+      : '';
+
+    const coverEditHtml = isAdminLoggedIn ? `
+      <button type="button" class="cover-edit-btn" onclick="event.stopPropagation(); openEditModal('${item.id}')" title="Edit Entry">
+        <ion-icon name="create-outline"></ion-icon>
+      </button>
+    ` : '';
+
+    return `
+      <div class="media-card" onclick="openMediaDetailModal('${item.id}')">
+        <div class="media-cover-wrap">
+          <img src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=No+Cover'">
+          <div class="cover-left-badges">
+            <div class="badge-cat-row">${formatCategoryBadgesHtml(item)}</div>
+            <span class="badge-rating">${ratingText}</span>
+            ${repeatBadgeHtml}
+          </div>
+          ${seasonBadgeHtml}
+          ${coverEditHtml}
+        </div>
+        <div class="media-body">
+          <h3 class="media-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h3>
+          <div class="media-bottom-stack">
+            <div class="media-meta-row">
+              <span class="status-pill ${statusKey}">${statusKey}</span>
+              <span class="progress-pill ${statusKey}">${progressText}</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill ${statusKey} ${extraBarClass}" style="width: ${percent}%"></div>
+            </div>
+            <div class="media-footer-row">
+              <span class="status-date-item" title="Last status update">
+                <ion-icon name="calendar-outline"></ion-icon>
+                <span>${statusDateText}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ==========================================
+// 4B. MEDIA DETAIL MODAL
+// ==========================================
+window.openMediaDetailModal = function (id) {
+  const item = allMediaLogs.find(m => m.id === id);
+  if (!item) return;
+
+  setElText('detail-modal-title', item.title);
+  const bodyEl = document.getElementById('detail-modal-body');
+  if (!bodyEl) return;
+
+  const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
+  const statusKey = (item.status || 'planned').toLowerCase().trim();
+  const ratingText = (item.rating !== null && item.rating !== undefined && item.rating !== '') ? `★ ${Number(item.rating).toFixed(1)} / 10` : 'Unrated';
+  const hasTotal = item.total_units !== null && item.total_units !== undefined && Number(item.total_units) > 0;
+  const progressText = hasTotal ? `${item.progress || 0} / ${item.total_units} ${item.unit_label || ''}` : `${item.progress || 0} ${item.unit_label || ''}`;
+  const repeatCount = Number(item.repeat_count) || 0;
+  const statusDateText = formatStatusDate(item.status_updated_at || item.updated_at || item.created_at);
+  const seasons = parseJsonArrayField(item.seasons);
+  const tracks = parseJsonArrayField(item.tracks);
+
+  const notesHtml = item.notes ? `
+    <div>
+      <div class="detail-section-title">Notes / Review</div>
+      <div class="detail-row-item" style="display: block; white-space: pre-wrap; line-height: 1.55; color: var(--light-gray);">${escapeHtml(item.notes)}</div>
+    </div>
+  ` : '';
+
+  const seasonsHtml = seasons.length > 0 ? `
+    <div>
+      <div class="detail-section-title">Seasons (${seasons.length})</div>
+      <div class="detail-list">
+        ${seasons.map(s => {
+          const sStatus = (s.status || 'planned').toLowerCase();
+          const sProg = s.total ? `${s.progress || 0}/${s.total}` : `${s.progress || 0}/?`;
+          return `
+            <div class="detail-row-item">
+              <span style="font-weight: 500; color: var(--white-1);">${escapeHtml(s.name || 'Season')}</span>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="status-pill ${sStatus}">${sStatus}</span>
+                <span class="progress-pill ${sStatus}">${sProg}</span>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  ` : '';
+
+  const tracksHtml = tracks.length > 0 ? `
+    <div>
+      <div class="detail-section-title">Tracklist (${tracks.length})</div>
+      <div class="detail-list">
+        ${tracks.map((t, i) => {
+          const tStatus = (t.status || 'planned').toLowerCase();
+          const tRating = (t.rating !== null && t.rating !== undefined && t.rating !== '') ? `★ ${Number(t.rating).toFixed(1)}` : '';
+          return `
+            <div class="detail-row-item">
+              <div style="min-width: 0; flex: 1;">
+                <div style="font-weight: 500; color: var(--white-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${i + 1}. ${escapeHtml(t.title || 'Untitled Track')}</div>
+                ${t.artist ? `<div style="font-size: 10px; color: var(--light-gray-70);">${escapeHtml(t.artist)}</div>` : ''}
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                ${tRating ? `<span style="font-size: 11px; font-weight: 600;">${tRating}</span>` : ''}
+                <span class="status-pill ${tStatus}">${tStatus}</span>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  ` : '';
+
+  const adminEditAction = isAdminLoggedIn ? `
+    <button type="button" class="form-btn primary-submit" onclick="closeMediaDetailModal(); openEditModal('${item.id}')">
+      <ion-icon name="create-outline"></ion-icon> Edit Entry
+    </button>
+  ` : '';
+
+  bodyEl.innerHTML = `
+    <div class="detail-hero">
+      <img class="detail-poster" src="${cover}" alt="${escapeHtml(item.title)}" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=No+Cover'">
+      <div class="detail-meta-col">
+        <div class="badge-cat-row">${formatCategoryBadgesHtml(item)}</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+          <span class="status-pill ${statusKey}">${statusKey}</span>
+          <span class="progress-pill ${statusKey}">${progressText.trim()}</span>
+          <span class="badge-rating">${ratingText}</span>
+          ${repeatCount > 0 ? `<span class="badge-repeat">↻ ${repeatCount}x</span>` : ''}
+        </div>
+        <div style="font-size: 11px; color: var(--light-gray-70);">Updated: ${statusDateText}</div>
+      </div>
+    </div>
+    ${notesHtml}
+    ${seasonsHtml}
+    ${tracksHtml}
+    ${adminEditAction}
+  `;
+
+  document.getElementById('media-detail-modal')?.classList.add('active');
+};
+
+window.closeMediaDetailModal = function () {
+  document.getElementById('media-detail-modal')?.classList.remove('active');
+};
+
+// ==========================================
+// 5. ADD / EDIT MODAL, MULTI-CATEGORY, SEASONS & TRACKS
+// ==========================================
+function getSelectedModalCategories() {
+  const checked = Array.from(document.querySelectorAll('#media-cat-checkboxes input[type="checkbox"]:checked'))
+    .map(cb => cb.value);
+  return checked.length > 0 ? checked : ['tv_show'];
+}
+
+function setSelectedModalCategories(cats) {
+  const set = new Set(cats && cats.length ? cats : ['tv_show']);
+  document.querySelectorAll('#media-cat-checkboxes input[type="checkbox"]').forEach(cb => {
+    cb.checked = set.has(cb.value);
+  });
+}
+
+window.handleCategoryCheckboxChange = function () {
+  const cats = getSelectedModalCategories();
+  const primary = cats[0];
+  const unitSelect = document.getElementById('media-unit');
+
+  if (primary === 'tv_show') unitSelect.value = 'eps';
+  else if (primary === 'movie') unitSelect.value = 'movie';
+  else if (primary === 'comic') unitSelect.value = 'ch';
+  else if (primary === 'novel') unitSelect.value = 'vol';
+  else if (primary === 'game') unitSelect.value = 'item';
+  else if (primary === 'music') unitSelect.value = 'track';
+
+  const seasonsSection = document.getElementById('seasons-editor-section');
+  const tracksSection = document.getElementById('tracks-editor-section');
+  if (seasonsSection) seasonsSection.style.display = cats.includes('tv_show') ? 'flex' : 'none';
+  if (tracksSection) tracksSection.style.display = cats.includes('music') ? 'flex' : 'none';
+};
+
+window.addSeasonRow = function (data = {}) {
+  const list = document.getElementById('seasons-editor-list');
+  if (!list) return;
+
+  const idx = list.children.length + 1;
+  const card = document.createElement('div');
+  card.className = 'season-edit-card';
+  card.innerHTML = `
+    <div class="season-edit-top">
+      <input type="text" class="form-input season-name-input" placeholder="Season ${idx}" value="${escapeHtml(data.name || `Season ${idx}`)}">
+      <button type="button" class="social-remove-btn" onclick="this.closest('.season-edit-card').remove(); syncProgressFromSeasons();" title="Remove Season">
+        <ion-icon name="trash-outline"></ion-icon>
+      </button>
+    </div>
+    <div class="season-edit-grid">
+      <select class="form-input season-status-input" onchange="syncProgressFromSeasons()">
+        <option value="planned" ${data.status === 'planned' ? 'selected' : ''}>Planned</option>
+        <option value="ongoing" ${data.status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
+        <option value="completed" ${data.status === 'completed' ? 'selected' : ''}>Completed</option>
+        <option value="dropped" ${data.status === 'dropped' ? 'selected' : ''}>Dropped</option>
+      </select>
+      <input type="number" class="form-input season-prog-input" min="0" placeholder="Done" value="${data.progress ?? 0}" oninput="syncProgressFromSeasons()">
+      <input type="number" class="form-input season-total-input" min="0" placeholder="Total" value="${data.total ?? ''}" oninput="syncProgressFromSeasons()">
+      <input type="number" class="form-input season-rating-input" min="0" max="10" step="0.1" placeholder="Score" value="${data.rating ?? ''}">
+    </div>
+  `;
+  list.appendChild(card);
+};
+
+window.syncProgressFromSeasons = function () {
+  const cards = document.querySelectorAll('#seasons-editor-list .season-edit-card');
+  if (cards.length === 0) return;
+
+  let sumProg = 0;
+  let sumTotal = 0;
+  let hasAnyTotal = false;
+
+  cards.forEach(c => {
+    const st = c.querySelector('.season-status-input')?.value || 'planned';
+    const tot = parseInt(c.querySelector('.season-total-input')?.value, 10);
+    let prg = parseInt(c.querySelector('.season-prog-input')?.value, 10) || 0;
+
+    if (st === 'completed' && tot > 0) {
+      prg = tot;
+      c.querySelector('.season-prog-input').value = tot;
+    }
+    sumProg += prg;
+    if (tot > 0) {
+      sumTotal += tot;
+      hasAnyTotal = true;
+    }
+  });
+
+  document.getElementById('media-progress').value = sumProg;
+  if (hasAnyTotal) {
+    document.getElementById('media-total').value = sumTotal;
+  }
+};
+
+function collectSeasonsFromModal() {
+  const cards = document.querySelectorAll('#seasons-editor-list .season-edit-card');
+  const arr = [];
+  cards.forEach(c => {
+    const name = c.querySelector('.season-name-input')?.value.trim() || 'Season';
+    const status = c.querySelector('.season-status-input')?.value || 'planned';
+    const progress = parseInt(c.querySelector('.season-prog-input')?.value, 10) || 0;
+    const totRaw = c.querySelector('.season-total-input')?.value;
+    const ratRaw = c.querySelector('.season-rating-input')?.value;
+    arr.push({
+      name,
+      status,
+      progress,
+      total: totRaw !== '' ? parseInt(totRaw, 10) : null,
+      rating: ratRaw !== '' ? parseFloat(ratRaw) : null
+    });
+  });
+  return arr;
+}
+
+window.addTrackRow = function (data = {}) {
+  const list = document.getElementById('tracks-editor-list');
+  if (!list) return;
+
+  const idx = list.children.length + 1;
+  const card = document.createElement('div');
+  card.className = 'track-edit-card';
+  card.innerHTML = `
+    <div class="track-edit-top">
+      <input type="text" class="form-input track-title-input" placeholder="Track #${idx} Title" value="${escapeHtml(data.title || '')}">
+      <button type="button" class="social-remove-btn" onclick="this.closest('.track-edit-card').remove(); syncProgressFromTracks();" title="Remove Track">
+        <ion-icon name="trash-outline"></ion-icon>
+      </button>
+    </div>
+    <div class="track-edit-grid">
+      <input type="text" class="form-input track-artist-input" placeholder="Artist" value="${escapeHtml(data.artist || '')}">
+      <select class="form-input track-status-input" onchange="syncProgressFromTracks()">
+        <option value="planned" ${data.status === 'planned' ? 'selected' : ''}>Planned</option>
+        <option value="ongoing" ${data.status === 'ongoing' ? 'selected' : ''}>Listening</option>
+        <option value="completed" ${data.status === 'completed' ? 'selected' : ''}>Completed</option>
+        <option value="dropped" ${data.status === 'dropped' ? 'selected' : ''}>Skipped</option>
+      </select>
+      <input type="number" class="form-input track-rating-input" min="0" max="10" step="0.1" placeholder="Rating" value="${data.rating ?? ''}">
+      <input type="text" class="form-input track-note-input" placeholder="Note" value="${escapeHtml(data.note || '')}">
+    </div>
+  `;
+  list.appendChild(card);
+  syncProgressFromTracks();
+};
+
+window.syncProgressFromTracks = function () {
+  const cards = document.querySelectorAll('#tracks-editor-list .track-edit-card');
+  if (cards.length === 0) return;
+
+  let doneCount = 0;
+  cards.forEach(c => {
+    if (c.querySelector('.track-status-input')?.value === 'completed') doneCount++;
+  });
+
+  document.getElementById('media-total').value = cards.length;
+  document.getElementById('media-progress').value = doneCount;
+};
+
+function collectTracksFromModal() {
+  const cards = document.querySelectorAll('#tracks-editor-list .track-edit-card');
+  const arr = [];
+  cards.forEach(c => {
+    const title = c.querySelector('.track-title-input')?.value.trim() || '';
+    const artist = c.querySelector('.track-artist-input')?.value.trim() || '';
+    const status = c.querySelector('.track-status-input')?.value || 'planned';
+    const ratRaw = c.querySelector('.track-rating-input')?.value;
+    const note = c.querySelector('.track-note-input')?.value.trim() || '';
+    if (title || artist) {
+      arr.push({
+        title,
+        artist,
+        status,
+        rating: ratRaw !== '' ? parseFloat(ratRaw) : null,
+        note
+      });
+    }
+  });
+  return arr;
+}
+
+window.openMediaModal = function () {
+  pendingUploadedUrls = [];
+  document.getElementById('media-modal-title').textContent = 'Add Media';
+  document.getElementById('media-form').reset();
+  document.getElementById('media-id').value = '';
+  document.getElementById('media-repeat').value = 0;
+  if (document.getElementById('media-notes')) document.getElementById('media-notes').value = '';
+  document.getElementById('btn-modal-delete').style.display = 'none';
+  document.getElementById('api-search-results').style.display = 'none';
+  if (document.getElementById('seasons-editor-list')) document.getElementById('seasons-editor-list').innerHTML = '';
+  if (document.getElementById('tracks-editor-list')) document.getElementById('tracks-editor-list').innerHTML = '';
+  setElText('cover-upload-status', '');
+
+  setSelectedModalCategories(['tv_show']);
+  handleCategoryCheckboxChange();
+  document.getElementById('media-modal').classList.add('active');
+};
+
+window.openEditModal = function (id) {
+  const item = allMediaLogs.find(m => m.id === id);
+  if (!item) return;
+
+  pendingUploadedUrls = [];
+  document.getElementById('media-modal-title').textContent = 'Edit Media';
+  document.getElementById('media-id').value = item.id;
+  document.getElementById('btn-modal-delete').style.display = 'inline-flex';
+
+  const cats = getItemCategories(item);
+  setSelectedModalCategories(cats);
+  handleCategoryCheckboxChange();
+
+  document.getElementById('media-title').value = item.title;
+  document.getElementById('media-cover').value = item.cover_url || '';
+  document.getElementById('media-status').value = (item.status || 'planned').toLowerCase().trim();
+  document.getElementById('media-progress').value = item.progress || 0;
+  document.getElementById('media-total').value = item.total_units || '';
+  document.getElementById('media-unit').value = item.unit_label || 'eps';
+  document.getElementById('media-rating').value = (item.rating !== null && item.rating !== undefined) ? item.rating : '';
+  document.getElementById('media-repeat').value = Number(item.repeat_count) || 0;
+  if (document.getElementById('media-notes')) document.getElementById('media-notes').value = item.notes || '';
+  document.getElementById('api-search-results').style.display = 'none';
+  setElText('cover-upload-status', '');
+
+  const seasonsList = document.getElementById('seasons-editor-list');
+  if (seasonsList) {
+    seasonsList.innerHTML = '';
+    parseJsonArrayField(item.seasons).forEach(s => addSeasonRow(s));
   }
 
-  .track-edit-grid,
-  .season-edit-grid {
-    grid-template-columns: 1fr 1fr;
+  const tracksList = document.getElementById('tracks-editor-list');
+  if (tracksList) {
+    tracksList.innerHTML = '';
+    parseJsonArrayField(item.tracks).forEach(t => addTrackRow(t));
   }
 
-  .form-row-2 {
-    grid-template-columns: 1fr;
-  }
+  document.getElementById('media-modal').classList.add('active');
+};
 
-  .api-search-row {
-    flex-wrap: wrap;
+window.closeMediaModal = async function () {
+  document.getElementById('media-modal').classList.remove('active');
+  await cleanupPendingUploads([]);
+};
+
+window.handleMediaCoverUpload = async function (event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  setElText('cover-upload-status', 'Uploading cover...');
+  try {
+    const publicUrl = await uploadImageToSupabase(file, 'covers');
+    document.getElementById('media-cover').value = publicUrl;
+    setElText('cover-upload-status', 'Cover uploaded successfully!');
+  } catch (err) {
+    setElText('cover-upload-status', `Upload failed: ${err.message}`);
+  } finally {
+    event.target.value = '';
+  }
+};
+
+window.handleStatusFormChange = function () {
+  const status = document.getElementById('media-status').value;
+  const totalVal = parseInt(document.getElementById('media-total').value, 10);
+
+  if (status === 'completed' && totalVal > 0) {
+    document.getElementById('media-progress').value = totalVal;
+  }
+};
+
+window.handleTotalUnitsChange = function () {
+  const status = document.getElementById('media-status').value;
+  const totalVal = parseInt(document.getElementById('media-total').value, 10);
+
+  if (status === 'completed' && totalVal > 0) {
+    document.getElementById('media-progress').value = totalVal;
+  }
+};
+
+window.stepModalProgress = function () {
+  const progInput = document.getElementById('media-progress');
+  const totalVal = parseInt(document.getElementById('media-total').value, 10);
+  const nextVal = (parseInt(progInput.value, 10) || 0) + 1;
+  progInput.value = nextVal;
+
+  if (totalVal > 0 && nextVal >= totalVal) {
+    document.getElementById('media-status').value = 'completed';
+  }
+};
+
+window.stepModalRepeat = function () {
+  const repInput = document.getElementById('media-repeat');
+  const nextVal = (parseInt(repInput.value, 10) || 0) + 1;
+  repInput.value = nextVal;
+};
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 4500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
   }
 }
+
+async function fetchAniListMedia(query, isNovel = false) {
+  const gql = `
+    query ($search: String) {
+      Page(perPage: 6) {
+        media(search: $search, type: MANGA, ${isNovel ? 'format: NOVEL' : 'format_not: NOVEL'}) {
+          title { english romaji }
+          coverImage { large medium }
+          chapters
+          volumes
+          countryOfOrigin
+        }
+      }
+    }
+  `;
+  const res = await fetchWithTimeout('https://graphql.anilist.co', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ query: gql, variables: { search: query } })
+  });
+  const json = await res.json();
+  return (json.data?.Page?.media || []).map(m => {
+    const originMap = { JP: 'Manga', KR: 'Manhwa', CN: 'Manhua' };
+    const label = isNovel ? 'Novel' : (originMap[m.countryOfOrigin] || 'Comic');
+    return {
+      title: m.title.english || m.title.romaji,
+      cover: normalizeImageUrl(m.coverImage?.large || m.coverImage?.medium || ''),
+      total: isNovel ? (m.volumes || m.chapters || null) : (m.chapters || null),
+      unit: isNovel ? (m.volumes ? 'vol' : 'ch') : 'ch',
+      meta: `${label} · ${isNovel ? (m.volumes || '?') + ' Volume' : (m.chapters || '?') + ' Chapter'}`
+    };
+  });
+}
+
+function deduplicateResults(list) {
+  const seen = new Set();
+  return list.filter(item => {
+    const key = item.title.toLowerCase().trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+window.searchExternalAPI = async function () {
+  const query = document.getElementById('api-search-input').value.trim();
+  const cats = getSelectedModalCategories();
+  const cat = cats[0] || 'tv_show';
+  const resultsBox = document.getElementById('api-search-results');
+
+  if (!query) return;
+  resultsBox.style.display = 'block';
+  resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">Searching...</p>`;
+
+  let items = [];
+
+  if (cat === 'tv_show') {
+    const [jikanRes, tvmazeRes, tmdbRes] = await Promise.allSettled([
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=5&sfw=true`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || []).map(a => ({
+          title: a.title_english || a.title,
+          cover: normalizeImageUrl(a.images?.jpg?.large_image_url || a.images?.jpg?.image_url || a.images?.webp?.large_image_url || ''),
+          total: a.episodes || null,
+          unit: 'eps',
+          meta: `Anime TV · ${a.episodes || '?'} Episode`
+        }));
+      })(),
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        return (data || []).slice(0, 5).map(entry => ({
+          tvmazeId: entry.show.id,
+          title: entry.show.name,
+          cover: normalizeImageUrl(entry.show.image?.original || entry.show.image?.medium || ''),
+          total: null,
+          unit: 'eps',
+          meta: `TV Show · ${entry.show.premiered?.slice(0, 4) || 'Show'}`
+        }));
+      })(),
+      (async () => {
+        if (!TMDB_API_KEY) return [];
+        const res = await fetchWithTimeout(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.results || []).slice(0, 5).map(t => ({
+          tmdbId: t.id,
+          title: t.name,
+          cover: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : '',
+          total: null,
+          unit: 'eps',
+          meta: `TV Show · ${t.first_air_date?.slice(0, 4) || 'TMDB'}`
+        }));
+      })()
+    ]);
+
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    if (tvmazeRes.status === 'fulfilled') items.push(...tvmazeRes.value);
+    if (tmdbRes.status === 'fulfilled') items.push(...tmdbRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'movie') {
+    const [jikanRes, itunesRes, tmdbRes] = await Promise.allSettled([
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=movie&limit=5&sfw=true`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || []).map(a => ({
+          title: a.title_english || a.title,
+          cover: normalizeImageUrl(a.images?.jpg?.large_image_url || a.images?.jpg?.image_url || a.images?.webp?.large_image_url || ''),
+          total: 1,
+          unit: 'movie',
+          meta: `Anime Movie · ${a.year || 'Film'}`
+        }));
+      })(),
+      (async () => {
+        const res = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=movie&limit=5`);
+        const data = await res.json();
+        return (data.results || []).map(m => ({
+          title: m.trackName,
+          cover: normalizeImageUrl(m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : ''),
+          total: 1,
+          unit: 'movie',
+          meta: `Movie · ${m.releaseDate?.slice(0, 4) || 'Film'}`
+        }));
+      })(),
+      (async () => {
+        if (!TMDB_API_KEY) return [];
+        const res = await fetchWithTimeout(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.results || []).slice(0, 5).map(m => ({
+          title: m.title,
+          cover: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : '',
+          total: 1,
+          unit: 'movie',
+          meta: `Movie · ${m.release_date?.slice(0, 4) || 'TMDB'}`
+        }));
+      })()
+    ]);
+
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    if (itunesRes.status === 'fulfilled') items.push(...itunesRes.value);
+    if (tmdbRes.status === 'fulfilled') items.push(...tmdbRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'comic') {
+    const [jikanRes, aniRes] = await Promise.allSettled([
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=6&sfw=true`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || [])
+          .filter(m => m.type !== 'Light Novel' && m.type !== 'Novel')
+          .map(m => ({
+            title: m.title_english || m.title,
+            cover: normalizeImageUrl(m.images?.jpg?.large_image_url || m.images?.jpg?.image_url || m.images?.webp?.large_image_url || ''),
+            total: m.chapters || null,
+            unit: 'ch',
+            meta: `${m.type} · ${m.chapters || '?'} Chapter`
+          }));
+      })(),
+      fetchAniListMedia(query, false)
+    ]);
+
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'novel') {
+    const [openLibRes, jikanRes, aniRes] = await Promise.allSettled([
+      (async () => {
+        const res = await fetchWithTimeout(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=6`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.docs || []).map(b => {
+          const author = b.author_name ? b.author_name[0] : 'Book';
+          const pages = b.number_of_pages_median || null;
+          return {
+            title: b.title,
+            cover: b.cover_i ? `https://covers.openlibrary.org/b/id/${b.cover_i}-L.jpg` : '',
+            total: pages,
+            unit: pages ? 'pages' : 'vol',
+            meta: `Novel (${author}) · ${pages ? pages + ' Pages' : 'Book'}`
+          };
+        });
+      })(),
+      (async () => {
+        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&type=lightnovel&limit=4&sfw=true`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.data || []).map(ln => ({
+          title: ln.title_english || ln.title,
+          cover: normalizeImageUrl(ln.images?.jpg?.large_image_url || ln.images?.jpg?.image_url || ln.images?.webp?.large_image_url || ''),
+          total: ln.volumes || ln.chapters || null,
+          unit: ln.volumes ? 'vol' : 'ch',
+          meta: `Light Novel · ${ln.volumes || '?'} Volume`
+        }));
+      })(),
+      fetchAniListMedia(query, true)
+    ]);
+
+    if (openLibRes.status === 'fulfilled') items.push(...openLibRes.value);
+    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
+    if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'game') {
+    const [wikiGameRes, vndbRes, rawgRes] = await Promise.allSettled([
+      (async () => {
+        const searchRes = await fetchWithTimeout(
+          `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=en&format=json&origin=*&limit=8`
+        );
+        if (!searchRes.ok) return [];
+        const searchData = await searchRes.json();
+        const candidates = (searchData.search || []).filter(item => {
+          const desc = (item.description || '').toLowerCase();
+          return desc.includes('video game') || desc.includes('game');
+        });
+
+        if (candidates.length === 0) return [];
+
+        const ids = candidates.map(c => c.id).join('|');
+        const entityRes = await fetchWithTimeout(
+          `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${ids}&props=claims|sitelinks|labels|descriptions&languages=en&format=json&origin=*`
+        );
+        const entityData = await entityRes.json();
+        const entities = entityData.entities || {};
+
+        const results = await Promise.all(
+          candidates.map(async c => {
+            const ent = entities[c.id];
+            if (!ent) return null;
+
+            const title = ent.labels?.en?.value || c.label;
+            const desc = ent.descriptions?.en?.value || 'Video Game';
+            let cover = '';
+
+            const p18 = ent.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+            if (p18) {
+              cover = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(p18)}?width=500`;
+            }
+
+            const enWikiTitle = ent.sitelinks?.enwiki?.title;
+            if (!cover && enWikiTitle) {
+              try {
+                const wpRes = await fetchWithTimeout(
+                  `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(enWikiTitle)}&prop=pageimages&pithumbsize=500&format=json&origin=*`
+                );
+                const wpData = await wpRes.json();
+                const pages = wpData.query?.pages || {};
+                const pageObj = Object.values(pages)[0];
+                if (pageObj?.thumbnail?.source) {
+                  cover = normalizeImageUrl(pageObj.thumbnail.source);
+                }
+              } catch (_) {}
+            }
+
+            return {
+              title,
+              cover,
+              total: 1,
+              unit: 'item',
+              meta: desc.charAt(0).toUpperCase() + desc.slice(1)
+            };
+          })
+        );
+
+        return results.filter(Boolean);
+      })(),
+      (async () => {
+        const res = await fetchWithTimeout('https://api.vndb.org/kana/vn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filters: ['search', '=', query],
+            fields: 'title, image.url, released',
+            results: 5
+          })
+        });
+        const data = await res.json();
+        return (data.results || []).map(g => ({
+          title: g.title,
+          cover: normalizeImageUrl(g.image?.url || ''),
+          total: 1,
+          unit: 'item',
+          meta: `Visual Novel · ${g.released || ''}`
+        }));
+      })(),
+      (async () => {
+        if (!RAWG_API_KEY) return [];
+        const res = await fetchWithTimeout(`https://api.rawg.io/api/games?key=${RAWG_API_KEY}&search=${encodeURIComponent(query)}&page_size=5`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.results || []).map(g => ({
+          title: g.name,
+          cover: normalizeImageUrl(g.background_image || ''),
+          total: 1,
+          unit: 'item',
+          meta: `Game · ${g.released?.slice(0, 4) || ''}`
+        }));
+      })()
+    ]);
+
+    if (wikiGameRes.status === 'fulfilled') items.push(...wikiGameRes.value);
+    if (vndbRes.status === 'fulfilled') items.push(...vndbRes.value);
+    if (rawgRes.status === 'fulfilled') items.push(...rawgRes.value);
+    items = deduplicateResults(items);
+
+  } else if (cat === 'music') {
+    try {
+      const res = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=album&limit=8`);
+      const data = await res.json();
+      items = (data.results || []).map(m => ({
+        title: `${m.collectionName} — ${m.artistName}`,
+        cover: normalizeImageUrl(m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : ''),
+        total: m.trackCount || 1,
+        unit: 'track',
+        meta: `Album · ${m.trackCount || '?'} Tracks · ${m.releaseDate?.slice(0, 4) || ''}`
+      }));
+      items = deduplicateResults(items);
+    } catch (e) {
+      console.error('Music search error:', e);
+    }
+  }
+
+  lastApiResults = items;
+
+  if (items.length === 0) {
+    resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">No results found. Please fill in the fields manually below.</p>`;
+    return;
+  }
+
+  resultsBox.innerHTML = items.map((it, idx) => `
+    <div class="api-result-item" onclick="applyApiResult(${idx})">
+      <img src="${it.cover || 'https://placehold.co/60x90/1e1e1f/888?text=?'}" alt="" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/60x90/1e1e1f/888?text=?'">
+      <div class="api-result-info">
+        <h4>${escapeHtml(it.title)}</h4>
+        <p>${escapeHtml(it.meta)}</p>
+      </div>
+    </div>
+  `).join('');
+};
+
+window.applyApiResult = async function (idx) {
+  const item = lastApiResults[idx];
+  if (!item) return;
+
+  document.getElementById('media-title').value = item.title;
+  document.getElementById('media-cover').value = item.cover || '';
+  if (item.total) document.getElementById('media-total').value = item.total;
+  if (item.unit) document.getElementById('media-unit').value = item.unit;
+  handleTotalUnitsChange();
+  document.getElementById('api-search-results').style.display = 'none';
+
+  if (item.tvmazeId) {
+    try {
+      const epRes = await fetchWithTimeout(`https://api.tvmaze.com/shows/${item.tvmazeId}/episodes`);
+      const epData = await epRes.json();
+      if (Array.isArray(epData) && epData.length > 0) {
+        document.getElementById('media-total').value = epData.length;
+        handleTotalUnitsChange();
+      }
+    } catch (e) {
+      console.error('TVMaze episode count error:', e);
+    }
+  }
+
+  if (item.tmdbId && TMDB_API_KEY) {
+    try {
+      const detailRes = await fetchWithTimeout(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}`);
+      const detailData = await detailRes.json();
+      if (detailData.number_of_episodes) {
+        document.getElementById('media-total').value = detailData.number_of_episodes;
+        handleTotalUnitsChange();
+      }
+    } catch (e) {
+      console.error('TMDB detail error:', e);
+    }
+  }
+};
+
+// ==========================================
+// 6. SUPABASE MEDIA CRUD + AUTO-CLEANUP
+// ==========================================
+document.getElementById('media-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const id = document.getElementById('media-id').value;
+  const existingItem = id ? allMediaLogs.find(m => m.id === id) : null;
+  const oldCover = existingItem ? existingItem.cover_url : null;
+  const newCover = normalizeImageUrl(document.getElementById('media-cover').value) || null;
+
+  const selectedCats = getSelectedModalCategories();
+  const primaryCat = selectedCats[0];
+  const ratingRaw = document.getElementById('media-rating').value;
+  const totalRaw = document.getElementById('media-total').value;
+  const statusVal = document.getElementById('media-status').value;
+  const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
+  let progressVal = parseInt(document.getElementById('media-progress').value, 10) || 0;
+  const repeatVal = Math.max(0, parseInt(document.getElementById('media-repeat').value, 10) || 0);
+  const notesVal = document.getElementById('media-notes')?.value.trim() || null;
+  const seasonsArr = collectSeasonsFromModal();
+  const tracksArr = collectTracksFromModal();
+
+  if (statusVal === 'completed' && totalUnits && totalUnits > 0) {
+    progressVal = totalUnits;
+  }
+
+  const prevStatus = existingItem ? (existingItem.status || '').toLowerCase().trim() : null;
+  const statusChanged = !existingItem || prevStatus !== statusVal;
+  const statusTimestamp = statusChanged
+    ? new Date().toISOString()
+    : (existingItem.status_updated_at || existingItem.updated_at || new Date().toISOString());
+
+  const basePayload = {
+    title: document.getElementById('media-title').value.trim(),
+    category: selectedCats.length > 1 ? selectedCats.join(',') : primaryCat,
+    sub_category: null,
+    cover_url: newCover,
+    status: statusVal,
+    progress: progressVal,
+    total_units: totalUnits,
+    unit_label: document.getElementById('media-unit').value,
+    rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null,
+    repeat_count: repeatVal,
+    updated_at: statusTimestamp
+  };
+
+  const extendedPayload = {
+    ...basePayload,
+    notes: notesVal,
+    seasons: seasonsArr,
+    tracks: tracksArr
+  };
+
+  let error;
+  if (id) {
+    ({ error } = await supabaseClient.from('media_logs').update(extendedPayload).eq('id', id));
+    if (error && /column .* does not exist/i.test(error.message)) {
+      ({ error } = await supabaseClient.from('media_logs').update(basePayload).eq('id', id));
+    }
+  } else {
+    ({ error } = await supabaseClient.from('media_logs').insert([extendedPayload]));
+    if (error && /column .* does not exist/i.test(error.message)) {
+      ({ error } = await supabaseClient.from('media_logs').insert([basePayload]));
+    }
+  }
+
+  if (error) {
+    Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
+  } else {
+    await cleanupPendingUploads([newCover]);
+    if (oldCover && oldCover !== newCover) {
+      await deleteOldStorageFile(oldCover);
+    }
+    document.getElementById('media-modal').classList.remove('active');
+    await fetchMediaLogs();
+    showToast(id ? 'Entry updated' : 'Added to library', 'success');
+  }
+});
+
+window.deleteCurrentModalMedia = async function () {
+  const id = document.getElementById('media-id').value;
+  if (!id) return;
+
+  const existingItem = allMediaLogs.find(m => m.id === id);
+
+  const confirm = await Swal.fire({
+    text: 'Remove this entry from your library?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ff5f5f',
+    confirmButtonText: 'Delete',
+    cancelButtonText: 'Cancel',
+    background: '#1e1e1f',
+    color: '#fff'
+  });
+
+  if (confirm.isConfirmed) {
+    const { error } = await supabaseClient.from('media_logs').delete().eq('id', id);
+    if (error) {
+      Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
+    } else {
+      await cleanupPendingUploads([]);
+      if (existingItem?.cover_url) {
+        await deleteOldStorageFile(existingItem.cover_url);
+      }
+      document.getElementById('media-modal').classList.remove('active');
+      await fetchMediaLogs();
+      showToast('Entry removed', 'info');
+    }
+  }
+};
+
+// ==========================================
+// 7. PERSONAL NOTES / POSTS (CREATE, READ, EDIT, DELETE)
+// ==========================================
+function formatPostDateTime(createdIso, updatedIso) {
+  if (!createdIso) return '';
+  const created = new Date(createdIso);
+  if (Number.isNaN(created.getTime())) return '';
+
+  const dateStr = created.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+  const timeStr = created.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+
+  const isEdited = updatedIso && Math.abs(new Date(updatedIso) - created) > 10000;
+  return `${dateStr} · ${timeStr}${isEdited ? ' (edited)' : ''}`;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function formatNoteContentWithLinks(rawText) {
+  const urlRegex = /(https?:\/\/[^\s<]+)/g;
+  const escaped = escapeHtml(rawText);
+  return escaped.replace(urlRegex, (url) => {
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="inline-note-link">${url}</a>`;
+  });
+}
+
+function extractFirstUrlCard(rawText) {
+  const match = (rawText || '').match(/https?:\/\/[^\s<]+/);
+  if (!match) return '';
+  const url = match[0];
+  try {
+    const u = new URL(url);
+    const domain = u.hostname.replace(/^www\./, '');
+    return `
+      <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="link-preview-card">
+        <div class="link-preview-icon">
+          <ion-icon name="${detectSocialIcon(url)}"></ion-icon>
+        </div>
+        <div class="link-preview-info">
+          <span class="link-preview-domain">${escapeHtml(domain)}</span>
+          <span class="link-preview-title">${escapeHtml(url)}</span>
+        </div>
+        <ion-icon name="open-outline" style="color: var(--light-gray-70); font-size: 16px; flex-shrink: 0;"></ion-icon>
+      </a>
+    `;
+  } catch (_) {
+    return '';
+  }
+}
+
+async function fetchBlogPosts() {
+  const { data, error } = await supabaseClient
+    .from('blog_posts')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    const listEl = document.getElementById('blog-feed-list');
+    if (listEl) listEl.innerHTML = `<p class="empty-state">Failed to load posts: ${error.message}</p>`;
+    return;
+  }
+
+  allBlogPosts = data || [];
+  renderBlogPosts();
+}
+
+function renderBlogPosts() {
+  const listEl = document.getElementById('blog-feed-list');
+  if (!listEl) return;
+
+  if (allBlogPosts.length === 0) {
+    listEl.innerHTML = `<p class="empty-state">No notes yet.</p>`;
+    return;
+  }
+
+  const avatarSrc = normalizeImageUrl(currentProfile.avatar_url) || TRANSPARENT_PIXEL;
+  const authorName = escapeHtml(currentProfile.name || '');
+
+  listEl.innerHTML = allBlogPosts.map(post => {
+    const postImg = normalizeImageUrl(post.image_url);
+    const timeLabel = formatPostDateTime(post.created_at, post.updated_at);
+    const linkCardHtml = !postImg ? extractFirstUrlCard(post.content) : '';
+
+    const adminControls = isAdminLoggedIn ? `
+      <div class="blog-post-actions">
+        <button type="button" class="blog-icon-btn" onclick="openEditPostModal('${post.id}')" title="Edit Post">
+          <ion-icon name="create-outline"></ion-icon>
+        </button>
+        <button type="button" class="blog-icon-btn delete" onclick="deleteBlogPost('${post.id}')" title="Delete Post">
+          <ion-icon name="trash-outline"></ion-icon>
+        </button>
+      </div>
+    ` : '';
+
+    const imageBlock = postImg ? `
+      <div class="blog-post-image-wrap">
+        <img src="${postImg}" alt="Post attachment" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'">
+      </div>
+    ` : '';
+
+    return `
+      <article class="blog-post-card">
+        <div class="blog-post-header">
+          <div class="blog-post-author">
+            <img class="blog-post-avatar" src="${avatarSrc}" alt="" onerror="this.src='${TRANSPARENT_PIXEL}'">
+            <div class="blog-post-meta">
+              <span class="blog-post-name">${authorName}</span>
+              <span class="blog-post-time">${timeLabel}</span>
+            </div>
+          </div>
+          ${adminControls}
+        </div>
+        <div class="blog-post-text">${formatNoteContentWithLinks(post.content)}</div>
+        ${linkCardHtml}
+        ${imageBlock}
+      </article>
+    `;
+  }).join('');
+}
+
+window.openPostModal = function () {
+  pendingUploadedUrls = [];
+  document.getElementById('post-modal-title').textContent = 'New Post';
+  document.getElementById('post-form').reset();
+  document.getElementById('post-id').value = '';
+  setElText('post-upload-status', '');
+  document.getElementById('post-modal').classList.add('active');
+};
+
+window.openEditPostModal = function (id) {
+  const post = allBlogPosts.find(p => p.id === id);
+  if (!post) return;
+
+  pendingUploadedUrls = [];
+  document.getElementById('post-modal-title').textContent = 'Edit Post';
+  document.getElementById('post-id').value = post.id;
+  document.getElementById('post-content').value = post.content || '';
+  document.getElementById('post-image').value = post.image_url || '';
+  setElText('post-upload-status', '');
+  document.getElementById('post-modal').classList.add('active');
+};
+
+window.closePostModal = async function () {
+  document.getElementById('post-modal').classList.remove('active');
+  await cleanupPendingUploads([]);
+};
+
+window.clearPostImageInput = function () {
+  document.getElementById('post-image').value = '';
+  setElText('post-upload-status', 'Photo removed (click Publish to save).');
+};
+
+window.handlePostImageUpload = async function (event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  setElText('post-upload-status', 'Uploading photo...');
+  try {
+    const publicUrl = await uploadImageToSupabase(file, 'posts');
+    document.getElementById('post-image').value = publicUrl;
+    setElText('post-upload-status', 'Photo uploaded!');
+  } catch (err) {
+    setElText('post-upload-status', `Upload failed: ${err.message}`);
+  } finally {
+    event.target.value = '';
+  }
+};
+
+document.getElementById('post-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const id = document.getElementById('post-id').value;
+  const existingPost = id ? allBlogPosts.find(p => p.id === id) : null;
+  const oldImage = existingPost ? existingPost.image_url : null;
+  const newImage = normalizeImageUrl(document.getElementById('post-image').value) || null;
+  const contentVal = document.getElementById('post-content').value.trim();
+
+  if (!contentVal) return;
+
+  const nowIso = new Date().toISOString();
+  const payload = {
+    content: contentVal,
+    image_url: newImage,
+    updated_at: nowIso
+  };
+
+  let error;
+  if (id) {
+    ({ error } = await supabaseClient.from('blog_posts').update(payload).eq('id', id));
+  } else {
+    payload.created_at = nowIso;
+    ({ error } = await supabaseClient.from('blog_posts').insert([payload]));
+  }
+
+  if (error) {
+    Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
+  } else {
+    await cleanupPendingUploads([newImage]);
+    if (oldImage && oldImage !== newImage) {
+      await deleteOldStorageFile(oldImage);
+    }
+    document.getElementById('post-modal').classList.remove('active');
+    await fetchBlogPosts();
+    showToast(id ? 'Post updated' : 'Post published', 'success');
+  }
+});
+
+window.deleteBlogPost = async function (id) {
+  const existingPost = allBlogPosts.find(p => p.id === id);
+
+  const confirm = await Swal.fire({
+    text: 'Delete this post permanently?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ff5f5f',
+    confirmButtonText: 'Delete',
+    cancelButtonText: 'Cancel',
+    background: '#1e1e1f',
+    color: '#fff'
+  });
+
+  if (confirm.isConfirmed) {
+    const { error } = await supabaseClient.from('blog_posts').delete().eq('id', id);
+    if (error) {
+      Swal.fire({ icon: 'error', text: error.message, background: '#1e1e1f', color: '#fff' });
+    } else {
+      if (existingPost?.image_url) {
+        await deleteOldStorageFile(existingPost.image_url);
+      }
+      await fetchBlogPosts();
+      showToast('Post deleted', 'info');
+    }
+  }
+};
