@@ -871,10 +871,12 @@ body {
   background: var(--white-1);
 }
 
+/* Popover default opens to the right (left: 0) so it never clips off the left edge */
 .toolbar-popover-menu {
   position: absolute;
   top: calc(100% + 6px);
-  right: 0;
+  left: 0;
+  right: auto;
   width: 260px;
   max-width: calc(100vw - 28px);
   background: var(--eerie-black-2);
@@ -886,6 +888,11 @@ body {
   display: none;
   flex-direction: column;
   gap: 12px;
+}
+
+.toolbar-popover-menu.align-right {
+  left: auto;
+  right: 0;
 }
 
 .compact-popover-menu {
@@ -2104,15 +2111,5 @@ textarea.form-input {
   }
   .list-hide-mobile {
     display: none;
-  }
-  /* Popover Anti-Clip Mobile Positioning */
-  .toolbar-popover-menu {
-    position: fixed;
-    top: auto;
-    left: 14px !important;
-    right: 14px !important;
-    width: auto;
-    max-width: none;
-    margin-top: 8px;
   }
 }
