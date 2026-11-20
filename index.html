@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=200">
+  <link rel="stylesheet" href="./assets/css/style.css?v=202">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -80,16 +80,14 @@
 
       <!-- INTEGRATED MAIN NAVIGATION BAR -->
       <nav class="primary-nav-bar" aria-label="Primary Navigation">
-        <div class="segmented-nav-tabs">
-          <button type="button" class="nav-segment-btn active" data-view="blog" onclick="switchMainView('blog')">
-            <ion-icon name="chatbubble-ellipses-outline" class="nav-icon-outline"></ion-icon>
-            <ion-icon name="chatbubble-ellipses" class="nav-icon-filled"></ion-icon>
+        <div class="segmented-nav-tabs" role="tablist">
+          <button type="button" class="nav-segment-btn active" id="tab-btn-blog" data-view="blog" onclick="switchMainView('blog')">
+            <ion-icon name="document-text-outline"></ion-icon>
             <span>Notes</span>
           </button>
 
           <button type="button" class="nav-segment-btn" id="bottom-tab-library" data-view="library" onclick="switchMainView('library')">
-            <ion-icon name="albums-outline" class="nav-icon-outline"></ion-icon>
-            <ion-icon name="albums" class="nav-icon-filled"></ion-icon>
+            <ion-icon name="albums-outline"></ion-icon>
             <span>Library</span>
             <ion-icon name="lock-closed" id="library-private-lock" class="nav-lock-tag" style="display: none;" title="Private (Admin Only)"></ion-icon>
           </button>
@@ -696,11 +694,17 @@
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 
+  <!-- Main JS -->
+  <script src="./assets/js/script.js?v=53"></script>
+
   <!-- Sync Helper for Integrated Navigation -->
   <script>
     (function () {
-      const originalSwitch = window.switchMainView;
-      function syncNavExtras(view) {
+      const origSwitch = window.switchMainView;
+      window.switchMainView = function (view) {
+        if (typeof origSwitch === 'function') {
+          origSwitch(view);
+        }
         document.querySelectorAll('.nav-segment-btn, .mini-nav-btn').forEach(btn => {
           btn.classList.toggle('active', btn.dataset.view === view);
         });
@@ -708,31 +712,22 @@
         if (actionLabel) {
           actionLabel.textContent = view === 'library' ? 'Add Media' : 'New Post';
         }
+      };
+
+      const libTab = document.getElementById('bottom-tab-library');
+      const miniLibTab = document.getElementById('mini-tab-library');
+      if (libTab && miniLibTab) {
+        const syncVisibility = () => {
+          miniLibTab.style.display = libTab.style.display === 'none' ? 'none' : 'inline-flex';
+        };
+        syncVisibility();
+        new MutationObserver(syncVisibility).observe(libTab, {
+          attributes: true,
+          attributeFilter: ['style']
+        });
       }
-
-      window.addEventListener('DOMContentLoaded', () => {
-        const prevSwitch = window.switchMainView;
-        if (typeof prevSwitch === 'function') {
-          window.switchMainView = function (view) {
-            prevSwitch(view);
-            syncNavExtras(view);
-          };
-        }
-
-        const libTab = document.getElementById('bottom-tab-library');
-        const miniLibTab = document.getElementById('mini-tab-library');
-        if (libTab && miniLibTab) {
-          const observer = new MutationObserver(() => {
-            miniLibTab.style.display = libTab.style.display;
-          });
-          observer.observe(libTab, { attributes: true, attributeFilter: ['style'] });
-        }
-      });
     })();
   </script>
-
-  <!-- Main JS -->
-  <script src="./assets/js/script.js?v=53"></script>
 </body>
 
 </html>
