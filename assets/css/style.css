@@ -426,71 +426,115 @@ body {
   color: var(--white-1);
 }
 
-/* Main View Switcher Tabs */
+/*-----------------------------------*\
+  #MAIN VIEW TABS & ADMIN ACTIONS
+\*-----------------------------------*/
+
 .main-view-tabs {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
   margin-top: 18px;
   padding-top: 12px;
+  padding-bottom: 12px;
   border-top: 1px solid var(--jet);
   flex-wrap: wrap;
+}
+
+.main-tabs-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(14, 14, 15, 0.65);
+  border: 1px solid var(--jet);
+  padding: 4px;
+  border-radius: 12px;
+  overflow-x: auto;
+  max-width: 100%;
+  scrollbar-width: none;
+}
+
+.main-tabs-group::-webkit-scrollbar {
+  display: none;
 }
 
 .main-view-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 9px 14px;
-  font-size: 13px;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 13px;
+  border-radius: 9px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--light-gray-70);
-  border-bottom: 2px solid transparent;
+  white-space: nowrap;
   transition: var(--transition-1);
+}
+
+.main-view-btn ion-icon {
+  font-size: 15px;
+  flex-shrink: 0;
 }
 
 .main-view-btn:hover {
   color: var(--white-1);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .main-view-btn.active {
+  background: var(--onyx);
   color: var(--white-1);
-  border-bottom-color: var(--white-1);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
 
 .tab-bar-actions {
-  margin-left: auto;
-  padding-bottom: 6px;
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
 }
 
-.add-media-btn {
+.tab-action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  background: var(--white-1);
-  color: var(--smoky-black);
-  padding: 7px 13px;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
   border-radius: 10px;
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
   transition: var(--transition-1);
 }
 
-.add-media-btn:hover {
+.tab-action-btn ion-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.tab-action-btn.primary {
+  background: var(--white-1);
+  color: var(--smoky-black);
+  border: 1px solid var(--white-1);
+}
+
+.tab-action-btn.primary:hover {
   opacity: 0.9;
   transform: translateY(-1px);
 }
 
-.secondary-action-btn {
+.tab-action-btn.secondary {
   background: var(--onyx);
   color: var(--light-gray);
   border: 1px solid var(--jet);
 }
 
-.secondary-action-btn:hover {
+.tab-action-btn.secondary:hover {
   border-color: var(--white-1);
   color: var(--white-1);
 }
@@ -1656,7 +1700,7 @@ body {
 
 .ai-workspace-grid {
   display: grid;
-  grid-template-columns: 1fr 270px;
+  grid-template-columns: minmax(0, 1fr) 260px;
   gap: 14px;
   align-items: start;
 }
@@ -1667,7 +1711,9 @@ body {
   border-radius: 18px;
   display: flex;
   flex-direction: column;
-  height: 580px;
+  height: 720px;
+  min-width: 0;
+  width: 100%;
   overflow: hidden;
   box-shadow: var(--shadow-1);
 }
@@ -1676,7 +1722,9 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 13px 16px;
   border-bottom: 1px solid var(--jet);
   background: rgba(18, 18, 19, 0.55);
 }
@@ -1685,6 +1733,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .ai-avatar-badge {
@@ -1718,6 +1767,32 @@ body {
   gap: 6px;
 }
 
+.ai-db-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  color: var(--light-gray-70);
+  font-size: 11px;
+  font-weight: 600;
+  transition: var(--transition-1);
+}
+
+.ai-db-toggle-btn:hover {
+  border-color: var(--white-1);
+  color: var(--white-1);
+}
+
+.ai-db-toggle-btn.active {
+  background: var(--white-1);
+  border-color: var(--white-1);
+  color: var(--smoky-black);
+}
+
 .ai-settings-panel {
   padding: 12px 16px;
   background: var(--onyx);
@@ -1731,12 +1806,6 @@ body {
   display: flex;
   gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
-}
-
-.ai-settings-row .form-input {
-  flex: 1;
-  min-width: 140px;
 }
 
 .ai-settings-hint {
@@ -1747,10 +1816,12 @@ body {
 .ai-messages-list {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
 }
 
 .ai-empty-welcome {
@@ -1784,7 +1855,8 @@ body {
 .ai-msg-row {
   display: flex;
   flex-direction: column;
-  max-width: 86%;
+  max-width: 85%;
+  min-width: 0;
   gap: 4px;
   animation: viewFadeIn 0.18s ease;
 }
@@ -1800,10 +1872,12 @@ body {
 }
 
 .ai-msg-bubble {
+  max-width: 100%;
   padding: 11px 14px;
   border-radius: 15px;
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
   word-break: break-word;
 }
 
@@ -1826,7 +1900,10 @@ body {
   border: 1px solid var(--jet);
   border-radius: 8px;
   padding: 10px;
+  max-width: 100%;
   overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
   margin: 8px 0;
   font-size: 12px;
 }
@@ -1837,6 +1914,7 @@ body {
   background: rgba(255, 255, 255, 0.08);
   padding: 1px 5px;
   border-radius: 4px;
+  overflow-wrap: anywhere;
 }
 
 .ai-msg-bubble pre code {
@@ -1901,6 +1979,7 @@ body {
 
 .ai-composer-input {
   flex: 1;
+  min-width: 0;
   background: var(--onyx);
   border: 1px solid var(--jet);
   border-radius: 12px;
@@ -1941,7 +2020,6 @@ body {
   cursor: not-allowed;
 }
 
-/* Right Sidebar */
 .ai-sidebar-card {
   background: var(--eerie-black-2);
   border: 1px solid var(--jet);
@@ -1950,6 +2028,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  min-width: 0;
 }
 
 .ai-sidebar-section {
@@ -2017,7 +2096,6 @@ body {
 .ai-quick-btn:hover {
   border-color: var(--white-1);
   color: var(--white-1);
-  transform: translateY(-1px);
 }
 
 /*-----------------------------------*\
@@ -2455,11 +2533,36 @@ textarea.form-input {
     grid-template-columns: 1fr;
   }
   .ai-chat-card {
-    height: 500px;
+    height: 76vh;
+    min-height: 520px;
   }
 }
 
 @media (max-width: 560px) {
+  .main-view-tabs {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .main-tabs-group {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  }
+  .main-view-btn {
+    padding: 0 8px;
+    font-size: 11.5px;
+  }
+  .tab-bar-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+  .tab-action-btn {
+    flex: 1 1 auto;
+    height: 34px;
+    padding: 0 11px;
+  }
   .category-tabs {
     gap: 5px;
   }
