@@ -31,7 +31,8 @@ let currentProfile = {
   bio: '',
   avatar_url: '',
   banner_url: '',
-  social_links: []
+  social_links: [],
+  is_library_private: false
 };
 
 function setElText(id, text) {
@@ -102,6 +103,10 @@ window.scrollToTopSmooth = function () {
 };
 
 window.switchMainView = function (viewName) {
+  if (viewName === 'library' && currentProfile.is_library_private && !isAdminLoggedIn) {
+    viewName = 'blog';
+  }
+
   currentMainView = viewName;
 
   document.querySelectorAll('.main-view-btn').forEach(btn => {
@@ -135,6 +140,46 @@ window.switchMainView = function (viewName) {
   updateAdminActionButtons();
 };
 
+function updateLibraryTabVisibility() {
+  const isPrivate = Boolean(currentProfile.is_library_private);
+  const canViewLibrary = !isPrivate || isAdminLoggedIn;
+
+  const mainLibBtn = document.getElementById('main-tab-library');
+  const miniLibBtn = document.getElementById('mini-tab-library');
+  const lockBadge = document.getElementById('library-private-lock');
+
+  if (mainLibBtn) mainLibBtn.style.display = canViewLibrary ? 'inline-flex' : 'none';
+  if (miniLibBtn) miniLibBtn.style.display = canViewLibrary ? 'inline-flex' : 'none';
+  if (lockBadge) lockBadge.style.display = (isPrivate && isAdminLoggedIn) ? 'inline-block' : 'none';
+
+  if (!canViewLibrary && currentMainView === 'library') {
+    switchMainView('blog');
+  }
+}
+
+window.toggleLibraryPrivacy = async function () {
+  if (!isAdminLoggedIn) return;
+
+  const nextState = !currentProfile.is_library_private;
+  const { error } = await supabaseClient
+    .from('profile_settings')
+    .update({
+      is_library_private: nextState,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', 1);
+
+  if (error) {
+    showToast(error.message, 'error');
+    return;
+  }
+
+  currentProfile.is_library_private = nextState;
+  updateLibraryTabVisibility();
+  updateAdminActionButtons();
+  showToast(nextState ? 'Library tab set to Private' : 'Library tab set to Public', 'info');
+};
+
 window.setLibraryViewMode = function (mode) {
   libraryViewMode = mode;
   document.getElementById('btn-view-grid')?.classList.toggle('active', mode === 'grid');
@@ -163,14 +208,26 @@ window.toggleLibraryStats = function () {
 function updateAdminActionButtons() {
   const addMediaBtn = document.getElementById('btn-add-media');
   const addPostBtn = document.getElementById('btn-add-post');
+  const privacyBtn = document.getElementById('btn-toggle-library-privacy');
+  const privacyIcon = document.getElementById('library-privacy-icon');
+  const privacyText = document.getElementById('library-privacy-text');
 
   if (!isAdminLoggedIn) {
     if (addMediaBtn) addMediaBtn.style.display = 'none';
     if (addPostBtn) addPostBtn.style.display = 'none';
+    if (privacyBtn) privacyBtn.style.display = 'none';
     return;
   }
 
-  if (addMediaBtn) addMediaBtn.style.display = currentMainView === 'library' ? 'inline-flex' : 'none';
+  const isLibView = currentMainView === 'library';
+  if (addMediaBtn) addMediaBtn.style.display = isLibView ? 'inline-flex' : 'none';
+  if (privacyBtn) {
+    privacyBtn.style.display = isLibView ? 'inline-flex' : 'none';
+    const isPriv = Boolean(currentProfile.is_library_private);
+    privacyBtn.classList.toggle('is-private', isPriv);
+    if (privacyIcon) privacyIcon.setAttribute('name', isPriv ? 'eye-off-outline' : 'eye-outline');
+    if (privacyText) privacyText.textContent = isPriv ? 'Private' : 'Public';
+  }
   if (addPostBtn) addPostBtn.style.display = currentMainView === 'blog' ? 'inline-flex' : 'none';
 }
 
@@ -195,6 +252,7 @@ function updateAdminUI() {
     if (btnText) btnText.textContent = 'Admin';
   }
 
+  updateLibraryTabVisibility();
   updateAdminActionButtons();
   renderMediaGrid();
   if (isProfileLoaded) renderBlogPosts();
@@ -361,7 +419,8 @@ async function fetchProfileSettings() {
       bio: data.bio || '',
       avatar_url: data.avatar_url || '',
       banner_url: data.banner_url || '',
-      social_links: Array.isArray(data.social_links) ? data.social_links : []
+      social_links: Array.isArray(data.social_links) ? data.social_links : [],
+      is_library_private: Boolean(data.is_library_private)
     };
   }
   isProfileLoaded = true;
@@ -440,6 +499,8 @@ function applyProfileToUI() {
     }
   }
 
+  updateLibraryTabVisibility();
+  updateAdminActionButtons();
   renderBlogPosts();
 }
 
@@ -548,6 +609,7 @@ document.getElementById('profile-form').addEventListener('submit', async (e) => 
     avatar_url: newAvatar,
     banner_url: newBanner,
     social_links: collectedLinks,
+    is_library_private: Boolean(currentProfile.is_library_private),
     updated_at: new Date().toISOString()
   };
 
@@ -901,7 +963,7 @@ function renderMediaGrid() {
       const statusDateText = formatStatusDate(item.updated_at || item.created_at);
 
       const catLabels = cats.map(c => CATEGORY_LABELS[c] || c).join(' / ');
-      const seasonTag = seasons.length > 0 ? `<span>• ${seasons.length} Parts</span>` : '';
+      const seasonTag = seasons.length > 0 ? `<span>• ${seasons.length + 1} Entries</span>` : '';
       const repeatHtml = repeatCount > 0 ? `<span class="list-repeat-tag">• ↻ ${repeatCount}x</span>` : '';
 
       const editBtnHtml = isAdminLoggedIn ? `
@@ -956,7 +1018,7 @@ function renderMediaGrid() {
       : '';
 
     const seasonsBadgeHtml = seasons.length > 0
-      ? `<span class="badge-seasons">${seasons.length} Parts / OVA</span>`
+      ? `<span class="badge-seasons">${seasons.length + 1} Entries</span>`
       : '';
 
     const coverEditHtml = isAdminLoggedIn ? `
@@ -1034,7 +1096,7 @@ window.openMediaDetailModal = function (id) {
 
   const seasonsHtml = seasons.length > 0 ? `
     <div>
-      <div class="detail-section-title">Seasons / Sequels / OVA (${seasons.length})</div>
+      <div class="detail-section-title">Entries & Parts (${seasons.length + 1} Total)</div>
       <div class="detail-list">
         ${seasons.map(s => {
           const sStatus = (s.status || 'planned').toLowerCase().trim();
