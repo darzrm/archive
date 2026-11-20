@@ -1377,7 +1377,7 @@ body {
 }
 
 /*-----------------------------------*\
-  #COMPACT LIST VIEW MODE (MINIMALIST & UNIFORM)
+  #COMPACT LIST VIEW MODE (STRICT TABULAR ALIGNMENT)
 \*-----------------------------------*/
 
 .media-grid.list-view {
@@ -1387,14 +1387,15 @@ body {
 }
 
 .media-list-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  height: 58px;
+  height: 54px;
   background: var(--eerie-black-2);
   border: 1px solid var(--jet);
   border-radius: 11px;
-  padding: 6px 10px;
+  padding: 5px 10px;
   cursor: pointer;
   overflow: hidden;
   transition: border-color 0.2s ease, background 0.2s ease;
@@ -1407,15 +1408,13 @@ body {
 
 .list-thumb {
   width: 30px;
-  height: 44px;
+  height: 42px;
   border-radius: 5px;
   object-fit: cover;
   background: var(--onyx);
-  flex-shrink: 0;
 }
 
 .list-main-info {
-  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -1436,25 +1435,13 @@ body {
 .list-sub-meta {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 10px;
+  gap: 6px;
+  font-size: 9.5px;
   line-height: 1;
   color: var(--light-gray-70);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Ultra-clean minimalist Status Pill inside List View */
-.media-list-row .status-pill {
-  padding: 1px 5px;
-  font-size: 8.5px;
-  font-weight: 600;
-  border-radius: 4px;
-  line-height: 1.25;
-  letter-spacing: 0.2px;
-  flex-shrink: 0;
 }
 
 .list-cat-tag {
@@ -1463,43 +1450,71 @@ body {
   font-weight: 600;
   letter-spacing: 0.3px;
   color: var(--light-gray-70);
-  flex-shrink: 0;
 }
 
 .list-repeat-tag {
   color: var(--white-1);
   font-weight: 600;
-  font-size: 9.5px;
-  flex-shrink: 0;
+  font-size: 9px;
 }
 
-/* Right-aligned uniform Progress Bar, Rating & Edit button */
+/* Fixed-width aligned columns on the right */
 .list-right-meta {
-  display: flex;
+  display: grid;
+  grid-auto-flow: column;
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
-  margin-left: auto;
 }
 
-.list-progress-box {
-  width: 72px;
-  flex-shrink: 0;
+.list-col-status {
+  width: 74px;
+  display: flex;
+  justify-content: center;
+}
+
+.media-list-row .status-pill {
+  width: 100%;
+  text-align: center;
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 600;
+  border-radius: 5px;
+  line-height: 1.2;
+  letter-spacing: 0.2px;
+}
+
+.list-col-count {
+  width: 76px;
+  text-align: right;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--light-gray);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.list-col-bar {
+  width: 68px;
+  display: flex;
+  align-items: center;
 }
 
 .list-progress-track {
-  height: 3px;
+  width: 100%;
+  height: 3.5px;
   background: rgba(255, 255, 255, 0.1);
 }
 
 .list-rating-pill {
+  width: 34px;
+  text-align: right;
   font-size: 11px;
   font-weight: 600;
   color: var(--white-1);
-  width: 34px;
-  text-align: right;
   font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
 }
 
 .list-edit-btn {
@@ -1513,7 +1528,6 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  flex-shrink: 0;
   transition: var(--transition-1);
 }
 
@@ -2322,23 +2336,34 @@ textarea.form-input {
     display: none;
   }
   .media-list-row {
-    height: 54px;
-    padding: 5px 9px;
+    height: 50px;
+    padding: 5px 8px;
     gap: 8px;
   }
   .list-thumb {
-    width: 28px;
-    height: 40px;
+    width: 26px;
+    height: 38px;
   }
   .list-right-meta {
-    gap: 7px;
+    gap: 6px;
   }
-  .list-progress-box {
-    width: 44px;
+  .list-col-status {
+    width: 60px;
+  }
+  .media-list-row .status-pill {
+    font-size: 8px;
+    padding: 2px 4px;
+  }
+  .list-col-count {
+    width: 56px;
+    font-size: 9.5px;
+  }
+  .list-col-bar {
+    display: none;
   }
   .list-rating-pill {
-    width: 30px;
-    font-size: 10.5px;
+    width: 28px;
+    font-size: 10px;
   }
   .back-to-top-btn {
     right: 14px;
