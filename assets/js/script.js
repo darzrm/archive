@@ -637,19 +637,51 @@ function getItemSeasons(item) {
   return Array.isArray(item.seasons) ? item.seasons : [];
 }
 
+// Prioritas Status Kartu Luar:
+// 1. Jika ada yang 'ongoing' -> 'ongoing'
+// 2. Jika SEMUA 'completed' -> 'completed'
+// 3. Jika ada 'dropped' -> 'dropped'
+// 4. Sisanya -> 'planned'
 function computeSyncedStatus(tracks) {
-  const statuses = Array.from(new Set(tracks.map(t => (t.status || 'planned').toLowerCase().trim())));
-  if (statuses.length === 1) {
-    return {
-      key: statuses[0],
-      label: statuses[0],
-      isMixed: false
-    };
+  const statuses = tracks.map(t => (t.status || 'planned').toLowerCase().trim());
+
+  if (statuses.includes('ongoing')) {
+    return { key: 'ongoing', label: 'Ongoing' };
   }
+  if (statuses.length > 0 && statuses.every(s => s === 'completed')) {
+    return { key: 'completed', label: 'Completed' };
+  }
+  if (statuses.includes('dropped')) {
+    return { key: 'dropped', label: 'Dropped' };
+  }
+  return { key: 'planned', label: 'Planned' };
+}
+
+// Gabungkan total progress seluruh kategori menjadi 1 angka minimalis (misal: 444/444 atau 444/?)
+function computeCombinedProgress(tracks, syncedStatusKey) {
+  const totalProgress = tracks.reduce((sum, t) => sum + (Number(t.progress) || 0), 0);
+  const allHaveTotal = tracks.every(t => t.total_units !== null && Number(t.total_units) > 0);
+  const totalUnits = allHaveTotal
+    ? tracks.reduce((sum, t) => sum + Number(t.total_units), 0)
+    : null;
+
+  const text = totalUnits !== null ? `${totalProgress}/${totalUnits}` : `${totalProgress}/?`;
+
+  let percent = 0;
+  if (syncedStatusKey === 'completed') {
+    percent = 100;
+  } else if (totalUnits !== null && totalUnits > 0) {
+    percent = Math.min(100, Math.max(0, Math.round((totalProgress / totalUnits) * 100)));
+  } else if (syncedStatusKey === 'planned') {
+    percent = 100;
+  } else {
+    percent = totalProgress > 0 ? 45 : 0;
+  }
+
   return {
-    key: 'mixed',
-    label: statuses.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' · '),
-    isMixed: true
+    text,
+    percent,
+    isPlannedEmpty: syncedStatusKey === 'planned' && totalProgress === 0
   };
 }
 
@@ -818,9 +850,10 @@ function renderMediaGrid() {
     const cats = getItemCategories(item);
     const tracks = getItemTracks(item);
     const seasons = getItemSeasons(item);
+    const synced = computeSyncedStatus(tracks);
 
     const matchCat = currentCategory === 'all' || cats.includes(currentCategory);
-    const matchStatus = statusFilter === 'all' || tracks.some(t => t.status === statusFilter);
+    const matchStatus = statusFilter === 'all' || synced.key === statusFilter || tracks.some(t => t.status === statusFilter);
     const matchRating = matchesRatingFilter(item, ratingFilter);
     const matchTitle = item.title.toLowerCase().includes(query);
     const matchSeason = seasons.some(s => (s.name || '').toLowerCase().includes(query));
@@ -863,17 +896,11 @@ function renderMediaGrid() {
       const cats = getItemCategories(item);
       const seasons = getItemSeasons(item);
       const synced = computeSyncedStatus(tracks);
+      const combined = computeCombinedProgress(tracks, synced.key);
       const repeatCount = Number(item.repeat_count) || 0;
       const statusDateText = formatStatusDate(item.updated_at || item.created_at);
 
       const catLabels = cats.map(c => CATEGORY_LABELS[c] || c).join(' / ');
-      const progressPills = tracks.map(t => {
-        const hasTotal = t.total_units !== null && t.total_units > 0;
-        const txt = hasTotal ? `${t.progress}/${t.total_units}` : `${t.progress}/?`;
-        const unitShort = tracks.length > 1 ? ` ${t.unit_label}` : '';
-        return `<span class="progress-pill ${t.status}">${txt}${unitShort}</span>`;
-      }).join('');
-
       const seasonTag = seasons.length > 0 ? `<span>• ${seasons.length} Parts</span>` : '';
       const repeatHtml = repeatCount > 0 ? `<span class="list-repeat-tag">• ↻ ${repeatCount}x</span>` : '';
 
@@ -898,7 +925,7 @@ function renderMediaGrid() {
           </div>
           <div class="list-right-meta">
             <span class="status-pill ${synced.key} list-hide-mobile">${escapeHtml(synced.label)}</span>
-            <div class="multi-progress-pills">${progressPills}</div>
+            <span class="progress-pill ${synced.key}">${combined.text}</span>
             <span class="list-rating-pill">${ratingText}</span>
             ${editBtnHtml}
           </div>
@@ -918,27 +945,10 @@ function renderMediaGrid() {
     const cats = getItemCategories(item);
     const seasons = getItemSeasons(item);
     const synced = computeSyncedStatus(tracks);
+    const combined = computeCombinedProgress(tracks, synced.key);
 
     const catBadgesHtml = cats.map(c => `<span class="badge-cat">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('');
-
-    const progressPillsHtml = tracks.map(t => {
-      const hasTotal = t.total_units !== null && t.total_units > 0;
-      const txt = hasTotal ? `${t.progress}/${t.total_units}` : `${t.progress}/?`;
-      const unitShort = tracks.length > 1 ? ` ${t.unit_label}` : '';
-      return `<span class="progress-pill ${t.status}">${txt}${unitShort}</span>`;
-    }).join('');
-
-    const trackPercents = tracks.map(t => {
-      const hasTotal = t.total_units !== null && t.total_units > 0;
-      if (t.status === 'completed') return 100;
-      if (hasTotal) return Math.min(100, Math.max(0, Math.round((t.progress / t.total_units) * 100)));
-      if (t.status === 'planned') return 100;
-      return t.progress > 0 ? 45 : 0;
-    });
-    const avgPercent = Math.round(trackPercents.reduce((a, b) => a + b, 0) / trackPercents.length);
-    const isAllPlannedEmpty = tracks.every(t => t.status === 'planned' && t.progress === 0);
-    const extraBarClass = isAllPlannedEmpty ? 'planned-empty' : '';
-
+    const extraBarClass = combined.isPlannedEmpty ? 'planned-empty' : '';
     const statusDateText = formatStatusDate(item.updated_at || item.created_at);
 
     const repeatBadgeHtml = repeatCount > 0
@@ -972,10 +982,10 @@ function renderMediaGrid() {
           <div class="media-bottom-stack">
             <div class="media-meta-row">
               <span class="status-pill ${synced.key}">${escapeHtml(synced.label)}</span>
-              <div class="multi-progress-pills">${progressPillsHtml}</div>
+              <span class="progress-pill ${synced.key}">${combined.text}</span>
             </div>
             <div class="progress-track">
-              <div class="progress-fill ${synced.key} ${extraBarClass}" style="width: ${avgPercent}%"></div>
+              <div class="progress-fill ${synced.key} ${extraBarClass}" style="width: ${combined.percent}%"></div>
             </div>
             <div class="media-footer-row">
               <span class="status-date-item" title="Last status update">
@@ -1768,7 +1778,7 @@ document.getElementById('media-form').addEventListener('submit', async (e) => {
     seasons,
     sub_category: null,
     cover_url: newCover,
-    status: syncedStatus.isMixed ? primaryTrack.status : syncedStatus.key,
+    status: syncedStatus.key,
     progress: primaryTrack.progress,
     total_units: primaryTrack.total_units,
     unit_label: primaryTrack.unit_label,
