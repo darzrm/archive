@@ -2,7 +2,7 @@
 // 1. SUPABASE CONFIGURATION & STATE
 // ==========================================
 const SUPABASE_URL = 'https://uendrdxiixmikkeanlod.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_IdPLjwQhVQwXGGxUnBVblg_oIQ5Zz89';
+const SUPABASE_ANON_KEY = 'sb_publishable_IdPLjwQhVQwXGGxUnBVblg_oIQ5Zz89';
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
