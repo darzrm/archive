@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=380">
+  <link rel="stylesheet" href="./assets/css/style.css?v=390">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -515,7 +515,7 @@
           <span class="upload-status-text" id="cover-upload-status"></span>
         </div>
 
-        <!-- PROGRESS -->
+        <!-- PROGRESS (3-EQUAL COLUMNS: COUNT UNIT | STATUS | SEASON/OVA/OTHER) -->
         <div class="form-group">
           <div class="social-editor-header">
             <label style="margin: 0;">Progress</label>
@@ -768,9 +768,9 @@
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 
   <!-- Main JS -->
-  <script src="./assets/js/script.js?v=76"></script>
+  <script src="./assets/js/script.js?v=77"></script>
 
-  <!-- Sync Helper: Default Medium Size, Settings Nav & Clean Track Cards -->
+  <!-- Sync Helper: Default Medium Size & Settings Nav -->
   <script>
     (function () {
       let activeSizePreset = 'medium';
@@ -862,50 +862,6 @@
           attributes: true,
           attributeFilter: ['style']
         });
-      }
-
-      function normalizeMediaTrackCards() {
-        document.querySelectorAll('#media-tracks-editor .track-edit-card').forEach(card => {
-          if (card.dataset.normalized === '1') return;
-          card.dataset.normalized = '1';
-
-          card.querySelectorAll('.step-plus-btn').forEach(btn => btn.remove());
-
-          const selects = Array.from(card.querySelectorAll('select'));
-          const numInputs = Array.from(card.querySelectorAll('input[type="number"]'));
-          const delBtn = card.querySelector('.social-remove-btn');
-
-          if (selects.length >= 3 && numInputs.length >= 2 && delBtn) {
-            const row1 = document.createElement('div');
-            row1.className = 'clean-card-row-cat';
-            row1.appendChild(selects[0]);
-            row1.appendChild(delBtn);
-
-            const row2 = document.createElement('div');
-            row2.className = 'clean-card-row-2col';
-            row2.appendChild(selects[1]);
-            row2.appendChild(selects[2]);
-
-            const row3 = document.createElement('div');
-            row3.className = 'clean-card-row-eps';
-            const slash = document.createElement('span');
-            slash.className = 'eps-slash';
-            slash.textContent = '/';
-            row3.appendChild(numInputs[0]);
-            row3.appendChild(slash);
-            row3.appendChild(numInputs[1]);
-
-            card.innerHTML = '';
-            card.appendChild(row1);
-            card.appendChild(row2);
-            card.appendChild(row3);
-          }
-        });
-      }
-
-      const tracksEditor = document.getElementById('media-tracks-editor');
-      if (tracksEditor) {
-        new MutationObserver(normalizeMediaTrackCards).observe(tracksEditor, { childList: true });
       }
 
       updatePageSizeLabels();
