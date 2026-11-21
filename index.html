@@ -9,13 +9,13 @@
 
   <link id="favicon-link" rel="icon" type="image/png" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
 
-  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=370">
+  <link rel="stylesheet" href="./assets/css/style.css?v=380">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -27,7 +27,7 @@
   <!-- Minimalist Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <!-- STICKY MINI HEADER ON SCROLL (LARGER + ICON-ONLY SEPARATE TABS) -->
+  <!-- STICKY MINI HEADER ON SCROLL -->
   <header class="sticky-mini-header" id="sticky-mini-header">
     <div class="sticky-mini-inner">
       <div class="sticky-mini-profile" onclick="scrollToTopSmooth()" title="Scroll to top">
@@ -35,14 +35,16 @@
         <span id="sticky-name-text"></span>
       </div>
 
-      <div class="sticky-mini-nav">
+      <nav class="sticky-mini-nav" aria-label="Floating Navigation">
         <button type="button" class="mini-nav-btn active" data-view="blog" onclick="switchMainView('blog')" title="Notes" aria-label="Notes">
           <ion-icon name="document-text-outline"></ion-icon>
+          <span>Notes</span>
         </button>
         <button type="button" class="mini-nav-btn" id="mini-tab-library" data-view="library" onclick="switchMainView('library')" title="Library" aria-label="Library">
           <ion-icon name="albums-outline"></ion-icon>
+          <span>Library</span>
         </button>
-      </div>
+      </nav>
     </div>
   </header>
 
@@ -82,15 +84,17 @@
         <div class="profile-socials-bar" id="profile-socials-bar" style="display: none;"></div>
       </div>
 
-      <!-- INTEGRATED MAIN NAVIGATION BAR (SEPARATE ICON-ONLY BUTTONS) -->
+      <!-- INTEGRATED MAIN NAVIGATION BAR (CLEAN MINIMALIST TABS) -->
       <nav class="primary-nav-bar" aria-label="Primary Navigation">
-        <div class="separate-nav-tabs" role="tablist">
-          <button type="button" class="nav-icon-tab-btn active" id="tab-btn-blog" data-view="blog" onclick="switchMainView('blog')" title="Notes" aria-label="Notes">
+        <div class="clean-nav-tabs" role="tablist">
+          <button type="button" class="nav-clean-tab-btn active" id="tab-btn-blog" data-view="blog" onclick="switchMainView('blog')" aria-label="Notes">
             <ion-icon name="document-text-outline"></ion-icon>
+            <span>Notes</span>
           </button>
 
-          <button type="button" class="nav-icon-tab-btn" id="bottom-tab-library" data-view="library" onclick="switchMainView('library')" title="Library" aria-label="Library">
+          <button type="button" class="nav-clean-tab-btn" id="bottom-tab-library" data-view="library" onclick="switchMainView('library')" aria-label="Library">
             <ion-icon name="albums-outline"></ion-icon>
+            <span>Library</span>
             <span id="library-private-lock" class="nav-lock-dot" style="display: none;" title="Private (Admin Only)">
               <ion-icon name="lock-closed"></ion-icon>
             </span>
@@ -473,7 +477,7 @@
         <button type="button" class="close-modal-btn" onclick="closeMediaModal()">&times;</button>
       </div>
 
-      <!-- Auto-Fill Metadata (Consistent Monochrome Theme) -->
+      <!-- Auto-Fill Metadata -->
       <div class="api-search-section">
         <label class="form-label">Auto-Fill</label>
         <div class="api-search-bar">
@@ -764,7 +768,7 @@
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 
   <!-- Main JS -->
-  <script src="./assets/js/script.js?v=75"></script>
+  <script src="./assets/js/script.js?v=76"></script>
 
   <!-- Sync Helper: Default Medium Size, Settings Nav & Clean Track Cards -->
   <script>
@@ -838,7 +842,7 @@
         if (typeof origSwitch === 'function') {
           origSwitch(view);
         }
-        document.querySelectorAll('.nav-icon-tab-btn, .mini-nav-btn').forEach(btn => {
+        document.querySelectorAll('.nav-clean-tab-btn, .mini-nav-btn').forEach(btn => {
           btn.classList.toggle('active', btn.dataset.view === view);
         });
         const actionLabel = document.getElementById('center-action-label');
