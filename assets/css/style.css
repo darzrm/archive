@@ -2145,7 +2145,7 @@ textarea.form-input {
 }
 
 /*-----------------------------------*\
-  #DYNAMIC FORM ROWS (CLEAN & PROPORTIONAL)
+  #DYNAMIC FORM ROWS (EXACTLY MATCHING USER REQUEST)
 \*-----------------------------------*/
 
 .tracks-editor-list,
@@ -2170,21 +2170,40 @@ textarea.form-input {
   padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
 }
 
-.track-edit-top,
-.season-edit-top {
+/* Row 1 for Category: [Category Dropdown] [Delete Button] */
+.track-edit-top {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 36px;
   align-items: center;
   gap: 8px;
   width: 100%;
 }
 
+/* Row 1 for Additional Entry: [Category Dropdown] [Additional Name Input] [Delete Button] */
+.season-edit-top {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Row 2: [Status Dropdown] [Jenis Count Dropdown] */
 .track-edit-grid,
 .season-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+/* Row 3 (Eps / Max Eps): [Current Eps Input] [Max Eps Input] */
+.track-edit-subgrid,
+.season-edit-subgrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
@@ -2197,33 +2216,6 @@ textarea.form-input {
   height: 36px;
   padding: 6px 10px;
   font-size: 12px;
-}
-
-.progress-input-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-}
-
-.step-plus-btn {
-  padding: 0 12px;
-  height: 36px;
-  border-radius: 9px;
-  background: var(--eerie-black-2);
-  border: 1px solid var(--jet);
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 700;
-  flex-shrink: 0;
-  transition: var(--transition-1);
-}
-
-.step-plus-btn:hover {
-  border-color: #ffffff;
-  background: #ffffff;
-  color: var(--smoky-black);
 }
 
 .upload-status-text {
