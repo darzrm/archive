@@ -1,5 +1,5 @@
 /*-----------------------------------*\
-  #CUSTOM PROPERTIES
+  #CUSTOM PROPERTIES (MONOCHROME)
 \*-----------------------------------*/
 
 :root {
@@ -14,12 +14,11 @@
   --light-gray-70: hsla(0, 0%, 84%, 0.7);
 
   --mono-bright: #ffffff;
-  --mono-soft: #d4d4d8;
+  --mono-soft: #e4e4e7;
   --mono-muted: #a1a1aa;
   --mono-dim: #71717a;
 
   --ff-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --ff-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
 
   --shadow-1: -4px 8px 24px hsla(0, 0%, 0%, 0.25);
   --shadow-2: 0 16px 30px hsla(0, 0%, 0%, 0.25);
@@ -143,7 +142,7 @@ body {
 }
 
 /*-----------------------------------*\
-  #STICKY MINI HEADER ON SCROLL (LARGER + SEPARATE ICON TABS)
+  #STICKY MINI HEADER ON SCROLL
 \*-----------------------------------*/
 
 .sticky-mini-header {
@@ -152,11 +151,11 @@ body {
   left: 0;
   right: 0;
   z-index: 90;
-  background: rgba(18, 18, 19, 0.92);
+  background: rgba(16, 16, 18, 0.92);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--jet);
-  padding: 12px 18px;
+  padding: 10px 18px;
   transform: translateY(-100%);
   opacity: 0;
   pointer-events: none;
@@ -181,14 +180,14 @@ body {
 .sticky-mini-profile {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 11px;
   cursor: pointer;
   min-width: 0;
 }
 
 .sticky-mini-profile img {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   object-fit: cover;
   background: var(--onyx);
@@ -197,7 +196,7 @@ body {
 }
 
 .sticky-mini-profile span {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--white-1);
   letter-spacing: -0.2px;
@@ -206,36 +205,45 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Segmented Pill Nav for Floating Header */
 .sticky-mini-nav {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--jet);
   flex-shrink: 0;
 }
 
 .mini-nav-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
-  background: var(--onyx);
-  border: 1px solid var(--jet);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  gap: 6px;
+  height: 32px;
+  padding: 0 13px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--light-gray-70);
-  transition: var(--transition-1);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.mini-nav-btn ion-icon {
+  font-size: 15px;
+  flex-shrink: 0;
 }
 
 .mini-nav-btn:hover {
   color: var(--white-1);
-  border-color: rgba(255, 255, 255, 0.35);
 }
 
 .mini-nav-btn.active {
   background: var(--white-1);
-  border-color: var(--white-1);
   color: var(--smoky-black);
+  font-weight: 600;
 }
 
 .back-to-top-btn {
@@ -285,7 +293,7 @@ body {
 }
 
 /*-----------------------------------*\
-  #PROFILE HEADER CARD & SEPARATE ICON TABS
+  #PROFILE HEADER CARD & CLEAN NAVIGATION TABS
 \*-----------------------------------*/
 
 .profile-header-card {
@@ -435,58 +443,75 @@ body {
   color: var(--white-1);
 }
 
-/* Integrated Primary Navigation Bar (Separate Icon-Only Buttons) */
+/* Integrated Primary Navigation Bar (Minimalist Clean Underline Tabs) */
 .primary-nav-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 12px 22px;
-  background: rgba(14, 14, 16, 0.6);
+  gap: 12px;
+  padding: 0 22px;
+  min-height: 48px;
+  background: rgba(14, 14, 16, 0.55);
   border-top: 1px solid var(--jet);
   width: 100%;
 }
 
-.separate-nav-tabs {
+.clean-nav-tabs {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  align-items: stretch;
+  gap: 20px;
+  height: 48px;
 }
 
-.nav-icon-tab-btn {
+.nav-clean-tab-btn {
   position: relative;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 40px;
-  border-radius: 11px;
-  background: var(--onyx);
-  border: 1px solid var(--jet);
-  font-size: 18px;
+  gap: 7px;
+  height: 100%;
+  padding: 0 2px;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--light-gray-70);
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  transition: color 0.2s ease;
 }
 
-.nav-icon-tab-btn:hover {
-  color: var(--white-1);
-  border-color: rgba(255, 255, 255, 0.35);
+.nav-clean-tab-btn ion-icon {
+  font-size: 16px;
+  flex-shrink: 0;
 }
 
-.nav-icon-tab-btn.active {
+.nav-clean-tab-btn::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
   background: var(--white-1);
-  border-color: var(--white-1);
-  color: var(--smoky-black);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.22s ease;
+}
+
+.nav-clean-tab-btn:hover {
+  color: var(--white-1);
+}
+
+.nav-clean-tab-btn.active {
+  color: var(--white-1);
+  font-weight: 600;
+}
+
+.nav-clean-tab-btn.active::after {
+  transform: scaleX(1);
 }
 
 .nav-lock-dot {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  font-size: 9px;
+  font-size: 11px;
   display: inline-flex;
-  opacity: 0.85;
+  opacity: 0.75;
 }
 
 .primary-create-btn {
@@ -494,9 +519,9 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 11px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 9px;
   background: var(--white-1);
   color: var(--smoky-black);
   font-size: 12px;
@@ -508,7 +533,7 @@ body {
 }
 
 .primary-create-btn ion-icon {
-  font-size: 17px;
+  font-size: 16px;
   display: block;
   flex-shrink: 0;
 }
@@ -660,6 +685,7 @@ body {
   color: var(--white-1);
   line-height: 1.2;
   margin-top: 2px;
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-sub {
@@ -696,6 +722,7 @@ body {
   font-weight: 700;
   color: var(--white-1);
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 
 .unit-lbl {
@@ -754,6 +781,7 @@ body {
   font-weight: 700;
   color: var(--white-1);
   line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
 .highlight-badge {
@@ -1159,7 +1187,7 @@ body {
 }
 
 /*-----------------------------------*\
-  #DETAIL MODAL BADGES & PROGRESS BAR CARDS
+  #DETAIL MODAL MONOCHROME BADGES & PROGRESS BARS
 \*-----------------------------------*/
 
 .detail-pill-badge {
@@ -1167,50 +1195,32 @@ body {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  border: none;
   border-radius: 7px;
-  font-family: var(--ff-mono);
-  font-size: 10px;
-  font-weight: 700;
+  font-family: var(--ff-inter);
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  font-weight: 600;
   line-height: 1.2;
   padding: 4px 9px;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   text-transform: uppercase;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
-.badge-cat {
+.badge-mono-subtle {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--mono-muted);
+}
+
+.badge-mono-soft {
   background: rgba(255, 255, 255, 0.11);
-  color: #f4f4f5;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--mono-soft);
 }
 
-.badge-rating {
-  background: #ffffff;
-  color: #09090b;
-}
-
-.badge-status-completed {
-  background: rgba(52, 211, 153, 0.16);
-  color: #6ee7b7;
-}
-
-.badge-status-ongoing {
-  background: rgba(96, 165, 250, 0.16);
-  color: #93c5fd;
-}
-
-.badge-status-planned {
-  background: rgba(251, 191, 36, 0.15);
-  color: #fcd34d;
-}
-
-.badge-status-dropped {
-  background: rgba(248, 113, 113, 0.16);
-  color: #fca5a5;
-}
-
-/* Redesigned Progress Cards with Progress Bar */
+/* Redesigned Monochrome Progress Cards */
 .detail-progress-list {
   display: flex;
   flex-direction: column;
@@ -1237,12 +1247,12 @@ body {
 .detail-progress-cat {
   font-size: 12.5px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--mono-soft);
 }
 
 .detail-progress-bar-track {
   width: 100%;
-  height: 6px;
+  height: 5px;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 999px;
   overflow: hidden;
@@ -1251,44 +1261,47 @@ body {
 .detail-progress-bar-fill {
   height: 100%;
   border-radius: 999px;
+  background: var(--mono-muted);
   transition: width 0.35s ease;
 }
 
-.fill-completed { background: #6ee7b7; }
-.fill-ongoing { background: #93c5fd; }
-.fill-planned { background: #fcd34d; }
-.fill-dropped { background: #fca5a5; }
+.fill-completed { background: #d4d4d8; }
+.fill-ongoing { background: #a1a1aa; }
+.fill-planned { background: #71717a; }
+.fill-dropped { background: #52525b; }
 
 .detail-progress-bottom {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-family: var(--ff-mono);
-  font-size: 11px;
+  font-family: var(--ff-inter);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
   color: var(--mono-muted);
 }
 
 .detail-progress-percent {
-  color: #e4e4e7;
+  color: var(--mono-soft);
   font-weight: 600;
 }
 
-/* Review Rating Pill (Bright Light Theme - No Dark Background) */
+/* Balanced Monochrome Rating Pill in Reviews */
 .review-rating-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  background: #f4f4f5;
-  color: #18181b;
-  border: none;
+  background: rgba(255, 255, 255, 0.11);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--mono-soft);
   border-radius: 7px;
-  font-family: var(--ff-mono);
-  font-size: 10.5px;
-  font-weight: 700;
+  font-family: var(--ff-inter);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 1.2;
   padding: 4px 9px;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.2px;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1386,7 +1399,7 @@ body {
   text-align: right;
   font-size: 11px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--mono-soft);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
@@ -1835,7 +1848,7 @@ body {
 .ep-review-title-label {
   font-size: 12.5px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--mono-soft);
 }
 
 .ep-review-note {
@@ -2647,17 +2660,29 @@ textarea.note-textarea-large {
 
 @media (max-width: 560px) {
   .primary-nav-bar {
-    padding: 10px 14px;
+    padding: 0 16px;
+    min-height: 44px;
     gap: 8px;
   }
-  .nav-icon-tab-btn {
-    width: 40px;
-    height: 38px;
+  .clean-nav-tabs {
+    height: 44px;
+    gap: 16px;
+  }
+  .nav-clean-tab-btn {
+    font-size: 12.5px;
   }
   .primary-create-btn {
-    height: 38px;
-    padding: 0 12px;
-    font-size: 12px;
+    height: 32px;
+    padding: 0 11px;
+    font-size: 11.5px;
+  }
+  .sticky-mini-header {
+    padding: 9px 14px;
+  }
+  .mini-nav-btn {
+    height: 30px;
+    padding: 0 11px;
+    font-size: 11.5px;
   }
   .category-tabs {
     gap: 5px;
