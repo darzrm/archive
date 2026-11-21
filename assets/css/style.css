@@ -1777,7 +1777,7 @@ body {
   color: #ffffff;
 }
 
-/* Equal 50% : 50% Split Row (URL + Upload / Bio + Social Button) */
+/* Equal 50% : 50% Split Row */
 .split-equal-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2145,7 +2145,7 @@ textarea.form-input {
 }
 
 /*-----------------------------------*\
-  #DYNAMIC FORM ROWS (EXACTLY MATCHING USER REQUEST)
+  #CLEAN 3-ROW MODAL FORM CARDS
 \*-----------------------------------*/
 
 .tracks-editor-list,
@@ -2174,8 +2174,8 @@ textarea.form-input {
   width: 100%;
 }
 
-/* Row 1 for Category: [Category Dropdown] [Delete Button] */
-.track-edit-top {
+/* Category Row 1: [CATEGORY] [DELETE] */
+.clean-card-row-cat {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 36px;
   align-items: center;
@@ -2183,31 +2183,38 @@ textarea.form-input {
   width: 100%;
 }
 
-/* Row 1 for Additional Entry: [Category Dropdown] [Additional Name Input] [Delete Button] */
-.season-edit-top {
+/* Additional Entry Row 1: [CATEGORY] [NAMA ADDITIONAL] [DELETE] */
+.clean-card-row-add {
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr) 36px;
+  grid-template-columns: 115px minmax(0, 1fr) 36px;
   align-items: center;
   gap: 8px;
   width: 100%;
 }
 
-/* Row 2: [Status Dropdown] [Jenis Count Dropdown] */
-.track-edit-grid,
-.season-edit-grid {
+/* Row 2: [STATUS] [JENIS COUNT] */
+.clean-card-row-2col {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
   gap: 8px;
   width: 100%;
 }
 
-/* Row 3 (Eps / Max Eps): [Current Eps Input] [Max Eps Input] */
-.track-edit-subgrid,
-.season-edit-subgrid {
+/* Row 3: [EPS] / [EPS] */
+.clean-card-row-eps {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
   gap: 8px;
   width: 100%;
+}
+
+.eps-slash {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--light-gray-70);
+  user-select: none;
 }
 
 .track-edit-card .form-input,
@@ -2216,6 +2223,37 @@ textarea.form-input {
   height: 36px;
   padding: 6px 10px;
   font-size: 12px;
+}
+
+.progress-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.progress-input-row .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.step-plus-btn {
+  padding: 0 11px;
+  height: 38px;
+  border-radius: 9px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  transition: var(--transition-1);
+}
+
+.step-plus-btn:hover {
+  border-color: #ffffff;
+  background: #ffffff;
+  color: var(--smoky-black);
 }
 
 .upload-status-text {
@@ -2469,6 +2507,10 @@ textarea.form-input {
   }
   .form-row {
     grid-template-columns: 1fr;
+  }
+  .clean-card-row-add {
+    grid-template-columns: 98px minmax(0, 1fr) 36px;
+    gap: 6px;
   }
   .equal-upload-btn,
   .equal-action-btn {
