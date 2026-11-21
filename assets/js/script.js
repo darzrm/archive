@@ -1356,7 +1356,7 @@ function renderMediaGrid() {
 }
 
 // ==========================================
-// 4B. MEDIA DETAIL MODAL (PLAIN MONOCHROME LABELS + THIN DIVIDER FOR NOTES)
+// 4B. MEDIA DETAIL MODAL (SUBTLE MONOCHROME BORDERS + CLEAN TYPOGRAPHY)
 // ==========================================
 window.openMediaDetailModal = function (id) {
   const item = allMediaLogs.find(m => String(m.id) === String(id));
@@ -1387,15 +1387,15 @@ window.openMediaDetailModal = function (id) {
     return `
       <div class="detail-row-item">
         <div>
-          <strong style="color: var(--white-1);">${escapeHtml(CATEGORY_LABELS[t.category] || t.category)}</strong>
-          <span style="color: var(--light-gray-70); margin-left: 8px;">${progStr}</span>
+          <strong style="color: var(--white-1); font-weight: 600;">${escapeHtml(CATEGORY_LABELS[t.category] || t.category)}</strong>
+          <span style="color: var(--light-gray-70); margin-left: 8px; font-variant-numeric: tabular-nums;">${progStr}</span>
         </div>
-        <span class="detail-plain-badge">${escapeHtml(t.status)}</span>
+        <span class="mono-pill-subtle">${escapeHtml(t.status)}</span>
       </div>
     `;
   }).join('');
 
-  // Render Review section ONLY if epReviews has entries (plain text + thin line above notes)
+  // Render Review section ONLY if epReviews has entries (subtle monochrome border + thin line above notes)
   let epReviewsHtml = '';
   if (epReviews.length > 0) {
     const ratedEps = epReviews.filter(e => e.rating !== null && !Number.isNaN(e.rating));
@@ -1407,11 +1407,11 @@ window.openMediaDetailModal = function (id) {
       <div>
         <div class="ep-graph-header">
           <div class="detail-section-title" style="margin-bottom: 0;">Review (${epReviews.length})</div>
-          ${avgEpScore ? `<span class="detail-plain-badge">★ Avg ${avgEpScore}</span>` : ''}
+          ${avgEpScore ? `<span class="mono-pill-subtle">★ Avg ${avgEpScore}</span>` : ''}
         </div>
         <div class="ep-review-cards-list">
           ${epReviews.map((ep, idx) => {
-            const partLabel = ep.number || `#${idx + 1}`;
+            const partLabel = ep.number || `Part ${idx + 1}`;
             const hasScore = ep.rating !== null && !Number.isNaN(ep.rating);
             const scoreStr = hasScore ? `★ ${Number(ep.rating).toFixed(1)}` : '';
 
@@ -1419,9 +1419,9 @@ window.openMediaDetailModal = function (id) {
               <div class="ep-review-card">
                 <div class="ep-review-main">
                   <div class="ep-review-left">
-                    <span class="ep-part-text">${escapeHtml(partLabel)}</span>
+                    <span class="mono-pill-subtle">${escapeHtml(partLabel)}</span>
                   </div>
-                  ${hasScore ? `<span class="ep-score-plain">${scoreStr}</span>` : ''}
+                  ${hasScore ? `<span class="mono-pill-subtle strong">${scoreStr}</span>` : ''}
                 </div>
                 ${ep.note ? `<div class="ep-review-note">${escapeHtml(ep.note)}</div>` : ''}
               </div>
@@ -1441,23 +1441,17 @@ window.openMediaDetailModal = function (id) {
     </div>
   ` : '';
 
-  const heroMetaParts = [
-    cats.map(c => (CATEGORY_LABELS[c] || c).toUpperCase()).join(' / '),
-    synced.label.toUpperCase(),
-    ratingText
-  ];
-  if (repeatCount > 0) heroMetaParts.push(`↻ ${repeatCount}X`);
-
-  const heroMetaHtml = heroMetaParts
-    .map(p => `<span>${escapeHtml(p)}</span>`)
-    .join('<span class="meta-dot">·</span>');
-
   document.getElementById('media-detail-body').innerHTML = `
     <div class="detail-hero">
       ${heroVisualHtml}
       <div class="detail-meta-col">
-        <div class="detail-plain-meta-row">
-          ${heroMetaHtml}
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+          ${cats.map(c => `<span class="mono-pill-subtle">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('')}
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+          <span class="mono-pill-subtle">${escapeHtml(synced.label)}</span>
+          <span class="mono-pill-subtle strong">${escapeHtml(ratingText)}</span>
+          ${repeatCount > 0 ? `<span class="mono-pill-subtle">↻ ${repeatCount}x</span>` : ''}
         </div>
         <div style="font-size: 11px; color: var(--light-gray-70);">
           Updated ${formatStatusDate(item.updated_at || item.created_at)}
@@ -2479,12 +2473,24 @@ window.addPostImageRow = function (url = '') {
         <span>Upload</span>
         <input type="file" accept="image/*" hidden onchange="handleSinglePostRowUpload(event, this)">
       </label>
-      <button type="button" class="social-remove-btn" onclick="this.closest('.post-img-split-row').remove()" title="Delete">
+      <button type="button" class="social-remove-btn" onclick="removePostImageRow(this)" title="Delete">
         <ion-icon name="trash-outline"></ion-icon>
       </button>
     </div>
   `;
   container.appendChild(row);
+};
+
+window.removePostImageRow = function (btn) {
+  const container = document.getElementById('post-images-editor');
+  const row = btn.closest('.post-img-split-row');
+  if (!row || !container) return;
+  if (container.children.length <= 1) {
+    const inp = row.querySelector('.post-image-url-input');
+    if (inp) inp.value = '';
+    return;
+  }
+  row.remove();
 };
 
 window.handleSinglePostRowUpload = async function (event, fileInput) {
@@ -2516,7 +2522,10 @@ window.openPostModal = function () {
   setElText('post-upload-status', '');
 
   const imgEditor = document.getElementById('post-images-editor');
-  if (imgEditor) imgEditor.innerHTML = '';
+  if (imgEditor) {
+    imgEditor.innerHTML = '';
+    addPostImageRow(''); // Always show at least 1 image row by default
+  }
 
   document.getElementById('post-modal').classList.add('active');
 };
@@ -2536,7 +2545,11 @@ window.openEditPostModal = function (id) {
   if (imgEditor) {
     imgEditor.innerHTML = '';
     const imgs = getPostImageUrls(post);
-    imgs.forEach(u => addPostImageRow(u));
+    if (imgs.length > 0) {
+      imgs.forEach(u => addPostImageRow(u));
+    } else {
+      addPostImageRow(''); // Always show at least 1 image row by default
+    }
   }
 
   document.getElementById('post-modal').classList.add('active');
@@ -2582,7 +2595,6 @@ if (postForm) {
       ? await supabaseClient.from('blog_posts').update(payload).eq('id', id)
       : await supabaseClient.from('blog_posts').insert([{ ...payload, created_at: nowIso }]);
 
-    // Fallback if is_private column hasn't been added to blog_posts yet
     if (res.error && res.error.message && res.error.message.includes('is_private')) {
       delete payload.is_private;
       res = id
