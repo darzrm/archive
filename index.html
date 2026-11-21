@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=330">
+  <link rel="stylesheet" href="./assets/css/style.css?v=350">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -450,7 +450,7 @@
         <button type="button" class="close-modal-btn" onclick="closeMediaModal()">&times;</button>
       </div>
 
-      <!-- Auto-Fill Metadata -->
+      <!-- Auto-Fill Metadata (Consistent Monochrome Theme) -->
       <div class="api-search-section">
         <label class="form-label">Auto-Fill</label>
         <div class="api-search-bar">
@@ -476,7 +476,7 @@
           <input type="text" id="media-title" class="form-input" required placeholder="Title">
         </div>
 
-        <!-- COVER (50% URL + 50% UPLOAD) -->
+        <!-- COVER (50% URL + 50% UPLOAD & DELETE) -->
         <div class="form-group">
           <div class="social-editor-header">
             <label style="margin: 0;">Cover</label>
@@ -499,7 +499,7 @@
           <div id="media-tracks-editor" class="tracks-editor-list"></div>
         </div>
 
-        <!-- REVIEW (50% PART + 50% NOTES) -->
+        <!-- REVIEW (50% PART + 50% NOTES & DELETE) -->
         <div class="form-group">
           <div class="social-editor-header">
             <label style="margin: 0;">Review</label>
@@ -568,31 +568,31 @@
 
       <form id="post-form" class="modal-form">
         <input type="hidden" id="post-id">
+        <input type="hidden" id="post-is-private" value="false">
 
         <div class="form-group">
           <label>Note</label>
-          <textarea id="post-content" class="form-input" rows="5" required placeholder="Write something..."></textarea>
+          <textarea id="post-content" class="form-input note-textarea-large" rows="6" required placeholder="Write something..."></textarea>
         </div>
 
-        <!-- IMAGE SLIDER ATTACHMENT -->
+        <!-- IMAGE SECTION: Header with Add button on far right + at least 1 row (50% URL | 50% Upload + Delete) -->
         <div class="form-group">
           <div class="social-editor-header">
             <label style="margin: 0;">Image</label>
-            <div style="display: flex; gap: 6px; align-items: center;">
-              <label class="add-social-btn" style="cursor: pointer;" title="Upload">
-                <ion-icon name="images-outline"></ion-icon> Upload
-                <input type="file" id="post-images-files" accept="image/*" multiple hidden onchange="handlePostImagesUpload(event)">
-              </label>
-              <button type="button" class="add-social-btn" onclick="addPostImageRow()">
-                <ion-icon name="add-outline"></ion-icon> Add
-              </button>
-            </div>
+            <button type="button" class="add-social-btn" onclick="addPostImageRow()">
+              <ion-icon name="add-outline"></ion-icon> Add
+            </button>
           </div>
           <div id="post-images-editor" class="multi-img-editor-list"></div>
           <span class="upload-status-text" id="post-upload-status"></span>
         </div>
 
-        <div class="modal-submit-row">
+        <!-- BOTTOM ROW: Visibility Toggle (50%) + Publish Button (50%) -->
+        <div class="split-equal-row" style="margin-top: 4px;">
+          <button type="button" id="btn-post-visibility" class="equal-action-btn" onclick="togglePostVisibilityState()">
+            <ion-icon name="globe-outline" id="post-vis-icon"></ion-icon>
+            <span id="post-vis-label">Public</span>
+          </button>
           <button type="submit" class="form-btn primary-submit">Publish</button>
         </div>
       </form>
@@ -747,7 +747,7 @@
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 
   <!-- Main JS -->
-  <script src="./assets/js/script.js?v=70"></script>
+  <script src="./assets/js/script.js?v=73"></script>
 
   <!-- Sync Helper: Default Medium Size, Settings Nav & Clean Track Cards -->
   <script>
@@ -843,7 +843,6 @@
         });
       }
 
-      // Normalize Progress cards to clean 3-row layout
       function normalizeMediaTrackCards() {
         document.querySelectorAll('#media-tracks-editor .track-edit-card').forEach(card => {
           if (card.dataset.normalized === '1') return;
