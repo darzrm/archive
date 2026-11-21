@@ -1847,19 +1847,25 @@ body {
   color: var(--bittersweet-shimmer);
 }
 
-/* Settings Multi-Step Panels */
+/* Settings Multi-Step Panels & Save Button Fix */
 .settings-step-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   width: 100%;
   animation: viewFadeIn 0.18s ease;
+}
+
+.settings-root-save-wrap {
+  width: 100%;
+  margin-top: 6px;
+  padding-bottom: 4px;
 }
 
 .settings-root-save-btn {
   width: 100% !important;
   display: flex !important;
-  margin-top: 4px;
+  height: 42px !important;
 }
 
 .settings-nav-item {
@@ -2138,7 +2144,10 @@ textarea.form-input {
   border-color: #ffffff;
 }
 
-/* Dynamic Form Rows (Tracks, Entries, Socials) */
+/*-----------------------------------*\
+  #DYNAMIC FORM ROWS (CLEAN & PROPORTIONAL)
+\*-----------------------------------*/
+
 .tracks-editor-list,
 .seasons-editor-list,
 .social-links-editor {
@@ -2167,16 +2176,11 @@ textarea.form-input {
 
 .track-edit-top,
 .season-edit-top {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   width: 100%;
-}
-
-.track-edit-top > *:first-child,
-.season-edit-top > *:first-child {
-  flex: 1;
-  min-width: 0;
 }
 
 .track-edit-grid,
@@ -2196,35 +2200,24 @@ textarea.form-input {
 }
 
 .progress-input-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px;
   width: 100%;
 }
 
-.progress-input-row .form-input {
-  flex: 1;
-  min-width: 0;
-}
-
 .step-plus-btn {
-  padding: 0 10px;
-  height: 38px;
+  padding: 0 12px;
+  height: 36px;
   border-radius: 9px;
-  background: var(--onyx);
+  background: var(--eerie-black-2);
   border: 1px solid var(--jet);
   color: #ffffff;
   font-size: 11px;
   font-weight: 700;
   flex-shrink: 0;
   transition: var(--transition-1);
-}
-
-.track-edit-card .step-plus-btn,
-.season-edit-card .step-plus-btn {
-  height: 36px;
-  background: var(--eerie-black-2);
-  padding: 0 12px;
 }
 
 .step-plus-btn:hover {
@@ -2283,10 +2276,10 @@ textarea.form-input {
 }
 
 .social-remove-btn {
-  height: 38px;
+  height: 36px;
   width: 36px;
   border-radius: 9px;
-  background: var(--onyx);
+  background: var(--eerie-black-2);
   border: 1px solid var(--jet);
   color: var(--bittersweet-shimmer);
   display: inline-flex;
@@ -2294,13 +2287,12 @@ textarea.form-input {
   justify-content: center;
   font-size: 15px;
   flex-shrink: 0;
+  transition: var(--transition-1);
 }
 
-.track-edit-card .social-remove-btn,
-.season-edit-card .social-remove-btn {
-  height: 36px;
-  width: 36px;
-  background: var(--eerie-black-2);
+.social-remove-btn:hover {
+  background: rgba(255, 95, 95, 0.15);
+  border-color: var(--bittersweet-shimmer);
 }
 
 .modal-submit-row {
