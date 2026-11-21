@@ -1162,33 +1162,31 @@ body {
 }
 
 /*-----------------------------------*\
-  #DETAIL MODAL MONOCHROME TEXT LABELS (NO BORDERS/COLOR PILLS)
+  #SUBTLE MONOCHROME PILLS & BADGES (DETAIL MODAL)
 \*-----------------------------------*/
 
-.detail-plain-meta-row {
-  display: flex;
-  flex-wrap: wrap;
+.mono-pill-subtle {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.35px;
+  justify-content: center;
+  gap: 4px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
   color: var(--light-gray);
-}
-
-.detail-plain-meta-row .meta-dot {
-  color: var(--mono-dim);
-}
-
-.detail-plain-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--light-gray);
-  letter-spacing: 0.25px;
-  text-transform: uppercase;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.2;
+  padding: 3px 8px;
+  letter-spacing: 0.2px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.mono-pill-subtle.strong {
+  color: #ffffff;
+  font-weight: 600;
 }
 
 /*-----------------------------------*\
@@ -1381,14 +1379,14 @@ body {
 }
 
 .detail-gallery-carousel {
-  width: 120px;
-  height: 176px;
+  width: 112px;
+  height: 164px;
   flex-shrink: 0;
   border-radius: 10px;
 }
 
 .detail-gallery-carousel .carousel-slide {
-  height: 176px;
+  height: 164px;
 }
 
 .detail-gallery-carousel .carousel-slide img {
@@ -1699,7 +1697,7 @@ body {
   width: 100%;
 }
 
-/* Clean Monochrome Detail Modal Review Cards (Plain Text + Thin Divider for Notes) */
+/* Detail Modal Review Cards (Subtle Monochrome Border + Thin Line Above Notes) */
 .ep-graph-header {
   display: flex;
   align-items: center;
@@ -1719,7 +1717,7 @@ body {
 .ep-review-card {
   background: var(--onyx);
   border: 1px solid var(--jet);
-  border-radius: 11px;
+  border-radius: 10px;
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
@@ -1742,23 +1740,14 @@ body {
 
 .ep-part-text {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   color: #ffffff;
-}
-
-.ep-score-plain {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--light-gray);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .ep-review-note {
   font-size: 12px;
-  color: var(--light-gray);
-  line-height: 1.5;
+  color: var(--light-gray-70);
+  line-height: 1.55;
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -1823,6 +1812,7 @@ body {
   height: 30px;
   border-radius: 9px;
   background: var(--onyx);
+  border: 1px solid var(--jet);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1836,6 +1826,7 @@ body {
   height: 30px;
   border-radius: 9px;
   background: var(--onyx);
+  border: 1px solid var(--jet);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1997,6 +1988,7 @@ body {
   height: 36px;
   border-radius: 10px;
   background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2125,44 +2117,43 @@ body {
   background-color: var(--smoky-black);
 }
 
-/* Auto-Fill Section with Distinct Contrast */
+/* Auto-Fill Section (Matched Monochrome Form & Button Colors) */
 .api-search-section {
-  background: #17171a;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 13px;
-  padding: 12px;
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0 0 14px 0;
   margin-bottom: 14px;
 }
 
 .api-search-section .form-input {
-  background: #27272c;
-  border-color: rgba(255, 255, 255, 0.18);
+  background: var(--onyx);
+  border: 1px solid var(--jet);
   color: #ffffff;
+  height: 38px;
 }
 
 .api-search-section .form-input:focus {
   border-color: #ffffff;
-  background: #2e2e34;
 }
 
 .api-search-section .form-btn {
-  background: #2f2f35;
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  color: #ffffff;
+  height: 38px;
 }
 
 .api-search-section .form-btn:hover {
-  background: #ffffff;
-  color: var(--smoky-black);
+  border-color: #ffffff;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .form-label {
   display: block;
-  font-size: 10.5px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--light-gray-70);
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
+  margin-bottom: 6px;
 }
 
 .api-search-bar {
@@ -2175,8 +2166,10 @@ body {
   max-height: 190px;
   overflow-y: auto;
   display: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 8px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  border-radius: 10px;
+  padding: 6px;
 }
 
 .api-result-item {
@@ -2189,7 +2182,7 @@ body {
 }
 
 .api-result-item:hover {
-  background: #27272c;
+  background: var(--eerie-black-2);
 }
 
 .api-result-item img {
@@ -2256,8 +2249,12 @@ body {
 textarea.form-input {
   height: auto;
   resize: vertical;
-  min-height: 96px;
+  min-height: 110px;
   line-height: 1.5;
+}
+
+textarea.note-textarea-large {
+  min-height: 135px;
 }
 
 .form-input:focus {
@@ -2439,12 +2436,12 @@ textarea.form-input {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 40px;
+  height: 38px;
   background: var(--onyx);
   border: 1px solid var(--jet);
   color: #ffffff;
   padding: 0 16px;
-  border-radius: 11px;
+  border-radius: 10px;
   font-size: 12px;
   font-weight: 600;
   transition: var(--transition-1);
@@ -2456,11 +2453,11 @@ textarea.form-input {
 
 .primary-submit {
   flex: 1;
-  height: 40px;
+  height: 38px;
   background: #ffffff;
   border-color: #ffffff;
   color: var(--smoky-black);
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
 .primary-submit:hover {
