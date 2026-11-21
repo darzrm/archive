@@ -1859,6 +1859,7 @@ body {
 .settings-root-save-btn {
   width: 100% !important;
   display: flex !important;
+  margin-top: 4px;
 }
 
 .settings-nav-item {
@@ -2143,8 +2144,9 @@ textarea.form-input {
 .social-links-editor {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
+  margin-top: 6px;
 }
 
 .social-links-editor:not(:empty) {
@@ -2156,10 +2158,10 @@ textarea.form-input {
   background: var(--onyx);
   border: 1px solid var(--jet);
   border-radius: 12px;
-  padding: 10px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
 }
 
@@ -2167,7 +2169,7 @@ textarea.form-input {
 .season-edit-top {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
 }
 
@@ -2188,8 +2190,8 @@ textarea.form-input {
 .track-edit-card .form-input,
 .season-edit-card .form-input {
   background: var(--eerie-black-2);
-  height: 34px;
-  padding: 6px 9px;
+  height: 36px;
+  padding: 6px 10px;
   font-size: 12px;
 }
 
@@ -2220,8 +2222,9 @@ textarea.form-input {
 
 .track-edit-card .step-plus-btn,
 .season-edit-card .step-plus-btn {
-  height: 34px;
+  height: 36px;
   background: var(--eerie-black-2);
+  padding: 0 12px;
 }
 
 .step-plus-btn:hover {
@@ -2295,8 +2298,8 @@ textarea.form-input {
 
 .track-edit-card .social-remove-btn,
 .season-edit-card .social-remove-btn {
-  height: 34px;
-  width: 34px;
+  height: 36px;
+  width: 36px;
   background: var(--eerie-black-2);
 }
 
