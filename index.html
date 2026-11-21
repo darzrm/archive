@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=307">
+  <link rel="stylesheet" href="./assets/css/style.css?v=308">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -650,7 +650,7 @@
             </label>
           </div>
 
-          <button type="submit" class="form-btn primary-submit">Save Settings</button>
+          <button type="submit" class="form-btn primary-submit settings-root-save-btn">Save Settings</button>
         </div>
 
         <!-- STEP 2: SETTINGS > PROFILE -->
@@ -751,7 +751,7 @@
   <!-- Main JS -->
   <script src="./assets/js/script.js?v=53"></script>
 
-  <!-- Sync Helper for Full Poster Grid Overlay & Settings Navigation -->
+  <!-- Sync Helper: Grid Poster Overlay, Entry 2 Badge Hiding & Form Layout Fixes -->
   <script>
     (function () {
       let activeSizePreset = 'small';
@@ -846,7 +846,7 @@
         });
       }
 
-      // Format Grid (Full Cover + Title with Bottom Dark Shadow) & Compact List
+      // Format Grid (Full Cover + Title with Bottom Dark Shadow) & Hide badge if total entries === 2
       function formatMediaItems() {
         const grid = document.getElementById('media-grid');
         if (!grid) return;
@@ -896,6 +896,15 @@
           const coverWrap = card.querySelector('.media-cover-wrap');
           const body = card.querySelector('.media-body');
           const titleEl = card.querySelector('.media-title');
+          const seasonsBadge = card.querySelector('.badge-seasons');
+
+          // If total entries / seasons badge indicates exactly 2, hide the badge on grid card
+          if (seasonsBadge) {
+            const badgeText = seasonsBadge.textContent.trim().toLowerCase();
+            if (badgeText.includes('2')) {
+              seasonsBadge.style.display = 'none';
+            }
+          }
 
           if (coverWrap && titleEl) {
             const titleText = titleEl.textContent.trim();
