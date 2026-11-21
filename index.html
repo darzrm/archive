@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=350">
+  <link rel="stylesheet" href="./assets/css/style.css?v=360">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -397,20 +397,20 @@
             </div>
           </div>
 
-          <!-- Grid / List View Switcher (DEFAULT: COMPACT LIST) -->
+          <!-- Grid / List View Switcher (DEFAULT: POSTER GRID) -->
           <div class="view-mode-toggle" title="Switch layout">
-            <button type="button" id="btn-view-grid" class="view-mode-btn" onclick="setLibraryViewMode('grid')" aria-label="Poster Grid View">
+            <button type="button" id="btn-view-grid" class="view-mode-btn active" onclick="setLibraryViewMode('grid')" aria-label="Poster Grid View">
               <ion-icon name="grid-outline"></ion-icon>
             </button>
-            <button type="button" id="btn-view-list" class="view-mode-btn active" onclick="setLibraryViewMode('list')" aria-label="Compact List View">
+            <button type="button" id="btn-view-list" class="view-mode-btn" onclick="setLibraryViewMode('list')" aria-label="Compact List View">
               <ion-icon name="list-outline"></ion-icon>
             </button>
           </div>
         </div>
       </section>
 
-      <!-- MEDIA GRID / LIST (DEFAULT: LIST-VIEW) -->
-      <section class="media-grid list-view" id="media-grid">
+      <!-- MEDIA GRID / LIST (DEFAULT: POSTER GRID) -->
+      <section class="media-grid" id="media-grid">
         <p class="empty-state">Loading library...</p>
       </section>
 
@@ -568,7 +568,6 @@
 
       <form id="post-form" class="modal-form">
         <input type="hidden" id="post-id">
-        <input type="hidden" id="post-is-private" value="false">
 
         <div class="form-group">
           <label>Note</label>
@@ -587,13 +586,8 @@
           <span class="upload-status-text" id="post-upload-status"></span>
         </div>
 
-        <!-- BOTTOM ROW: Visibility Toggle (50%) + Publish Button (50%) -->
-        <div class="split-equal-row" style="margin-top: 4px;">
-          <button type="button" id="btn-post-visibility" class="equal-action-btn" onclick="togglePostVisibilityState()">
-            <ion-icon name="globe-outline" id="post-vis-icon"></ion-icon>
-            <span id="post-vis-label">Public</span>
-          </button>
-          <button type="submit" class="form-btn primary-submit">Publish</button>
+        <div class="modal-submit-row">
+          <button type="submit" class="form-btn primary-submit full-width-submit">Publish</button>
         </div>
       </form>
     </div>
@@ -737,7 +731,7 @@
           <label>Password</label>
           <input type="password" id="login-password" class="form-input" required>
         </div>
-        <button type="submit" class="form-btn primary-submit">Sign In</button>
+        <button type="submit" class="form-btn primary-submit full-width-submit" style="margin-top: 4px;">Sign In</button>
       </form>
     </div>
   </div>
@@ -747,7 +741,7 @@
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 
   <!-- Main JS -->
-  <script src="./assets/js/script.js?v=73"></script>
+  <script src="./assets/js/script.js?v=74"></script>
 
   <!-- Sync Helper: Default Medium Size, Settings Nav & Clean Track Cards -->
   <script>
