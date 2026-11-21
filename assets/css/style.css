@@ -1102,7 +1102,7 @@ body {
 }
 
 /*-----------------------------------*\
-  #POSTER GRID MODE (FULL COVER + DARK SHADOW TITLE)
+  #POSTER GRID MODE (CLEAN POSTER ONLY — NO STATUS OR TOTAL COUNT)
 \*-----------------------------------*/
 
 .media-grid {
@@ -1219,7 +1219,7 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 14px;
-  z-index: 4;
+  z-index: 5;
   transition: var(--transition-1);
 }
 
@@ -1258,7 +1258,7 @@ body {
 }
 
 /*-----------------------------------*\
-  #UNIFIED STATUS PILL
+  #UNIFIED STATUS PILL (FOR DETAIL MODAL)
 \*-----------------------------------*/
 
 .status-pill,
@@ -1283,10 +1283,6 @@ body {
   white-space: nowrap;
 }
 
-.status-pill::before {
-  display: none !important;
-}
-
 .detail-modal-body .badge-cat,
 .detail-modal-body .badge-rating,
 .detail-modal-body .badge-repeat,
@@ -1301,18 +1297,8 @@ body {
   line-height: 1.2;
 }
 
-.progress-pill,
-.progress-pill.completed,
-.progress-pill.ongoing,
-.progress-pill.planned,
-.progress-pill.dropped {
-  font-weight: 600;
-  font-size: 11px;
-  color: #ffffff !important;
-}
-
 /*-----------------------------------*\
-  #COMPACT LIST VIEW MODE (ULTRA-CLEAN)
+  #COMPACT LIST VIEW MODE (DEFAULT)
 \*-----------------------------------*/
 
 .media-grid.list-view {
@@ -1404,12 +1390,6 @@ body {
   font-size: 9px;
 }
 
-.media-list-row .status-pill,
-.media-list-row .progress-track,
-.media-list-row .progress-pill {
-  display: none !important;
-}
-
 .list-right-meta {
   display: flex;
   align-items: center;
@@ -1429,17 +1409,19 @@ body {
 }
 
 .list-edit-btn {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   background: var(--onyx);
   border: 1px solid var(--jet);
   color: var(--light-gray-70);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 13px;
   flex-shrink: 0;
+  position: relative;
+  z-index: 3;
   transition: var(--transition-1);
 }
 
@@ -1482,7 +1464,7 @@ body {
 }
 
 /*-----------------------------------*\
-  #IMAGE SLIDER / CAROUSEL (NOTES & DETAIL MODAL)
+  #IMAGE SLIDER / CAROUSEL
 \*-----------------------------------*/
 
 .image-carousel {
@@ -1791,7 +1773,7 @@ body {
 }
 
 /*-----------------------------------*\
-  #EPISODE / CHAPTER REVIEWS (IMDb / SeriesGraph Style)
+  #COVER & REVIEW 50% : 50% FORM ROWS
 \*-----------------------------------*/
 
 .ep-reviews-editor-list,
@@ -1803,6 +1785,16 @@ body {
   margin-top: 6px;
 }
 
+/* Cover 50% URL + 50% Upload Row */
+.cover-split-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+/* Post Image URL Row */
 .multi-img-row {
   display: flex;
   align-items: center;
@@ -1820,31 +1812,24 @@ body {
   flex-shrink: 0;
 }
 
-.ep-review-edit-card {
-  background: var(--onyx);
-  border: 1px solid var(--jet);
-  border-radius: 12px;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
+/* Review 50% Part + 50% Notes Row */
+.review-split-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
 }
 
-.ep-review-edit-top {
+.review-part-group {
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr) 74px 36px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr);
   gap: 6px;
   align-items: center;
+  width: 100%;
 }
 
-.ep-review-edit-card .form-input {
-  background: var(--eerie-black-2);
-  height: 35px;
-  padding: 6px 9px;
-  font-size: 12px;
-}
-
-/* IMDb / SeriesGraph Style Episode Cards in Detail Modal */
+/* Detail Modal Review Cards (IMDb / SeriesGraph Style) */
 .ep-graph-header {
   display: flex;
   align-items: center;
@@ -1936,7 +1921,6 @@ body {
   flex-shrink: 0;
 }
 
-/* SeriesGraph Color Tiers */
 .sg-rating-badge.sg-goat {
   background: rgba(16, 185, 129, 0.2);
   color: #34d399;
@@ -1974,11 +1958,9 @@ body {
 }
 
 .ep-review-note {
-  font-size: 11.5px;
-  color: var(--light-gray-70);
+  font-size: 12px;
+  color: var(--light-gray);
   line-height: 1.45;
-  padding-top: 2px;
-  border-top: 1px dashed rgba(255, 255, 255, 0.07);
 }
 
 /*-----------------------------------*\
@@ -2161,7 +2143,7 @@ body {
   color: var(--bittersweet-shimmer);
 }
 
-/* Settings Multi-Step Panels & Save Button Fix */
+/* Settings Multi-Step Panels */
 .settings-step-panel {
   display: flex;
   flex-direction: column;
@@ -2341,12 +2323,34 @@ body {
   background-color: var(--smoky-black);
 }
 
+/* Auto-Fill Section with Distinct Contrast */
 .api-search-section {
-  background: var(--onyx);
-  border: 1px solid var(--jet);
+  background: #17171a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 13px;
   padding: 12px;
   margin-bottom: 14px;
+}
+
+.api-search-section .form-input {
+  background: #27272c;
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.api-search-section .form-input:focus {
+  border-color: #ffffff;
+  background: #2e2e34;
+}
+
+.api-search-section .form-btn {
+  background: #2f2f35;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.api-search-section .form-btn:hover {
+  background: #ffffff;
+  color: var(--smoky-black);
 }
 
 .form-label {
@@ -2369,7 +2373,7 @@ body {
   max-height: 190px;
   overflow-y: auto;
   display: none;
-  border-top: 1px solid var(--jet);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding-top: 8px;
 }
 
@@ -2383,7 +2387,7 @@ body {
 }
 
 .api-result-item:hover {
-  background: var(--eerie-black-1);
+  background: #27272c;
 }
 
 .api-result-item img {
@@ -2605,10 +2609,10 @@ textarea.form-input {
 }
 
 .social-remove-btn {
-  height: 36px;
+  height: 38px;
   width: 36px;
   border-radius: 9px;
-  background: var(--eerie-black-2);
+  background: var(--onyx);
   border: 1px solid var(--jet);
   color: var(--bittersweet-shimmer);
   display: inline-flex;
@@ -2636,6 +2640,7 @@ textarea.form-input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   height: 40px;
   background: var(--onyx);
   border: 1px solid var(--jet);
@@ -2807,10 +2812,6 @@ textarea.form-input {
   .form-row {
     grid-template-columns: 1fr;
   }
-  .ep-review-edit-top {
-    grid-template-columns: 74px minmax(0, 1fr) 64px 34px;
-    gap: 5px;
-  }
   .equal-upload-btn,
   .equal-action-btn {
     font-size: 11px;
@@ -2831,9 +2832,6 @@ textarea.form-input {
   }
   .social-edit-row select.form-input {
     width: 92px;
-  }
-  .list-hide-mobile {
-    display: none;
   }
   .media-list-row {
     height: 48px;
