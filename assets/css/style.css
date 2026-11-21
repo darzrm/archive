@@ -1856,6 +1856,11 @@ body {
   animation: viewFadeIn 0.18s ease;
 }
 
+.settings-root-save-btn {
+  width: 100% !important;
+  display: flex !important;
+}
+
 .settings-nav-item {
   width: 100%;
   display: flex;
@@ -2504,19 +2509,6 @@ textarea.form-input {
   }
   .media-list-row {
     height: 48px;
-    padding: 5px 10px;
-    gap: 8px;
-  }
-  .list-thumb {
-    width: 26px;
-    height: 36px;
-  }
-  .list-right-meta {
-    gap: 8px;
-  }
-  .list-rating-pill {
-    width: 30px;
-    font-size: 10.5px;
   }
   .back-to-top-btn {
     right: 14px;
