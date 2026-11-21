@@ -831,7 +831,7 @@ if (profileForm) {
 }
 
 // ==========================================
-// 3. MULTI-CATEGORY, EPISODE REVIEWS & GALLERY HELPERS
+// 3. MULTI-CATEGORY, SEASON/OVA, EPISODE REVIEWS & GALLERY HELPERS
 // ==========================================
 const CATEGORY_LABELS = {
   tv_show: 'TV Show',
@@ -878,7 +878,8 @@ function getItemTracks(item) {
       status: (t.status || item.status || 'planned').toLowerCase().trim(),
       progress: Number(t.progress) || 0,
       total_units: (t.total_units !== null && t.total_units !== undefined && t.total_units !== '') ? Number(t.total_units) : null,
-      unit_label: t.unit_label || DEFAULT_UNITS_BY_CAT[t.category] || 'eps'
+      unit_label: t.unit_label || DEFAULT_UNITS_BY_CAT[t.category] || 'eps',
+      season_label: (t.season_label || '').toString().trim()
     }));
   }
 
@@ -888,7 +889,8 @@ function getItemTracks(item) {
     status: (item.status || 'planned').toLowerCase().trim(),
     progress: Number(item.progress) || 0,
     total_units: (item.total_units !== null && item.total_units !== undefined && item.total_units !== '') ? Number(item.total_units) : null,
-    unit_label: item.unit_label || DEFAULT_UNITS_BY_CAT[cat] || 'eps'
+    unit_label: item.unit_label || DEFAULT_UNITS_BY_CAT[cat] || 'eps',
+    season_label: ''
   }];
 }
 
@@ -1250,12 +1252,13 @@ function renderMediaGrid() {
     const matchStatus = statusFilter === 'all' || synced.key === statusFilter || allUnits.some(t => t.status === statusFilter);
     const matchRange = matchesCustomFilters(item);
     const matchTitle = (item.title || '').toLowerCase().includes(query);
+    const matchSeason = allUnits.some(t => (t.season_label || '').toLowerCase().includes(query));
     const matchEpReview = epReviews.some(ep =>
       (ep.title || '').toLowerCase().includes(query) ||
       (ep.number || '').toLowerCase().includes(query) ||
       (ep.note || '').toLowerCase().includes(query)
     );
-    const matchQuery = !query || matchTitle || matchEpReview;
+    const matchQuery = !query || matchTitle || matchSeason || matchEpReview;
 
     return matchCat && matchStatus && matchRange && matchQuery;
   });
@@ -1369,7 +1372,7 @@ function renderMediaGrid() {
 }
 
 // ==========================================
-// 4B. MEDIA DETAIL MODAL (STRICT MONOCHROME THEME + INTER TABULAR-NUMS)
+// 4B. MEDIA DETAIL MODAL (UNIFORM MONOCHROME + SEASON/OVA LABEL)
 // ==========================================
 window.openMediaDetailModal = function (id) {
   const item = allMediaLogs.find(m => String(m.id) === String(id));
@@ -1394,7 +1397,7 @@ window.openMediaDetailModal = function (id) {
     ? buildImageCarouselHtml(posterSlides, 'detail-gallery-carousel')
     : `<img class="detail-poster" src="${posterSlides[0]}" alt="${escapeHtml(item.title)}" onerror="this.src='${fallbackPoster}'">`;
 
-  // Progress Section: Monochrome Progress Bar + Inter Tabular Percentage + Monochrome Status Pill
+  // Progress Section: Uniform Monochrome Color + Season/OVA beside Category
   const tracksHtml = tracks.map(t => {
     const hasTotal = t.total_units !== null && t.total_units > 0;
     const unitShort = UNIT_SHORT_LABELS[t.unit_label] || (t.unit_label || '').toUpperCase();
@@ -1409,18 +1412,19 @@ window.openMediaDetailModal = function (id) {
       pct = 45;
     }
 
-    const statusKey = (t.status || 'planned').toLowerCase().trim();
-    const statusBadgeClass = statusKey === 'completed' ? 'badge-mono-soft' : 'badge-mono-subtle';
-    const fillClass = `fill-${statusKey}`;
+    const catName = escapeHtml(CATEGORY_LABELS[t.category] || t.category);
+    const seasonSuffix = t.season_label
+      ? ` <span class="detail-progress-season">· ${escapeHtml(t.season_label)}</span>`
+      : '';
 
     return `
       <div class="detail-progress-card">
         <div class="detail-progress-top">
-          <span class="detail-progress-cat">${escapeHtml(CATEGORY_LABELS[t.category] || t.category)}</span>
-          <span class="detail-pill-badge ${statusBadgeClass}">${escapeHtml(t.status)}</span>
+          <span class="detail-progress-cat">${catName}${seasonSuffix}</span>
+          <span class="detail-pill-badge">${escapeHtml(t.status)}</span>
         </div>
         <div class="detail-progress-bar-track">
-          <div class="detail-progress-bar-fill ${fillClass}" style="width: ${pct}%;"></div>
+          <div class="detail-progress-bar-fill" style="width: ${pct}%;"></div>
         </div>
         <div class="detail-progress-bottom">
           <span>${progStr}</span>
@@ -1430,7 +1434,7 @@ window.openMediaDetailModal = function (id) {
     `;
   }).join('');
 
-  // Review Section: Balanced Monochrome Rating Pill
+  // Review Section
   let epReviewsHtml = '';
   if (epReviews.length > 0) {
     epReviewsHtml = `
@@ -1473,12 +1477,12 @@ window.openMediaDetailModal = function (id) {
       ${heroVisualHtml}
       <div class="detail-meta-col">
         <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-          ${cats.map(c => `<span class="detail-pill-badge badge-mono-subtle">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('')}
+          ${cats.map(c => `<span class="detail-pill-badge">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('')}
         </div>
         <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-          <span class="detail-pill-badge ${synced.key === 'completed' ? 'badge-mono-soft' : 'badge-mono-subtle'}">${escapeHtml(synced.label)}</span>
-          <span class="detail-pill-badge ${hasRating ? 'badge-mono-soft' : 'badge-mono-subtle'}">${escapeHtml(ratingText)}</span>
-          ${repeatCount > 0 ? `<span class="detail-pill-badge badge-mono-subtle">↻ ${repeatCount}X</span>` : ''}
+          <span class="detail-pill-badge">${escapeHtml(synced.label)}</span>
+          <span class="detail-pill-badge">${escapeHtml(ratingText)}</span>
+          ${repeatCount > 0 ? `<span class="detail-pill-badge">↻ ${repeatCount}X</span>` : ''}
         </div>
         <div style="font-size: 11px; color: var(--light-gray-70);">
           Updated ${formatStatusDate(item.updated_at || item.created_at)}
@@ -1503,7 +1507,7 @@ window.closeMediaDetailModal = function () {
 };
 
 // ==========================================
-// 5. ADD / EDIT MEDIA MODAL (50:50 COVER & 50:50 REVIEW)
+// 5. ADD / EDIT MEDIA MODAL (3-EQUAL COLUMNS IN PROGRESS)
 // ==========================================
 window.addMediaImageRow = function (url = '') {
   const container = document.getElementById('media-gallery-editor');
@@ -1566,13 +1570,14 @@ window.addMediaTrackRow = function (track = null) {
   const cat = (track && track.category) ? track.category : 'tv_show';
   const status = (track && track.status) ? track.status : 'completed';
   const progress = (track && track.progress !== undefined) ? track.progress : 0;
-  const total = (track && track.total_units !== undefined) ? track.total_units : '';
+  const total = (track && track.total_units !== undefined && track.total_units !== null) ? track.total_units : '';
   const unit = (track && track.unit_label) ? track.unit_label : (DEFAULT_UNITS_BY_CAT[cat] || 'eps');
+  const seasonLabel = (track && track.season_label) ? track.season_label : '';
 
   const card = document.createElement('div');
   card.className = 'track-edit-card';
   card.innerHTML = `
-    <div class="track-edit-top">
+    <div class="clean-card-row-cat">
       <select class="form-input track-cat-select" onchange="onTrackCategoryChange(this)">
         <option value="tv_show" ${cat === 'tv_show' ? 'selected' : ''}>TV Show</option>
         <option value="movie" ${cat === 'movie' ? 'selected' : ''}>Movie</option>
@@ -1585,17 +1590,8 @@ window.addMediaTrackRow = function (track = null) {
         <ion-icon name="trash-outline"></ion-icon>
       </button>
     </div>
-    <div class="track-edit-grid">
-      <select class="form-input track-status-select" onchange="onTrackStatusOrTotalChange(this)">
-        <option value="completed" ${status === 'completed' ? 'selected' : ''}>Completed</option>
-        <option value="ongoing" ${status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
-        <option value="planned" ${status === 'planned' ? 'selected' : ''}>Planned</option>
-        <option value="dropped" ${status === 'dropped' ? 'selected' : ''}>Dropped</option>
-      </select>
-      <div class="progress-input-row">
-        <input type="number" class="form-input track-progress-input" min="0" value="${progress}" placeholder="Count">
-      </div>
-      <input type="number" class="form-input track-total-input" min="0" value="${total !== null ? total : ''}" placeholder="Total" oninput="onTrackStatusOrTotalChange(this)">
+
+    <div class="clean-card-row-3col">
       <select class="form-input track-unit-select">
         <option value="eps" ${unit === 'eps' ? 'selected' : ''}>Episode</option>
         <option value="movie" ${unit === 'movie' ? 'selected' : ''}>Movie</option>
@@ -1605,6 +1601,21 @@ window.addMediaTrackRow = function (track = null) {
         <option value="track" ${unit === 'track' ? 'selected' : ''}>Track</option>
         <option value="item" ${unit === 'item' ? 'selected' : ''}>Item</option>
       </select>
+
+      <select class="form-input track-status-select" onchange="onTrackStatusOrTotalChange(this)">
+        <option value="completed" ${status === 'completed' ? 'selected' : ''}>Completed</option>
+        <option value="ongoing" ${status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
+        <option value="planned" ${status === 'planned' ? 'selected' : ''}>Planned</option>
+        <option value="dropped" ${status === 'dropped' ? 'selected' : ''}>Dropped</option>
+      </select>
+
+      <input type="text" class="form-input track-season-input" placeholder="Season / OVA" value="${escapeHtml(seasonLabel)}">
+    </div>
+
+    <div class="clean-card-row-eps">
+      <input type="number" class="form-input track-progress-input" min="0" value="${progress}" placeholder="Count">
+      <span class="eps-slash">/</span>
+      <input type="number" class="form-input track-total-input" min="0" value="${total}" placeholder="Total" oninput="onTrackStatusOrTotalChange(this)">
     </div>
   `;
   container.appendChild(card);
@@ -1687,7 +1698,14 @@ window.openMediaModal = function () {
   const tracksEditor = document.getElementById('media-tracks-editor');
   if (tracksEditor) {
     tracksEditor.innerHTML = '';
-    addMediaTrackRow({ category: 'tv_show', status: 'completed', progress: 0, total_units: '', unit_label: 'eps' });
+    addMediaTrackRow({
+      category: 'tv_show',
+      status: 'completed',
+      progress: 0,
+      total_units: '',
+      unit_label: 'eps',
+      season_label: ''
+    });
   }
 
   const epEditor = document.getElementById('media-ep-reviews-editor');
@@ -2188,6 +2206,7 @@ if (mediaForm) {
     trackCards.forEach(card => {
       const cat = card.querySelector('.track-cat-select').value;
       const status = card.querySelector('.track-status-select').value;
+      const seasonLabel = card.querySelector('.track-season-input')?.value.trim() || '';
       const totalRaw = card.querySelector('.track-total-input').value;
       const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
       let progressVal = parseInt(card.querySelector('.track-progress-input').value, 10) || 0;
@@ -2200,6 +2219,7 @@ if (mediaForm) {
       tracks.push({
         category: cat,
         status,
+        season_label: seasonLabel,
         progress: progressVal,
         total_units: totalUnits,
         unit_label: unitLabel
