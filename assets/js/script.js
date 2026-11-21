@@ -19,7 +19,7 @@ let lastApiResults = [];
 let pendingUploadedUrls = [];
 let currentCategory = 'all';
 let currentMainView = 'blog';
-let libraryViewMode = 'list'; // DEFAULT: Compact List
+let libraryViewMode = 'grid'; // DEFAULT: Poster Grid View
 let itemsPerPage = 16;        // DEFAULT: Medium (16 desktop / 12 mobile)
 let visibleMediaLimit = 16;
 let isStatsExpanded = false;
@@ -839,13 +839,13 @@ const DEFAULT_UNITS_BY_CAT = {
 };
 
 const UNIT_SHORT_LABELS = {
-  eps: 'Eps',
-  ch: 'Ch',
-  movie: 'Movie',
-  vol: 'Vol',
-  pages: 'Pages',
-  track: 'Track',
-  item: 'Item'
+  eps: 'EPS',
+  ch: 'CH',
+  movie: 'MOVIE',
+  vol: 'VOL',
+  pages: 'PAGES',
+  track: 'TRACK',
+  item: 'ITEM'
 };
 
 function getLegacyCategory(item) {
@@ -1293,7 +1293,7 @@ function renderMediaGrid() {
     }
   }
 
-  // COMPACT LIST VIEW RENDER: "TV SHOW / MOVIE · COMPLETED · REVIEWED"
+  // COMPACT LIST VIEW RENDER
   if (libraryViewMode === 'list') {
     grid.innerHTML = displayedItems.map(item => {
       const safeId = escapeHtml(String(item.id));
@@ -1337,7 +1337,7 @@ function renderMediaGrid() {
     return;
   }
 
-  // POSTER GRID VIEW RENDER: TITLE ONLY WITH SUBTLE DARK BOTTOM GRADIENT
+  // POSTER GRID VIEW RENDER (DEFAULT)
   grid.innerHTML = displayedItems.map(item => {
     const safeId = escapeHtml(String(item.id));
     const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
@@ -1356,7 +1356,7 @@ function renderMediaGrid() {
 }
 
 // ==========================================
-// 4B. MEDIA DETAIL MODAL (SUBTLE MONOCHROME BORDERS + CLEAN TYPOGRAPHY)
+// 4B. MEDIA DETAIL MODAL (SOLID CAPSLOCK BADGES, NO BORDERS, CLEAN LAYOUT)
 // ==========================================
 window.openMediaDetailModal = function (id) {
   const item = allMediaLogs.find(m => String(m.id) === String(id));
@@ -1371,7 +1371,7 @@ window.openMediaDetailModal = function (id) {
   const epReviews = getItemEpisodeReviews(item);
   const cats = getItemCategories(item);
   const synced = computeSyncedStatus(tracks);
-  const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : 'Unrated';
+  const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : 'UNRATED';
   const repeatCount = Number(item.repeat_count) || 0;
 
   setElText('detail-modal-title', item.title);
@@ -1380,34 +1380,31 @@ window.openMediaDetailModal = function (id) {
     ? buildImageCarouselHtml(posterSlides, 'detail-gallery-carousel')
     : `<img class="detail-poster" src="${posterSlides[0]}" alt="${escapeHtml(item.title)}" onerror="this.src='${fallbackPoster}'">`;
 
+  // Progress Rows: Left = Category Name, Right = Clean Unit Count + Solid Capslock Status Badge
   const tracksHtml = tracks.map(t => {
     const hasTotal = t.total_units !== null && t.total_units > 0;
-    const unitShort = UNIT_SHORT_LABELS[t.unit_label] || t.unit_label || '';
-    const progStr = hasTotal ? `${t.progress} / ${t.total_units} ${unitShort}` : `${t.progress} / ? ${unitShort}`;
+    const unitShort = UNIT_SHORT_LABELS[t.unit_label] || (t.unit_label || '').toUpperCase();
+    const progStr = hasTotal ? `${t.progress} / ${t.total_units} ${unitShort}` : `${t.progress} ${unitShort}`;
     return `
       <div class="detail-row-item">
-        <div>
-          <strong style="color: var(--white-1); font-weight: 600;">${escapeHtml(CATEGORY_LABELS[t.category] || t.category)}</strong>
-          <span style="color: var(--light-gray-70); margin-left: 8px; font-variant-numeric: tabular-nums;">${progStr}</span>
+        <div class="detail-progress-left">
+          <span class="detail-progress-cat">${escapeHtml(CATEGORY_LABELS[t.category] || t.category)}</span>
         </div>
-        <span class="mono-pill-subtle">${escapeHtml(t.status)}</span>
+        <div class="detail-progress-right">
+          <span class="detail-progress-count">${progStr}</span>
+          <span class="detail-row-badge-solid">${escapeHtml(t.status)}</span>
+        </div>
       </div>
     `;
   }).join('');
 
-  // Render Review section ONLY if epReviews has entries (subtle monochrome border + thin line above notes)
+  // Review Section: No Average header, Ch/Eps styled like Progress Category, Rating styled like Progress Status badge
   let epReviewsHtml = '';
   if (epReviews.length > 0) {
-    const ratedEps = epReviews.filter(e => e.rating !== null && !Number.isNaN(e.rating));
-    const avgEpScore = ratedEps.length > 0
-      ? (ratedEps.reduce((sum, e) => sum + Number(e.rating), 0) / ratedEps.length).toFixed(2)
-      : null;
-
     epReviewsHtml = `
       <div>
         <div class="ep-graph-header">
           <div class="detail-section-title" style="margin-bottom: 0;">Review (${epReviews.length})</div>
-          ${avgEpScore ? `<span class="mono-pill-subtle">★ Avg ${avgEpScore}</span>` : ''}
         </div>
         <div class="ep-review-cards-list">
           ${epReviews.map((ep, idx) => {
@@ -1418,10 +1415,8 @@ window.openMediaDetailModal = function (id) {
             return `
               <div class="ep-review-card">
                 <div class="ep-review-main">
-                  <div class="ep-review-left">
-                    <span class="mono-pill-subtle">${escapeHtml(partLabel)}</span>
-                  </div>
-                  ${hasScore ? `<span class="mono-pill-subtle strong">${scoreStr}</span>` : ''}
+                  <span class="ep-review-title-label">${escapeHtml(partLabel)}</span>
+                  ${hasScore ? `<span class="detail-row-badge-solid">${scoreStr}</span>` : ''}
                 </div>
                 ${ep.note ? `<div class="ep-review-note">${escapeHtml(ep.note)}</div>` : ''}
               </div>
@@ -1446,12 +1441,12 @@ window.openMediaDetailModal = function (id) {
       ${heroVisualHtml}
       <div class="detail-meta-col">
         <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-          ${cats.map(c => `<span class="mono-pill-subtle">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('')}
+          ${cats.map(c => `<span class="mono-badge-solid">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('')}
         </div>
         <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-          <span class="mono-pill-subtle">${escapeHtml(synced.label)}</span>
-          <span class="mono-pill-subtle strong">${escapeHtml(ratingText)}</span>
-          ${repeatCount > 0 ? `<span class="mono-pill-subtle">↻ ${repeatCount}x</span>` : ''}
+          <span class="mono-badge-solid">${escapeHtml(synced.label)}</span>
+          <span class="mono-badge-solid">${escapeHtml(ratingText)}</span>
+          ${repeatCount > 0 ? `<span class="mono-badge-solid">↻ ${repeatCount}X</span>` : ''}
         </div>
         <div style="font-size: 11px; color: var(--light-gray-70);">
           Updated ${formatStatusDate(item.updated_at || item.created_at)}
@@ -2288,7 +2283,7 @@ window.deleteCurrentModalMedia = async function () {
 };
 
 // ==========================================
-// 7. PERSONAL NOTES / POSTS + PUBLIC/PRIVATE + 50:50 IMAGE ROWS
+// 7. PERSONAL NOTES / POSTS + 50:50 IMAGE ROWS
 // ==========================================
 function getPostImageUrls(post) {
   const urls = [];
@@ -2405,7 +2400,6 @@ function renderBlogPosts() {
     const timeLabel = formatPostDateTime(post.created_at, post.updated_at);
     const detectedUrl = extractFirstUrl(post.content);
     const linkPreviewHtml = detectedUrl ? buildLinkPreviewCard(detectedUrl) : '';
-    const privateBadge = post.is_private ? `<span>·</span><ion-icon name="lock-closed-outline" title="Private"></ion-icon>` : '';
 
     const adminControls = isAdminLoggedIn ? `
       <div class="blog-post-actions">
@@ -2429,7 +2423,7 @@ function renderBlogPosts() {
             <img class="blog-post-avatar" src="${avatarSrc}" alt="" onerror="this.src='${TRANSPARENT_PIXEL}'">
             <div class="blog-post-meta">
               <span class="blog-post-name">${authorName}</span>
-              <span class="blog-post-time">${timeLabel} ${privateBadge}</span>
+              <span class="blog-post-time">${timeLabel}</span>
             </div>
           </div>
           ${adminControls}
@@ -2441,22 +2435,6 @@ function renderBlogPosts() {
     `;
   }).join('');
 }
-
-function updatePostVisibilityUI(isPrivate) {
-  const hiddenInput = document.getElementById('post-is-private');
-  const iconEl = document.getElementById('post-vis-icon');
-  const labelEl = document.getElementById('post-vis-label');
-
-  if (hiddenInput) hiddenInput.value = isPrivate ? 'true' : 'false';
-  if (iconEl) iconEl.setAttribute('name', isPrivate ? 'lock-closed-outline' : 'globe-outline');
-  if (labelEl) labelEl.textContent = isPrivate ? 'Private' : 'Public';
-}
-
-window.togglePostVisibilityState = function () {
-  const hiddenInput = document.getElementById('post-is-private');
-  const currentlyPrivate = hiddenInput ? hiddenInput.value === 'true' : false;
-  updatePostVisibilityUI(!currentlyPrivate);
-};
 
 // Post Image Row: 50% Image URL | 50% (Upload + Delete)
 window.addPostImageRow = function (url = '') {
@@ -2518,7 +2496,6 @@ window.openPostModal = function () {
   document.getElementById('post-modal-title').textContent = 'New Post';
   document.getElementById('post-form').reset();
   document.getElementById('post-id').value = '';
-  updatePostVisibilityUI(false);
   setElText('post-upload-status', '');
 
   const imgEditor = document.getElementById('post-images-editor');
@@ -2538,7 +2515,6 @@ window.openEditPostModal = function (id) {
   document.getElementById('post-modal-title').textContent = 'Edit Post';
   document.getElementById('post-id').value = post.id;
   document.getElementById('post-content').value = post.content || '';
-  updatePostVisibilityUI(Boolean(post.is_private));
   setElText('post-upload-status', '');
 
   const imgEditor = document.getElementById('post-images-editor');
@@ -2581,13 +2557,12 @@ if (postForm) {
     const contentVal = document.getElementById('post-content').value.trim();
     if (!contentVal) return;
 
-    const isPrivateVal = document.getElementById('post-is-private')?.value === 'true';
     const nowIso = new Date().toISOString();
     const payload = {
       content: contentVal,
       image_url: imageUrls[0] || null,
       image_urls: imageUrls,
-      is_private: isPrivateVal,
+      is_private: false,
       updated_at: nowIso
     };
 
