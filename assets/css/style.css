@@ -1190,6 +1190,37 @@ body {
   #DETAIL MODAL UNIFORM MONOCHROME BADGES & PROGRESS BARS
 \*-----------------------------------*/
 
+.detail-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.detail-section-header .detail-section-title {
+  margin-bottom: 0;
+}
+
+.detail-load-more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mono-soft);
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  padding: 4px 10px;
+  border-radius: 8px;
+  transition: var(--transition-1);
+}
+
+.detail-load-more-btn:hover {
+  border-color: var(--white-1);
+  color: var(--white-1);
+}
+
 .detail-pill-badge {
   display: inline-flex;
   align-items: center;
