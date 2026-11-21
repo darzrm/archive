@@ -19,8 +19,8 @@ let lastApiResults = [];
 let pendingUploadedUrls = [];
 let currentCategory = 'all';
 let currentMainView = 'blog';
-let libraryViewMode = 'grid'; // DEFAULT: Poster Grid View
-let itemsPerPage = 16;        // DEFAULT: Medium (16 desktop / 12 mobile)
+let libraryViewMode = 'grid';
+let itemsPerPage = 16;
 let visibleMediaLimit = 16;
 let isStatsExpanded = false;
 let isAdminLoggedIn = false;
@@ -178,7 +178,6 @@ window.toggleToolbarPopover = function (type) {
   }
 };
 
-// Display Size & View Mode Unified Modal Controls
 function syncDisplayModalUI() {
   const modalGridBtn = document.getElementById('modal-btn-view-grid');
   const modalListBtn = document.getElementById('modal-btn-view-list');
@@ -831,7 +830,7 @@ if (profileForm) {
 }
 
 // ==========================================
-// 3. MULTI-CATEGORY, SEASON/OVA, EPISODE REVIEWS & GALLERY HELPERS
+// 3. MULTI-CATEGORY, SEASON/OVA OPTIONS, SORTING & GALLERY HELPERS
 // ==========================================
 const CATEGORY_LABELS = {
   tv_show: 'TV Show',
@@ -861,6 +860,55 @@ const UNIT_SHORT_LABELS = {
   item: 'ITEM'
 };
 
+// Mandatory Season / OVA / Part Options in Exact Display Order
+const SEASON_PART_OPTIONS = [
+  'Main',
+  'Season 1',
+  'Season 2',
+  'Season 3',
+  'Season 4',
+  'Season 5',
+  'Season 6',
+  'Season 7',
+  'Season 8',
+  'Season 9',
+  'Season 10',
+  'Part 1',
+  'Part 2',
+  'Part 3',
+  'Part 4',
+  'OVA',
+  'ONA',
+  'Movie',
+  'Special',
+  'Arc'
+];
+
+function normalizeSeasonOption(val) {
+  const clean = (val || '').toString().trim();
+  if (!clean) return 'Main';
+  const matched = SEASON_PART_OPTIONS.find(opt => opt.toLowerCase() === clean.toLowerCase());
+  return matched || clean;
+}
+
+function getSeasonSortRank(label) {
+  const clean = normalizeSeasonOption(label);
+  const idx = SEASON_PART_OPTIONS.findIndex(opt => opt.toLowerCase() === clean.toLowerCase());
+  if (idx !== -1) return idx;
+  const numMatch = clean.match(/(\d+)/);
+  if (numMatch) return 100 + parseInt(numMatch[1], 10);
+  return 999;
+}
+
+function sortTracksChronologically(tracks) {
+  return [...tracks].sort((a, b) => {
+    const rankA = getSeasonSortRank(a.season_label);
+    const rankB = getSeasonSortRank(b.season_label);
+    if (rankA !== rankB) return rankA - rankB;
+    return (a.season_label || '').localeCompare(b.season_label || '');
+  });
+}
+
 function getLegacyCategory(item) {
   const rawCat = (item.category || '').toLowerCase().trim();
   if (rawCat === 'series' || rawCat === 'tv_show') return 'tv_show';
@@ -873,14 +921,15 @@ function getLegacyCategory(item) {
 
 function getItemTracks(item) {
   if (Array.isArray(item.tracks) && item.tracks.length > 0) {
-    return item.tracks.map(t => ({
+    const mapped = item.tracks.map(t => ({
       category: t.category || getLegacyCategory(item),
       status: (t.status || item.status || 'planned').toLowerCase().trim(),
       progress: Number(t.progress) || 0,
       total_units: (t.total_units !== null && t.total_units !== undefined && t.total_units !== '') ? Number(t.total_units) : null,
       unit_label: t.unit_label || DEFAULT_UNITS_BY_CAT[t.category] || 'eps',
-      season_label: (t.season_label || '').toString().trim()
+      season_label: normalizeSeasonOption(t.season_label)
     }));
+    return sortTracksChronologically(mapped);
   }
 
   const cat = getLegacyCategory(item);
@@ -890,7 +939,7 @@ function getItemTracks(item) {
     progress: Number(item.progress) || 0,
     total_units: (item.total_units !== null && item.total_units !== undefined && item.total_units !== '') ? Number(item.total_units) : null,
     unit_label: item.unit_label || DEFAULT_UNITS_BY_CAT[cat] || 'eps',
-    season_label: ''
+    season_label: 'Main'
   }];
 }
 
@@ -1372,11 +1421,143 @@ function renderMediaGrid() {
 }
 
 // ==========================================
-// 4B. MEDIA DETAIL MODAL (UNIFORM MONOCHROME + SEASON/OVA LABEL)
+// 4B. MEDIA DETAIL MODAL (AGGREGATED SUMMARY + LOAD MORE)
 // ==========================================
+let detailProgressExpanded = false;
+
+function buildSingleProgressCardHtml(t) {
+  const hasTotal = t.total_units !== null && t.total_units > 0;
+  const unitShort = UNIT_SHORT_LABELS[t.unit_label] || (t.unit_label || '').toUpperCase();
+  const progStr = hasTotal ? `${t.progress} / ${t.total_units} ${unitShort}` : `${t.progress} ${unitShort}`;
+
+  let pct = 0;
+  if (hasTotal) {
+    pct = Math.min(100, Math.max(0, Math.round((t.progress / t.total_units) * 100)));
+  } else if (t.status === 'completed') {
+    pct = 100;
+  } else if (t.progress > 0) {
+    pct = 45;
+  }
+
+  const catName = escapeHtml(CATEGORY_LABELS[t.category] || t.category);
+  const seasonLabel = normalizeSeasonOption(t.season_label);
+  const seasonSuffix = (seasonLabel && seasonLabel !== 'Main')
+    ? ` <span class="detail-progress-season">· ${escapeHtml(seasonLabel)}</span>`
+    : '';
+
+  return `
+    <div class="detail-progress-card">
+      <div class="detail-progress-top">
+        <span class="detail-progress-cat">${catName}${seasonSuffix}</span>
+        <span class="detail-pill-badge">${escapeHtml(t.status)}</span>
+      </div>
+      <div class="detail-progress-bar-track">
+        <div class="detail-progress-bar-fill" style="width: ${pct}%;"></div>
+      </div>
+      <div class="detail-progress-bottom">
+        <span>${progStr}</span>
+        <span class="detail-progress-percent">${hasTotal || t.status === 'completed' ? `${pct}%` : ''}</span>
+      </div>
+    </div>
+  `;
+}
+
+function buildAggregatedSummaryCardHtml(tracks) {
+  const cats = Array.from(new Set(tracks.map(t => CATEGORY_LABELS[t.category] || t.category)));
+  const combinedCatLabel = cats.join(' / ');
+  const synced = computeSyncedStatus(tracks);
+
+  const unitMap = new Map();
+  let sumProg = 0;
+  let sumTotal = 0;
+  let allHaveTotal = true;
+
+  tracks.forEach(t => {
+    const unitKey = t.unit_label || DEFAULT_UNITS_BY_CAT[t.category] || 'item';
+    const shortLbl = UNIT_SHORT_LABELS[unitKey] || unitKey.toUpperCase();
+    const entry = unitMap.get(shortLbl) || { prog: 0, total: 0, hasTotal: true };
+
+    const p = Number(t.progress) || 0;
+    const tot = (t.total_units !== null && t.total_units > 0) ? Number(t.total_units) : null;
+
+    entry.prog += p;
+    sumProg += p;
+
+    if (tot !== null) {
+      entry.total += tot;
+      sumTotal += tot;
+    } else {
+      entry.hasTotal = false;
+      allHaveTotal = false;
+    }
+
+    unitMap.set(shortLbl, entry);
+  });
+
+  const unitSummaryParts = [];
+  unitMap.forEach((val, shortLbl) => {
+    if (val.hasTotal && val.total > 0) {
+      unitSummaryParts.push(`${val.prog} / ${val.total} ${shortLbl}`);
+    } else {
+      unitSummaryParts.push(`${val.prog} ${shortLbl}`);
+    }
+  });
+
+  let pct = 0;
+  if (allHaveTotal && sumTotal > 0) {
+    pct = Math.min(100, Math.max(0, Math.round((sumProg / sumTotal) * 100)));
+  } else if (synced.key === 'completed') {
+    pct = 100;
+  } else if (sumTotal > 0) {
+    pct = Math.min(100, Math.max(0, Math.round((sumProg / sumTotal) * 100)));
+  } else if (sumProg > 0) {
+    pct = 50;
+  }
+
+  return `
+    <div class="detail-progress-card">
+      <div class="detail-progress-top">
+        <span class="detail-progress-cat">${escapeHtml(combinedCatLabel)} <span class="detail-progress-season">· Total (${tracks.length})</span></span>
+        <span class="detail-pill-badge">${escapeHtml(synced.label)}</span>
+      </div>
+      <div class="detail-progress-bar-track">
+        <div class="detail-progress-bar-fill" style="width: ${pct}%;"></div>
+      </div>
+      <div class="detail-progress-bottom">
+        <span>${escapeHtml(unitSummaryParts.join(' · '))}</span>
+        <span class="detail-progress-percent">${pct}%</span>
+      </div>
+    </div>
+  `;
+}
+
+window.toggleDetailProgressList = function (id) {
+  const item = allMediaLogs.find(m => String(m.id) === String(id));
+  if (!item) return;
+
+  detailProgressExpanded = !detailProgressExpanded;
+  const tracks = getItemTracks(item);
+  const listEl = document.getElementById('detail-progress-list-container');
+  const btnEl = document.getElementById('btn-detail-progress-toggle');
+
+  if (listEl) {
+    listEl.innerHTML = detailProgressExpanded
+      ? tracks.map(buildSingleProgressCardHtml).join('')
+      : buildAggregatedSummaryCardHtml(tracks);
+  }
+
+  if (btnEl) {
+    btnEl.innerHTML = detailProgressExpanded
+      ? `<span>Show Less</span><ion-icon name="chevron-up-outline"></ion-icon>`
+      : `<span>Load More</span><ion-icon name="chevron-down-outline"></ion-icon>`;
+  }
+};
+
 window.openMediaDetailModal = function (id) {
   const item = allMediaLogs.find(m => String(m.id) === String(id));
   if (!item) return;
+
+  detailProgressExpanded = false;
 
   const safeId = escapeHtml(String(item.id));
   const galleryUrls = getItemGalleryUrls(item);
@@ -1397,44 +1578,18 @@ window.openMediaDetailModal = function (id) {
     ? buildImageCarouselHtml(posterSlides, 'detail-gallery-carousel')
     : `<img class="detail-poster" src="${posterSlides[0]}" alt="${escapeHtml(item.title)}" onerror="this.src='${fallbackPoster}'">`;
 
-  // Progress Section: Uniform Monochrome Color + Season/OVA beside Category
-  const tracksHtml = tracks.map(t => {
-    const hasTotal = t.total_units !== null && t.total_units > 0;
-    const unitShort = UNIT_SHORT_LABELS[t.unit_label] || (t.unit_label || '').toUpperCase();
-    const progStr = hasTotal ? `${t.progress} / ${t.total_units} ${unitShort}` : `${t.progress} ${unitShort}`;
+  const hasMultipleTracks = tracks.length > 1;
+  const initialTracksHtml = hasMultipleTracks
+    ? buildAggregatedSummaryCardHtml(tracks)
+    : buildSingleProgressCardHtml(tracks[0]);
 
-    let pct = 0;
-    if (hasTotal) {
-      pct = Math.min(100, Math.max(0, Math.round((t.progress / t.total_units) * 100)));
-    } else if (t.status === 'completed') {
-      pct = 100;
-    } else if (t.progress > 0) {
-      pct = 45;
-    }
+  const progressToggleBtnHtml = hasMultipleTracks ? `
+    <button type="button" id="btn-detail-progress-toggle" class="detail-load-more-btn" onclick="toggleDetailProgressList('${safeId}')">
+      <span>Load More</span>
+      <ion-icon name="chevron-down-outline"></ion-icon>
+    </button>
+  ` : '';
 
-    const catName = escapeHtml(CATEGORY_LABELS[t.category] || t.category);
-    const seasonSuffix = t.season_label
-      ? ` <span class="detail-progress-season">· ${escapeHtml(t.season_label)}</span>`
-      : '';
-
-    return `
-      <div class="detail-progress-card">
-        <div class="detail-progress-top">
-          <span class="detail-progress-cat">${catName}${seasonSuffix}</span>
-          <span class="detail-pill-badge">${escapeHtml(t.status)}</span>
-        </div>
-        <div class="detail-progress-bar-track">
-          <div class="detail-progress-bar-fill" style="width: ${pct}%;"></div>
-        </div>
-        <div class="detail-progress-bottom">
-          <span>${progStr}</span>
-          <span class="detail-progress-percent">${hasTotal || t.status === 'completed' ? `${pct}%` : ''}</span>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  // Review Section
   let epReviewsHtml = '';
   if (epReviews.length > 0) {
     epReviewsHtml = `
@@ -1491,8 +1646,11 @@ window.openMediaDetailModal = function (id) {
     </div>
 
     <div>
-      <div class="detail-section-title">Progress</div>
-      <div class="detail-progress-list">${tracksHtml}</div>
+      <div class="detail-section-header">
+        <div class="detail-section-title">Progress</div>
+        ${progressToggleBtnHtml}
+      </div>
+      <div id="detail-progress-list-container" class="detail-progress-list">${initialTracksHtml}</div>
     </div>
 
     ${epReviewsHtml}
@@ -1507,7 +1665,7 @@ window.closeMediaDetailModal = function () {
 };
 
 // ==========================================
-// 5. ADD / EDIT MEDIA MODAL (3-EQUAL COLUMNS IN PROGRESS)
+// 5. ADD / EDIT MEDIA MODAL (MANDATORY SEASON/OVA SELECT)
 // ==========================================
 window.addMediaImageRow = function (url = '') {
   const container = document.getElementById('media-gallery-editor');
@@ -1563,6 +1721,17 @@ window.handleSingleCoverRowUpload = async function (event, fileInput) {
   }
 };
 
+function buildSeasonOptionsHtml(selectedVal) {
+  const normalized = normalizeSeasonOption(selectedVal);
+  const optionsList = SEASON_PART_OPTIONS.includes(normalized)
+    ? SEASON_PART_OPTIONS
+    : [normalized, ...SEASON_PART_OPTIONS];
+
+  return optionsList.map(opt => `
+    <option value="${escapeHtml(opt)}" ${opt === normalized ? 'selected' : ''}>${escapeHtml(opt)}</option>
+  `).join('');
+}
+
 window.addMediaTrackRow = function (track = null) {
   const container = document.getElementById('media-tracks-editor');
   if (!container) return;
@@ -1572,7 +1741,7 @@ window.addMediaTrackRow = function (track = null) {
   const progress = (track && track.progress !== undefined) ? track.progress : 0;
   const total = (track && track.total_units !== undefined && track.total_units !== null) ? track.total_units : '';
   const unit = (track && track.unit_label) ? track.unit_label : (DEFAULT_UNITS_BY_CAT[cat] || 'eps');
-  const seasonLabel = (track && track.season_label) ? track.season_label : '';
+  const seasonLabel = (track && track.season_label) ? normalizeSeasonOption(track.season_label) : 'Main';
 
   const card = document.createElement('div');
   card.className = 'track-edit-card';
@@ -1609,7 +1778,9 @@ window.addMediaTrackRow = function (track = null) {
         <option value="dropped" ${status === 'dropped' ? 'selected' : ''}>Dropped</option>
       </select>
 
-      <input type="text" class="form-input track-season-input" placeholder="Season / OVA" value="${escapeHtml(seasonLabel)}">
+      <select class="form-input track-season-select" required>
+        ${buildSeasonOptionsHtml(seasonLabel)}
+      </select>
     </div>
 
     <div class="clean-card-row-eps">
@@ -1704,7 +1875,7 @@ window.openMediaModal = function () {
       progress: 0,
       total_units: '',
       unit_label: 'eps',
-      season_label: ''
+      season_label: 'Main'
     });
   }
 
@@ -2180,7 +2351,7 @@ window.applyApiResult = async function (idx) {
 };
 
 // ==========================================
-// 6. SUPABASE MEDIA CRUD + AUTO-CLEANUP
+// 6. SUPABASE MEDIA CRUD + AUTO-SORT TRACKS
 // ==========================================
 const mediaForm = document.getElementById('media-form');
 if (mediaForm) {
@@ -2202,11 +2373,11 @@ if (mediaForm) {
     const newPrimaryCover = galleryUrls[0] || null;
 
     const trackCards = document.querySelectorAll('#media-tracks-editor .track-edit-card');
-    const tracks = [];
+    const rawTracks = [];
     trackCards.forEach(card => {
       const cat = card.querySelector('.track-cat-select').value;
       const status = card.querySelector('.track-status-select').value;
-      const seasonLabel = card.querySelector('.track-season-input')?.value.trim() || '';
+      const seasonLabel = normalizeSeasonOption(card.querySelector('.track-season-select')?.value);
       const totalRaw = card.querySelector('.track-total-input').value;
       const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
       let progressVal = parseInt(card.querySelector('.track-progress-input').value, 10) || 0;
@@ -2216,7 +2387,7 @@ if (mediaForm) {
         progressVal = totalUnits;
       }
 
-      tracks.push({
+      rawTracks.push({
         category: cat,
         status,
         season_label: seasonLabel,
@@ -2226,10 +2397,12 @@ if (mediaForm) {
       });
     });
 
-    if (tracks.length === 0) {
+    if (rawTracks.length === 0) {
       showToast('At least 1 progress track is required', 'error');
       return;
     }
+
+    const tracks = sortTracksChronologically(rawTracks);
 
     const epRows = document.querySelectorAll('#media-ep-reviews-editor .review-split-row');
     const episodeReviews = [];
