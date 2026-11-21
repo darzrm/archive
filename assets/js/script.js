@@ -81,11 +81,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupOutsidePopoverCloser();
     setupFilterListeners();
     updateSortUIControls();
-
-    const gridBtn = document.getElementById('btn-view-grid');
-    const listBtn = document.getElementById('btn-view-list');
-    if (gridBtn) gridBtn.classList.toggle('active', libraryViewMode === 'grid');
-    if (listBtn) listBtn.classList.toggle('active', libraryViewMode === 'list');
+    syncDisplayModalUI();
 
     await checkAdminSession();
     await fetchProfileSettings();
@@ -118,8 +114,7 @@ function setupScrollListeners() {
 function closeAllToolbarPopovers() {
   const pairs = [
     ['filter-popover-menu', 'btn-filter-toggle'],
-    ['sort-popover-menu', 'btn-sort-toggle'],
-    ['pages-popover-menu', 'btn-pages-toggle']
+    ['sort-popover-menu', 'btn-sort-toggle']
   ];
   pairs.forEach(([menuId, btnId]) => {
     const m = document.getElementById(menuId);
@@ -133,13 +128,11 @@ function setupOutsidePopoverCloser() {
   document.addEventListener('click', (e) => {
     const filterWrap = document.getElementById('filter-popover-wrap');
     const sortWrap = document.getElementById('sort-popover-wrap');
-    const pagesWrap = document.getElementById('pages-popover-wrap');
 
     const insideFilter = filterWrap && filterWrap.contains(e.target);
     const insideSort = sortWrap && sortWrap.contains(e.target);
-    const insidePages = pagesWrap && pagesWrap.contains(e.target);
 
-    if (!insideFilter && !insideSort && !insidePages) {
+    if (!insideFilter && !insideSort) {
       closeAllToolbarPopovers();
     }
   });
@@ -148,8 +141,7 @@ function setupOutsidePopoverCloser() {
 window.toggleToolbarPopover = function (type) {
   const map = {
     filter: ['filter-popover-menu', 'btn-filter-toggle'],
-    sort: ['sort-popover-menu', 'btn-sort-toggle'],
-    pages: ['pages-popover-menu', 'btn-pages-toggle']
+    sort: ['sort-popover-menu', 'btn-sort-toggle']
   };
   const target = map[type];
   if (!target) return;
@@ -186,6 +178,31 @@ window.toggleToolbarPopover = function (type) {
   }
 };
 
+// Display Size & View Mode Unified Modal Controls
+function syncDisplayModalUI() {
+  const modalGridBtn = document.getElementById('modal-btn-view-grid');
+  const modalListBtn = document.getElementById('modal-btn-view-list');
+  const toolbarIcon = document.getElementById('display-options-icon');
+
+  if (modalGridBtn) modalGridBtn.classList.toggle('active', libraryViewMode === 'grid');
+  if (modalListBtn) modalListBtn.classList.toggle('active', libraryViewMode === 'list');
+  if (toolbarIcon) {
+    toolbarIcon.setAttribute('name', libraryViewMode === 'list' ? 'list-outline' : 'grid-outline');
+  }
+}
+
+window.openDisplayOptionsModal = function () {
+  closeAllToolbarPopovers();
+  syncDisplayModalUI();
+  const modal = document.getElementById('display-options-modal');
+  if (modal) modal.classList.add('active');
+};
+
+window.closeDisplayOptionsModal = function () {
+  const modal = document.getElementById('display-options-modal');
+  if (modal) modal.classList.remove('active');
+};
+
 window.scrollToTopSmooth = function () {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
@@ -197,7 +214,7 @@ window.switchMainView = function (viewName) {
 
   currentMainView = viewName;
 
-  document.querySelectorAll('.nav-segment-btn, .mini-nav-btn').forEach(btn => {
+  document.querySelectorAll('.nav-icon-tab-btn, .mini-nav-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === viewName);
   });
 
@@ -232,7 +249,7 @@ function updateLibraryTabVisibility() {
   const lockBadge = document.getElementById('library-private-lock');
 
   if (bottomLibBtn) bottomLibBtn.style.display = canViewLibrary ? 'inline-flex' : 'none';
-  if (lockBadge) lockBadge.style.display = (isPrivate && isAdminLoggedIn) ? 'inline-block' : 'none';
+  if (lockBadge) lockBadge.style.display = (isPrivate && isAdminLoggedIn) ? 'inline-flex' : 'none';
 
   if (!canViewLibrary && currentMainView === 'library') {
     switchMainView('blog');
@@ -250,10 +267,7 @@ window.handleCenterActionClick = function () {
 
 window.setLibraryViewMode = function (mode) {
   libraryViewMode = mode;
-  const gridBtn = document.getElementById('btn-view-grid');
-  const listBtn = document.getElementById('btn-view-list');
-  if (gridBtn) gridBtn.classList.toggle('active', mode === 'grid');
-  if (listBtn) listBtn.classList.toggle('active', mode === 'list');
+  syncDisplayModalUI();
   renderMediaGrid();
 };
 
@@ -266,11 +280,10 @@ window.selectItemsPerPage = function (val) {
     visibleMediaLimit = itemsPerPage;
   }
 
-  document.querySelectorAll('#pages-popover-menu .page-option-item').forEach(btn => {
+  document.querySelectorAll('#display-options-modal .page-option-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.limit === String(val));
   });
 
-  closeAllToolbarPopovers();
   renderMediaGrid();
 };
 
@@ -848,6 +861,14 @@ const UNIT_SHORT_LABELS = {
   item: 'ITEM'
 };
 
+function getStatusBadgeClass(statusKey) {
+  const key = (statusKey || 'planned').toLowerCase().trim();
+  if (key === 'completed') return 'badge-status-completed';
+  if (key === 'ongoing') return 'badge-status-ongoing';
+  if (key === 'dropped') return 'badge-status-dropped';
+  return 'badge-status-planned';
+}
+
 function getLegacyCategory(item) {
   const rawCat = (item.category || '').toLowerCase().trim();
   if (rawCat === 'series' || rawCat === 'tv_show') return 'tv_show';
@@ -1356,7 +1377,7 @@ function renderMediaGrid() {
 }
 
 // ==========================================
-// 4B. MEDIA DETAIL MODAL (SOLID CAPSLOCK BADGES, NO BORDERS, CLEAN LAYOUT)
+// 4B. MEDIA DETAIL MODAL (NEW BADGE PALETTE, PROGRESS BAR CARDS & LIGHT REVIEW RATING)
 // ==========================================
 window.openMediaDetailModal = function (id) {
   const item = allMediaLogs.find(m => String(m.id) === String(id));
@@ -1371,7 +1392,9 @@ window.openMediaDetailModal = function (id) {
   const epReviews = getItemEpisodeReviews(item);
   const cats = getItemCategories(item);
   const synced = computeSyncedStatus(tracks);
-  const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : 'UNRATED';
+  const syncedStatusClass = getStatusBadgeClass(synced.key);
+  const hasRating = item.rating !== null && item.rating !== undefined && item.rating !== '';
+  const ratingText = hasRating ? `★ ${Number(item.rating).toFixed(1)}` : 'UNRATED';
   const repeatCount = Number(item.repeat_count) || 0;
 
   setElText('detail-modal-title', item.title);
@@ -1380,25 +1403,42 @@ window.openMediaDetailModal = function (id) {
     ? buildImageCarouselHtml(posterSlides, 'detail-gallery-carousel')
     : `<img class="detail-poster" src="${posterSlides[0]}" alt="${escapeHtml(item.title)}" onerror="this.src='${fallbackPoster}'">`;
 
-  // Progress Rows: Left = Category Name, Right = Clean Unit Count + Solid Capslock Status Badge
+  // Progress Section: Visual Progress Bar + Percentage + Status Pill
   const tracksHtml = tracks.map(t => {
     const hasTotal = t.total_units !== null && t.total_units > 0;
     const unitShort = UNIT_SHORT_LABELS[t.unit_label] || (t.unit_label || '').toUpperCase();
     const progStr = hasTotal ? `${t.progress} / ${t.total_units} ${unitShort}` : `${t.progress} ${unitShort}`;
+
+    let pct = 0;
+    if (hasTotal) {
+      pct = Math.min(100, Math.max(0, Math.round((t.progress / t.total_units) * 100)));
+    } else if (t.status === 'completed') {
+      pct = 100;
+    } else if (t.progress > 0) {
+      pct = 45;
+    }
+
+    const statusBadgeClass = getStatusBadgeClass(t.status);
+    const fillClass = `fill-${(t.status || 'planned').toLowerCase().trim()}`;
+
     return `
-      <div class="detail-row-item">
-        <div class="detail-progress-left">
+      <div class="detail-progress-card">
+        <div class="detail-progress-top">
           <span class="detail-progress-cat">${escapeHtml(CATEGORY_LABELS[t.category] || t.category)}</span>
+          <span class="detail-pill-badge ${statusBadgeClass}">${escapeHtml(t.status)}</span>
         </div>
-        <div class="detail-progress-right">
-          <span class="detail-progress-count">${progStr}</span>
-          <span class="detail-row-badge-solid">${escapeHtml(t.status)}</span>
+        <div class="detail-progress-bar-track">
+          <div class="detail-progress-bar-fill ${fillClass}" style="width: ${pct}%;"></div>
+        </div>
+        <div class="detail-progress-bottom">
+          <span>${progStr}</span>
+          <span class="detail-progress-percent">${hasTotal || t.status === 'completed' ? `${pct}%` : ''}</span>
         </div>
       </div>
     `;
   }).join('');
 
-  // Review Section: No Average header, Ch/Eps styled like Progress Category, Rating styled like Progress Status badge
+  // Review Section: Bright light-colored rating pill (no dark background)
   let epReviewsHtml = '';
   if (epReviews.length > 0) {
     epReviewsHtml = `
@@ -1416,7 +1456,7 @@ window.openMediaDetailModal = function (id) {
               <div class="ep-review-card">
                 <div class="ep-review-main">
                   <span class="ep-review-title-label">${escapeHtml(partLabel)}</span>
-                  ${hasScore ? `<span class="detail-row-badge-solid">${scoreStr}</span>` : ''}
+                  ${hasScore ? `<span class="review-rating-pill">${scoreStr}</span>` : ''}
                 </div>
                 ${ep.note ? `<div class="ep-review-note">${escapeHtml(ep.note)}</div>` : ''}
               </div>
@@ -1441,12 +1481,12 @@ window.openMediaDetailModal = function (id) {
       ${heroVisualHtml}
       <div class="detail-meta-col">
         <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-          ${cats.map(c => `<span class="mono-badge-solid">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('')}
+          ${cats.map(c => `<span class="detail-pill-badge badge-cat">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('')}
         </div>
         <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-          <span class="mono-badge-solid">${escapeHtml(synced.label)}</span>
-          <span class="mono-badge-solid">${escapeHtml(ratingText)}</span>
-          ${repeatCount > 0 ? `<span class="mono-badge-solid">↻ ${repeatCount}X</span>` : ''}
+          <span class="detail-pill-badge ${syncedStatusClass}">${escapeHtml(synced.label)}</span>
+          <span class="detail-pill-badge ${hasRating ? 'badge-rating' : 'badge-cat'}">${escapeHtml(ratingText)}</span>
+          ${repeatCount > 0 ? `<span class="detail-pill-badge badge-cat">↻ ${repeatCount}X</span>` : ''}
         </div>
         <div style="font-size: 11px; color: var(--light-gray-70);">
           Updated ${formatStatusDate(item.updated_at || item.created_at)}
@@ -1456,7 +1496,7 @@ window.openMediaDetailModal = function (id) {
 
     <div>
       <div class="detail-section-title">Progress</div>
-      <div class="detail-list">${tracksHtml}</div>
+      <div class="detail-progress-list">${tracksHtml}</div>
     </div>
 
     ${epReviewsHtml}
@@ -1611,7 +1651,6 @@ window.onTrackStatusOrTotalChange = function (el) {
   }
 };
 
-// Review Row Builder (50% Part + 50% Notes + Delete)
 window.addEpisodeReviewRow = function (ep = null) {
   const container = document.getElementById('media-ep-reviews-editor');
   if (!container) return;
@@ -2436,7 +2475,6 @@ function renderBlogPosts() {
   }).join('');
 }
 
-// Post Image Row: 50% Image URL | 50% (Upload + Delete)
 window.addPostImageRow = function (url = '') {
   const container = document.getElementById('post-images-editor');
   if (!container) return;
@@ -2501,7 +2539,7 @@ window.openPostModal = function () {
   const imgEditor = document.getElementById('post-images-editor');
   if (imgEditor) {
     imgEditor.innerHTML = '';
-    addPostImageRow(''); // Always show at least 1 image row by default
+    addPostImageRow('');
   }
 
   document.getElementById('post-modal').classList.add('active');
@@ -2524,7 +2562,7 @@ window.openEditPostModal = function (id) {
     if (imgs.length > 0) {
       imgs.forEach(u => addPostImageRow(u));
     } else {
-      addPostImageRow(''); // Always show at least 1 image row by default
+      addPostImageRow('');
     }
   }
 
