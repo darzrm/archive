@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=320">
+  <link rel="stylesheet" href="./assets/css/style.css?v=330">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -450,11 +450,11 @@
         <button type="button" class="close-modal-btn" onclick="closeMediaModal()">&times;</button>
       </div>
 
-      <!-- Auto Search API Helper -->
+      <!-- Auto-Fill Metadata -->
       <div class="api-search-section">
-        <label class="form-label">Auto-Fill Metadata</label>
+        <label class="form-label">Auto-Fill</label>
         <div class="api-search-bar">
-          <select id="api-search-cat" class="form-input" style="max-width: 115px;">
+          <select id="api-search-cat" class="form-input" style="max-width: 112px;">
             <option value="tv_show">TV Show</option>
             <option value="movie">Movie</option>
             <option value="comic">Comic</option>
@@ -462,7 +462,7 @@
             <option value="game">Game</option>
             <option value="music">Music</option>
           </select>
-          <input type="text" id="api-search-input" class="form-input" placeholder="Search title...">
+          <input type="text" id="api-search-input" class="form-input" placeholder="Search...">
           <button type="button" class="form-btn" onclick="searchExternalAPI()">Search</button>
         </div>
         <div class="api-results-list" id="api-search-results"></div>
@@ -472,45 +472,39 @@
         <input type="hidden" id="media-id">
 
         <div class="form-group">
-          <label>Title *</label>
-          <input type="text" id="media-title" class="form-input" required placeholder="e.g. Chainsaw Man">
+          <label>Title</label>
+          <input type="text" id="media-title" class="form-input" required placeholder="Title">
         </div>
 
-        <!-- MULTI-IMAGE / COVER SLIDER EDITOR -->
+        <!-- COVER (50% URL + 50% UPLOAD) -->
         <div class="form-group">
           <div class="social-editor-header">
-            <label style="margin: 0;">Cover & Slide Images (First image = main cover)</label>
-            <div style="display: flex; gap: 6px; align-items: center;">
-              <label class="add-social-btn" style="cursor: pointer;" title="Upload multiple images">
-                <ion-icon name="cloud-upload-outline"></ion-icon> Upload
-                <input type="file" id="media-gallery-files" accept="image/*" multiple hidden onchange="handleMediaGalleryUpload(event)">
-              </label>
-              <button type="button" class="add-social-btn" onclick="addMediaImageRow()">
-                <ion-icon name="add-outline"></ion-icon> Add URL
-              </button>
-            </div>
+            <label style="margin: 0;">Cover</label>
+            <button type="button" class="add-social-btn" onclick="addMediaImageRow()">
+              <ion-icon name="add-outline"></ion-icon> Add
+            </button>
           </div>
           <div id="media-gallery-editor" class="multi-img-editor-list"></div>
           <span class="upload-status-text" id="cover-upload-status"></span>
         </div>
 
-        <!-- MULTI-CATEGORY PROGRESS TRACKS -->
+        <!-- PROGRESS -->
         <div class="form-group">
           <div class="social-editor-header">
-            <label style="margin: 0;">Categories & Progress *</label>
+            <label style="margin: 0;">Progress</label>
             <button type="button" class="add-social-btn" onclick="addMediaTrackRow()">
-              <ion-icon name="add-outline"></ion-icon> Add Category
+              <ion-icon name="add-outline"></ion-icon> Add
             </button>
           </div>
           <div id="media-tracks-editor" class="tracks-editor-list"></div>
         </div>
 
-        <!-- EPISODE / CHAPTER REVIEWS (IMDb / SeriesGraph Style) -->
+        <!-- REVIEW (50% PART + 50% NOTES) -->
         <div class="form-group">
           <div class="social-editor-header">
-            <label style="margin: 0;">Episode / Chapter Reviews</label>
+            <label style="margin: 0;">Review</label>
             <button type="button" class="add-social-btn" onclick="addEpisodeReviewRow()">
-              <ion-icon name="star-outline"></ion-icon> Add Review
+              <ion-icon name="add-outline"></ion-icon> Add
             </button>
           </div>
           <div id="media-ep-reviews-editor" class="ep-reviews-editor-list"></div>
@@ -518,22 +512,22 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label>Overall Rating (1.0 - 10.0)</label>
-            <input type="number" id="media-rating" class="form-input" step="0.1" min="1.0" max="10.0" placeholder="Empty if unrated">
+            <label>Overall Rating</label>
+            <input type="number" id="media-rating" class="form-input" step="0.1" min="1.0" max="10.0" placeholder="1.0 - 10.0">
           </div>
 
           <div class="form-group">
-            <label>Rewatch / Reread</label>
+            <label>Rewatch</label>
             <div class="progress-input-row">
               <input type="number" id="media-repeat" class="form-input" min="0" value="0">
-              <button type="button" class="step-plus-btn" onclick="stepModalRepeat()" title="+1 Rewatch">+1</button>
+              <button type="button" class="step-plus-btn" onclick="stepModalRepeat()" title="+1">+1</button>
             </div>
           </div>
         </div>
 
         <div class="modal-submit-row">
           <button type="button" id="btn-modal-delete" class="form-btn danger-btn" style="display: none;" onclick="deleteCurrentModalMedia()">Delete</button>
-          <button type="submit" class="form-btn primary-submit">Save Entry</button>
+          <button type="submit" class="form-btn primary-submit">Save</button>
         </div>
       </form>
     </div>
@@ -549,7 +543,7 @@
           <div class="modal-icon-badge">
             <ion-icon name="information-circle-outline"></ion-icon>
           </div>
-          <h3 id="detail-modal-title">Media Details</h3>
+          <h3 id="detail-modal-title">Details</h3>
         </div>
         <button type="button" class="close-modal-btn" onclick="closeMediaDetailModal()">&times;</button>
       </div>
@@ -576,21 +570,21 @@
         <input type="hidden" id="post-id">
 
         <div class="form-group">
-          <label>Write something... *</label>
-          <textarea id="post-content" class="form-input" rows="5" required placeholder="Share a thought, review, or paste a link..."></textarea>
+          <label>Note</label>
+          <textarea id="post-content" class="form-input" rows="5" required placeholder="Write something..."></textarea>
         </div>
 
-        <!-- MULTI-IMAGE ATTACHMENT SLIDER EDITOR -->
+        <!-- IMAGE SLIDER ATTACHMENT -->
         <div class="form-group">
           <div class="social-editor-header">
-            <label style="margin: 0;">Attachments / Image Slide (Optional)</label>
+            <label style="margin: 0;">Image</label>
             <div style="display: flex; gap: 6px; align-items: center;">
-              <label class="add-social-btn" style="cursor: pointer;" title="Upload photos from device">
+              <label class="add-social-btn" style="cursor: pointer;" title="Upload">
                 <ion-icon name="images-outline"></ion-icon> Upload
                 <input type="file" id="post-images-files" accept="image/*" multiple hidden onchange="handlePostImagesUpload(event)">
               </label>
               <button type="button" class="add-social-btn" onclick="addPostImageRow()">
-                <ion-icon name="add-outline"></ion-icon> Add URL
+                <ion-icon name="add-outline"></ion-icon> Add
               </button>
             </div>
           </div>
@@ -634,7 +628,7 @@
               </div>
               <div class="settings-nav-text">
                 <span class="settings-nav-title">Profile</span>
-                <span class="settings-nav-sub">Edit display name, bio, avatar, banner & social links</span>
+                <span class="settings-nav-sub">Name, bio, avatar, banner & links</span>
               </div>
             </div>
             <ion-icon name="chevron-forward-outline" class="settings-chevron"></ion-icon>
@@ -647,7 +641,7 @@
                 <ion-icon name="eye-off-outline"></ion-icon>
                 <span>Private Library</span>
               </div>
-              <p class="settings-card-desc">Hide Library tab from public visitors (visible only when logged in as Admin).</p>
+              <p class="settings-card-desc">Hide Library tab from public visitors.</p>
             </div>
             <label class="toggle-switch" aria-label="Toggle Private Library">
               <input type="checkbox" id="edit-library-private">
@@ -656,36 +650,34 @@
           </div>
 
           <div class="settings-root-save-wrap">
-            <button type="submit" class="form-btn primary-submit settings-root-save-btn">Save Settings</button>
+            <button type="submit" class="form-btn primary-submit settings-root-save-btn">Save</button>
           </div>
         </div>
 
         <!-- STEP 2: SETTINGS > PROFILE -->
         <div id="settings-step-profile" class="settings-step-panel" style="display: none;">
           <div class="form-group">
-            <label>Display Name *</label>
+            <label>Name</label>
             <input type="text" id="edit-profile-name" class="form-input" required>
           </div>
 
-          <!-- Bio (50%) & Add Social Link Button (50%) -->
           <div class="form-group">
-            <label>Bio & Social Links</label>
+            <label>Bio & Links</label>
             <div class="split-equal-row">
-              <input type="text" id="edit-profile-bio" class="form-input" placeholder="Bio / Subtitle">
+              <input type="text" id="edit-profile-bio" class="form-input" placeholder="Bio">
               <button type="button" class="equal-action-btn" onclick="addSocialLinkRow()">
                 <ion-icon name="add-outline"></ion-icon>
-                <span>Add Social Link</span>
+                <span>Add Link</span>
               </button>
             </div>
             <div id="social-links-editor" class="social-links-editor"></div>
           </div>
 
-          <!-- Profile Avatar: 50% URL + 50% Upload -->
           <div class="form-group">
-            <label>Profile Avatar</label>
+            <label>Avatar</label>
             <div class="split-equal-row">
-              <input type="url" id="edit-profile-avatar" class="form-input" placeholder="Avatar URL (https://...)">
-              <label class="equal-upload-btn" title="Upload avatar from device">
+              <input type="url" id="edit-profile-avatar" class="form-input" placeholder="Avatar URL">
+              <label class="equal-upload-btn" title="Upload Avatar">
                 <ion-icon name="person-circle-outline"></ion-icon>
                 <span>Upload Avatar</span>
                 <input type="file" id="profile-avatar-file" accept="image/*" hidden onchange="handleProfileImageUpload(event)">
@@ -694,13 +686,12 @@
             <span class="upload-status-text" id="profile-upload-status"></span>
           </div>
 
-          <!-- Header Banner: 50% URL + 50% Upload -->
           <div class="form-group">
-            <label>Header Banner (Optional)</label>
+            <label>Banner</label>
             <div class="split-equal-row">
-              <input type="url" id="edit-profile-banner" class="form-input" placeholder="Banner URL (https://...)">
+              <input type="url" id="edit-profile-banner" class="form-input" placeholder="Banner URL">
               <div class="equal-action-pair">
-                <label class="equal-upload-btn" title="Upload banner from device">
+                <label class="equal-upload-btn" title="Upload Banner">
                   <ion-icon name="image-outline"></ion-icon>
                   <span>Upload Banner</span>
                   <input type="file" id="profile-banner-file" accept="image/*" hidden onchange="handleBannerImageUpload(event)">
@@ -715,7 +706,7 @@
 
           <div class="modal-submit-row">
             <button type="button" class="form-btn" onclick="navigateSettingsStep('root')">Back</button>
-            <button type="submit" class="form-btn primary-submit">Save Profile</button>
+            <button type="submit" class="form-btn primary-submit">Save</button>
           </div>
         </div>
 
@@ -756,9 +747,9 @@
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 
   <!-- Main JS -->
-  <script src="./assets/js/script.js?v=60"></script>
+  <script src="./assets/js/script.js?v=70"></script>
 
-  <!-- Sync Helper: Default Medium Size, Settings Nav, Clean Track Cards & Grid Poster Overlay -->
+  <!-- Sync Helper: Default Medium Size, Settings Nav & Clean Track Cards -->
   <script>
     (function () {
       let activeSizePreset = 'medium';
@@ -794,7 +785,6 @@
         }
       };
 
-      // Settings Multi-Step Navigation (Settings > Profile)
       window.navigateSettingsStep = function (step) {
         const rootPanel = document.getElementById('settings-step-root');
         const profilePanel = document.getElementById('settings-step-profile');
@@ -809,7 +799,7 @@
           profilePanel.style.display = 'flex';
           if (backBtn) backBtn.style.display = 'inline-flex';
           if (headerIcon) headerIcon.style.display = 'none';
-          if (titleEl) titleEl.textContent = 'Edit Profile';
+          if (titleEl) titleEl.textContent = 'Profile';
         } else {
           profilePanel.style.display = 'none';
           rootPanel.style.display = 'flex';
@@ -853,7 +843,7 @@
         });
       }
 
-      // Normalize Categories & Progress cards to 3-row layout
+      // Normalize Progress cards to clean 3-row layout
       function normalizeMediaTrackCards() {
         document.querySelectorAll('#media-tracks-editor .track-edit-card').forEach(card => {
           if (card.dataset.normalized === '1') return;
@@ -896,88 +886,6 @@
       const tracksEditor = document.getElementById('media-tracks-editor');
       if (tracksEditor) {
         new MutationObserver(normalizeMediaTrackCards).observe(tracksEditor, { childList: true });
-      }
-
-      // Format Grid & List Items
-      function formatMediaItems() {
-        const grid = document.getElementById('media-grid');
-        if (!grid) return;
-
-        if (grid.classList.contains('list-view')) {
-          grid.querySelectorAll('.media-list-row').forEach(row => {
-            if (row.dataset.cleaned === '1') return;
-            row.dataset.cleaned = '1';
-
-            const subMeta = row.querySelector('.list-sub-meta');
-            if (subMeta) {
-              const catTag = subMeta.querySelector('.list-cat-tag');
-              const epBadge = subMeta.querySelector('.list-ep-review-tag');
-              const repeatTag = subMeta.querySelector('.list-repeat-tag');
-              const cleanItems = [];
-              if (catTag) cleanItems.push(catTag);
-              if (epBadge) cleanItems.push(epBadge);
-              if (repeatTag) cleanItems.push(repeatTag);
-
-              subMeta.innerHTML = '';
-              cleanItems.forEach((el, idx) => {
-                if (idx > 0) {
-                  const sep = document.createElement('span');
-                  sep.className = 'list-meta-sep';
-                  sep.textContent = '•';
-                  subMeta.appendChild(sep);
-                }
-                subMeta.appendChild(el);
-              });
-            }
-
-            const rightMeta = row.querySelector('.list-right-meta');
-            if (rightMeta) {
-              const ratingEl = rightMeta.querySelector('.list-rating-pill');
-              const editBtn = rightMeta.querySelector('.list-edit-btn');
-              rightMeta.innerHTML = '';
-              if (ratingEl) rightMeta.appendChild(ratingEl);
-              if (editBtn) rightMeta.appendChild(editBtn);
-            }
-          });
-          return;
-        }
-
-        // Poster Grid Mode
-        grid.querySelectorAll('.media-card').forEach(card => {
-          if (card.dataset.posterMode === '1') return;
-          card.dataset.posterMode = '1';
-
-          const coverWrap = card.querySelector('.media-cover-wrap');
-          const body = card.querySelector('.media-body');
-          const titleEl = card.querySelector('.media-title');
-
-          if (coverWrap && titleEl) {
-            const titleText = titleEl.textContent.trim();
-            const overlay = document.createElement('div');
-            overlay.className = 'poster-bottom-overlay';
-
-            const overlayTitle = document.createElement('h3');
-            overlayTitle.className = 'poster-overlay-title';
-            overlayTitle.textContent = titleText;
-            overlayTitle.title = titleText;
-
-            overlay.appendChild(overlayTitle);
-            coverWrap.appendChild(overlay);
-          }
-
-          if (body) {
-            body.remove();
-          }
-        });
-      }
-
-      const mediaGridEl = document.getElementById('media-grid');
-      if (mediaGridEl) {
-        new MutationObserver(formatMediaItems).observe(mediaGridEl, {
-          childList: true,
-          attributes: true,
-          attributeFilter: ['class']
-        });
       }
 
       updatePageSizeLabels();
