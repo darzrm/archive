@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=312">
+  <link rel="stylesheet" href="./assets/css/style.css?v=400">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -71,6 +71,17 @@
               <ion-icon name="lock-closed-outline" id="admin-lock-icon"></ion-icon>
               <span id="admin-btn-text">Admin</span>
             </button>
+          </div>
+        </div>
+
+        <!-- Custom Reading / Watch Goal Bar -->
+        <div class="header-goal-bar-wrap" id="header-goal-bar-wrap" style="display: none;">
+          <div class="header-goal-top">
+            <span class="header-goal-label" id="header-goal-label">2026 Goal</span>
+            <span class="header-goal-count" id="header-goal-count">0 / 30 Completed (0%)</span>
+          </div>
+          <div class="header-goal-track">
+            <div class="header-goal-fill" id="header-goal-fill" style="width: 0%;"></div>
           </div>
         </div>
 
@@ -277,14 +288,20 @@
         </ul>
       </nav>
 
-      <!-- SEARCH, POPOVER FILTER, SORT, CUSTOM PAGES POPOVER & VIEW SWITCHER -->
+      <!-- SEARCH, POPOVER FILTER, SORT, BATCH SELECT, DISPLAY SIZE & VIEW SWITCHER -->
       <section class="library-toolbar">
         <div class="search-box">
           <ion-icon name="search-outline"></ion-icon>
-          <input type="text" id="search-library" placeholder="Search title or entry...">
+          <input type="text" id="search-library" placeholder="Search title...">
         </div>
 
         <div class="toolbar-controls-group">
+          <!-- Batch Multi-Select Button (Admin Only) -->
+          <button type="button" class="toolbar-btn" id="btn-batch-toggle" style="display: none;" onclick="toggleBatchSelectMode()" title="Select multiple entries">
+            <ion-icon name="checkbox-outline"></ion-icon>
+            <span id="batch-toggle-label">Select</span>
+          </button>
+
           <!-- Filter Popover Button -->
           <div class="popover-wrapper" id="filter-popover-wrap">
             <button type="button" class="toolbar-btn" id="btn-filter-toggle" onclick="toggleToolbarPopover('filter')">
@@ -397,7 +414,7 @@
             </div>
           </div>
 
-          <!-- Grid / List View Switcher -->
+          <!-- Grid / Compact List View Switcher -->
           <div class="view-mode-toggle" title="Switch layout">
             <button type="button" id="btn-view-grid" class="view-mode-btn active" onclick="setLibraryViewMode('grid')" aria-label="Poster Grid View">
               <ion-icon name="grid-outline"></ion-icon>
@@ -429,6 +446,29 @@
     </footer>
 
   </main>
+
+  <!-- FLOATING BATCH ACTION BAR (ADMIN MULTI-SELECT) -->
+  <div id="batch-action-bar" class="batch-action-bar" style="display: none;">
+    <div class="batch-bar-left">
+      <span class="batch-count-badge" id="batch-selected-count">0 Selected</span>
+      <button type="button" class="batch-link-btn" onclick="selectAllVisibleBatch()">Select Visible</button>
+    </div>
+    <div class="batch-bar-right">
+      <select id="batch-status-select" class="form-input batch-select">
+        <option value="completed">Set Completed</option>
+        <option value="ongoing">Set Ongoing</option>
+        <option value="planned">Set Planned</option>
+        <option value="dropped">Set Dropped</option>
+      </select>
+      <button type="button" class="form-btn primary-submit batch-apply-btn" onclick="applyBatchStatusUpdate()">Apply</button>
+      <button type="button" class="form-btn danger-btn batch-del-btn" onclick="applyBatchDelete()" title="Delete selected">
+        <ion-icon name="trash-outline"></ion-icon>
+      </button>
+      <button type="button" class="clean-clear-btn" onclick="toggleBatchSelectMode(false)" title="Cancel">
+        <ion-icon name="close-outline"></ion-icon>
+      </button>
+    </div>
+  </div>
 
   <!-- FLOATING BACK TO TOP BUTTON -->
   <button type="button" id="btn-back-to-top" class="back-to-top-btn" onclick="scrollToTopSmooth()" title="Back to top" aria-label="Back to top">
@@ -477,7 +517,7 @@
         </div>
 
         <div class="form-group">
-          <label>Cover Image</label>
+          <label>Primary Cover Image</label>
           <div class="split-equal-row">
             <input type="url" id="media-cover" class="form-input" placeholder="Image URL (https://...)">
             <label class="equal-upload-btn" title="Upload cover from device">
@@ -489,6 +529,17 @@
           <span class="upload-status-text" id="cover-upload-status"></span>
         </div>
 
+        <!-- ALTERNATE POSTERS / COVER GALLERY -->
+        <div class="form-group">
+          <div class="social-editor-header">
+            <label style="margin: 0;">Alternate Posters (Optional)</label>
+            <button type="button" class="add-social-btn" onclick="addAltCoverRow()">
+              <ion-icon name="images-outline"></ion-icon> Add Poster
+            </button>
+          </div>
+          <div id="media-alt-covers-editor" class="social-links-editor"></div>
+        </div>
+
         <!-- MULTI-CATEGORY PROGRESS TRACKS -->
         <div class="form-group">
           <div class="social-editor-header">
@@ -498,17 +549,6 @@
             </button>
           </div>
           <div id="media-tracks-editor" class="tracks-editor-list"></div>
-        </div>
-
-        <!-- OPTIONAL ADDITIONAL ENTRIES / PARTS -->
-        <div class="form-group">
-          <div class="social-editor-header">
-            <label style="margin: 0;">Additional Entries / Parts</label>
-            <button type="button" class="add-social-btn" onclick="addSeasonItemRow()">
-              <ion-icon name="add-outline"></ion-icon> Add Entry
-            </button>
-          </div>
-          <div id="media-seasons-editor" class="seasons-editor-list"></div>
         </div>
 
         <div class="form-row">
@@ -571,12 +611,20 @@
         <input type="hidden" id="post-id">
 
         <div class="form-group">
-          <label>Write something... *</label>
-          <textarea id="post-content" class="form-input" rows="5" required placeholder="Share a thought, review, or paste a link..."></textarea>
+          <label>Write something... (Supports Spotify & YouTube links) *</label>
+          <textarea id="post-content" class="form-input" rows="5" required placeholder="Share a thought, review, or paste a Spotify / YouTube link..."></textarea>
+        </div>
+
+        <!-- LINKED MEDIA CROSS-REFERENCE -->
+        <div class="form-group">
+          <label>Link Library Entry (Optional)</label>
+          <select id="post-linked-media" class="form-input">
+            <option value="">— None —</option>
+          </select>
         </div>
 
         <div class="form-group">
-          <label>Attachment (Optional)</label>
+          <label>Image Attachment (Optional)</label>
           <div class="split-equal-row">
             <input type="url" id="post-image" class="form-input" placeholder="Image URL (https://...)">
             <div class="equal-action-pair">
@@ -601,7 +649,7 @@
   </div>
 
   <!-- ========================================== -->
-  <!-- MODAL 3: SETTINGS (ROOT > PROFILE)         -->
+  <!-- MODAL 3: SETTINGS (ROOT > PROFILE / THEME) -->
   <!-- ========================================== -->
   <div class="modal-overlay" id="profile-modal">
     <div class="modal-box">
@@ -634,6 +682,106 @@
             </div>
             <ion-icon name="chevron-forward-outline" class="settings-chevron"></ion-icon>
           </button>
+
+          <!-- Custom Accent & Theme Tint -->
+          <div class="settings-block-card">
+            <div class="settings-card-title">
+              <ion-icon name="color-palette-outline"></ion-icon>
+              <span>Theme Tint & Accent Color</span>
+            </div>
+            <div class="theme-tint-grid" id="theme-tint-selector">
+              <button type="button" class="tint-option-btn active" data-tint="charcoal" onclick="selectThemeTint('charcoal')">
+                <span class="tint-swatch" style="background: #121213; border-color: #383838;"></span>
+                <span>Charcoal</span>
+              </button>
+              <button type="button" class="tint-option-btn" data-tint="oled" onclick="selectThemeTint('oled')">
+                <span class="tint-swatch" style="background: #000000; border-color: #262626;"></span>
+                <span>Pitch OLED</span>
+              </button>
+              <button type="button" class="tint-option-btn" data-tint="slate" onclick="selectThemeTint('slate')">
+                <span class="tint-swatch" style="background: #161922; border-color: #2e3545;"></span>
+                <span>Warm Slate</span>
+              </button>
+            </div>
+
+            <div class="accent-swatches-row" id="accent-color-selector">
+              <button type="button" class="accent-dot-btn active" data-accent="#ffffff" style="background: #ffffff;" onclick="selectAccentColor('#ffffff')" title="Monochrome White"></button>
+              <button type="button" class="accent-dot-btn" data-accent="#7dd3fc" style="background: #7dd3fc;" onclick="selectAccentColor('#7dd3fc')" title="Ice Blue"></button>
+              <button type="button" class="accent-dot-btn" data-accent="#86efac" style="background: #86efac;" onclick="selectAccentColor('#86efac')" title="Sage Mint"></button>
+              <button type="button" class="accent-dot-btn" data-accent="#fcd34d" style="background: #fcd34d;" onclick="selectAccentColor('#fcd34d')" title="Warm Amber"></button>
+              <button type="button" class="accent-dot-btn" data-accent="#fda4af" style="background: #fda4af;" onclick="selectAccentColor('#fda4af')" title="Soft Rose"></button>
+              <button type="button" class="accent-dot-btn" data-accent="#c4b5fd" style="background: #c4b5fd;" onclick="selectAccentColor('#c4b5fd')" title="Lavender"></button>
+            </div>
+          </div>
+
+          <!-- Default Library Display Setting -->
+          <div class="settings-block-card">
+            <div class="settings-card-title">
+              <ion-icon name="grid-outline"></ion-icon>
+              <span>Default Library Display</span>
+            </div>
+            <p class="settings-card-desc">Set default grid density & layout mode when visitors open the site.</p>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Default Size</label>
+                <select id="edit-default-density" class="form-input">
+                  <option value="small">Small (6 / 8)</option>
+                  <option value="medium">Medium (12 / 16)</option>
+                  <option value="large">Large (24 / 32)</option>
+                  <option value="all">All Entries</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Default Layout</label>
+                <select id="edit-default-view" class="form-input">
+                  <option value="grid">Poster Grid</option>
+                  <option value="list">Compact List</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reading / Watch Goal Bar Setting -->
+          <div class="settings-block-card">
+            <div class="settings-card-row-inline">
+              <div class="settings-card-info">
+                <div class="settings-card-title">
+                  <ion-icon name="trophy-outline"></ion-icon>
+                  <span>Header Goal Bar</span>
+                </div>
+                <p class="settings-card-desc">Show a live completion progress bar below your profile bio.</p>
+              </div>
+              <label class="toggle-switch" aria-label="Toggle Goal Bar">
+                <input type="checkbox" id="edit-goal-enabled" onchange="toggleGoalFieldsVisibility()">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div id="goal-config-fields" class="goal-config-fields" style="display: none;">
+              <div class="form-group">
+                <label>Goal Title</label>
+                <input type="text" id="edit-goal-label" class="form-input" placeholder="e.g. 2026 Watch & Read Challenge">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Target Completed</label>
+                  <input type="number" id="edit-goal-target" class="form-input" min="1" value="30">
+                </div>
+                <div class="form-group">
+                  <label>Count Category</label>
+                  <select id="edit-goal-category" class="form-input">
+                    <option value="all">All Categories</option>
+                    <option value="tv_show">TV Shows</option>
+                    <option value="movie">Movies</option>
+                    <option value="comic">Comics</option>
+                    <option value="novel">Novels</option>
+                    <option value="game">Games</option>
+                    <option value="music">Music</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <!-- Library Visibility Setting -->
           <div class="settings-card-row">
@@ -751,305 +899,7 @@
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 
   <!-- Main JS -->
-  <script src="./assets/js/script.js?v=53"></script>
-
-  <!-- Sync Helper: Grid Poster Overlay, Entry 2 Badge Hiding & Clean Modal Form Layout -->
-  <script>
-    (function () {
-      let activeSizePreset = 'small';
-
-      function getDeviceLimits() {
-        const isMobile = window.innerWidth <= 680;
-        return isMobile
-          ? { small: '6', medium: '12', large: '24', all: 'all' }
-          : { small: '8', medium: '16', large: '32', all: 'all' };
-      }
-
-      function updatePageSizeLabels() {
-        const limits = getDeviceLimits();
-        document.querySelectorAll('.page-option-item[data-size]').forEach(btn => {
-          const sizeKey = btn.dataset.size;
-          const limitVal = limits[sizeKey];
-          btn.dataset.limit = limitVal;
-          const hint = btn.querySelector('.size-count-hint');
-          if (hint && limitVal !== 'all') {
-            hint.textContent = '(' + limitVal + ')';
-          }
-          btn.classList.toggle('active', sizeKey === activeSizePreset);
-        });
-      }
-
-      window.selectPresetPageSize = function (sizeKey) {
-        activeSizePreset = sizeKey;
-        const limits = getDeviceLimits();
-        const limitVal = limits[sizeKey] || '8';
-        updatePageSizeLabels();
-        if (typeof window.selectItemsPerPage === 'function') {
-          window.selectItemsPerPage(limitVal);
-        }
-      };
-
-      // Settings Multi-Step Navigation (Settings > Profile)
-      window.navigateSettingsStep = function (step) {
-        const rootPanel = document.getElementById('settings-step-root');
-        const profilePanel = document.getElementById('settings-step-profile');
-        const backBtn = document.getElementById('btn-settings-back');
-        const headerIcon = document.getElementById('settings-header-icon');
-        const titleEl = document.getElementById('settings-modal-title');
-
-        if (!rootPanel || !profilePanel) return;
-
-        if (step === 'profile') {
-          rootPanel.style.display = 'none';
-          profilePanel.style.display = 'flex';
-          if (backBtn) backBtn.style.display = 'inline-flex';
-          if (headerIcon) headerIcon.style.display = 'none';
-          if (titleEl) titleEl.textContent = 'Edit Profile';
-        } else {
-          profilePanel.style.display = 'none';
-          rootPanel.style.display = 'flex';
-          if (backBtn) backBtn.style.display = 'none';
-          if (headerIcon) headerIcon.style.display = 'inline-flex';
-          if (titleEl) titleEl.textContent = 'Settings';
-        }
-      };
-
-      window.openSettingsRoot = function () {
-        window.navigateSettingsStep('root');
-        if (typeof window.openProfileModal === 'function') {
-          window.openProfileModal();
-        }
-      };
-
-      const origSwitch = window.switchMainView;
-      window.switchMainView = function (view) {
-        if (typeof origSwitch === 'function') {
-          origSwitch(view);
-        }
-        document.querySelectorAll('.nav-segment-btn, .mini-nav-btn').forEach(btn => {
-          btn.classList.toggle('active', btn.dataset.view === view);
-        });
-        const actionLabel = document.getElementById('center-action-label');
-        if (actionLabel) {
-          actionLabel.textContent = view === 'library' ? 'Add Media' : 'New Post';
-        }
-      };
-
-      const libTab = document.getElementById('bottom-tab-library');
-      const miniLibTab = document.getElementById('mini-tab-library');
-      if (libTab && miniLibTab) {
-        const syncVisibility = () => {
-          miniLibTab.style.display = libTab.style.display === 'none' ? 'none' : 'inline-flex';
-        };
-        syncVisibility();
-        new MutationObserver(syncVisibility).observe(libTab, {
-          attributes: true,
-          attributeFilter: ['style']
-        });
-      }
-
-      // Normalize Modal Form Cards (Remove +1 inside cards & enforce exact 3-row layout)
-      function normalizeMediaModalCards() {
-        // 1. Categories & Progress cards:
-        // Row 1: [CATEGORY] [DELETE]
-        // Row 2: [STATUS] [JENIS COUNT]
-        // Row 3: [EPS] [MAX EPS]
-        document.querySelectorAll('#media-tracks-editor .track-edit-card').forEach(card => {
-          if (card.dataset.normalized === '1') return;
-          card.dataset.normalized = '1';
-
-          // Remove any +1 button inside track card
-          card.querySelectorAll('.step-plus-btn').forEach(btn => btn.remove());
-
-          const selects = Array.from(card.querySelectorAll('select'));
-          const numInputs = Array.from(card.querySelectorAll('input[type="number"]'));
-          const delBtn = card.querySelector('.social-remove-btn');
-
-          if (selects.length >= 3 && numInputs.length >= 2 && delBtn) {
-            const row1 = document.createElement('div');
-            row1.className = 'clean-card-row-cat';
-            row1.appendChild(selects[0]); // Category
-            row1.appendChild(delBtn);     // Delete
-
-            const row2 = document.createElement('div');
-            row2.className = 'clean-card-row-2col';
-            row2.appendChild(selects[1]); // Status
-            row2.appendChild(selects[2]); // Jenis Count
-
-            const row3 = document.createElement('div');
-            row3.className = 'clean-card-row-eps';
-            const slash = document.createElement('span');
-            slash.className = 'eps-slash';
-            slash.textContent = '/';
-            row3.appendChild(numInputs[0]); // Current Eps
-            row3.appendChild(slash);
-            row3.appendChild(numInputs[1]); // Max Eps
-
-            card.innerHTML = '';
-            card.appendChild(row1);
-            card.appendChild(row2);
-            card.appendChild(row3);
-          }
-        });
-
-        // 2. Additional Entries cards:
-        // Row 1: [CATEGORY] [NAMA ADDITIONAL] [DELETE]
-        // Row 2: [STATUS] [JENIS COUNT]
-        // Row 3: [EPS] [MAX EPS]
-        document.querySelectorAll('#media-seasons-editor .season-edit-card').forEach(card => {
-          if (card.dataset.normalized === '1') return;
-          card.dataset.normalized = '1';
-
-          // Remove any +1 button inside additional entry card
-          card.querySelectorAll('.step-plus-btn').forEach(btn => btn.remove());
-
-          const selects = Array.from(card.querySelectorAll('select'));
-          const textInput = card.querySelector('input[type="text"]');
-          const numInputs = Array.from(card.querySelectorAll('input[type="number"]'));
-          const delBtn = card.querySelector('.social-remove-btn');
-
-          if (selects.length >= 3 && textInput && numInputs.length >= 2 && delBtn) {
-            const row1 = document.createElement('div');
-            row1.className = 'clean-card-row-add';
-            row1.appendChild(selects[0]); // Category
-            row1.appendChild(textInput);  // Nama Additional
-            row1.appendChild(delBtn);     // Delete
-
-            const row2 = document.createElement('div');
-            row2.className = 'clean-card-row-2col';
-            row2.appendChild(selects[1]); // Status
-            row2.appendChild(selects[2]); // Jenis Count
-
-            const row3 = document.createElement('div');
-            row3.className = 'clean-card-row-eps';
-            const slash = document.createElement('span');
-            slash.className = 'eps-slash';
-            slash.textContent = '/';
-            row3.appendChild(numInputs[0]); // Current Eps
-            row3.appendChild(slash);
-            row3.appendChild(numInputs[1]); // Max Eps
-
-            card.innerHTML = '';
-            card.appendChild(row1);
-            card.appendChild(row2);
-            card.appendChild(row3);
-          }
-        });
-      }
-
-      const tracksEditor = document.getElementById('media-tracks-editor');
-      const seasonsEditor = document.getElementById('media-seasons-editor');
-      if (tracksEditor) {
-        new MutationObserver(normalizeMediaModalCards).observe(tracksEditor, { childList: true });
-      }
-      if (seasonsEditor) {
-        new MutationObserver(normalizeMediaModalCards).observe(seasonsEditor, { childList: true });
-      }
-
-      // Format Grid (Full Cover + Title with Bottom Dark Shadow) & Hide badge if total entries === 2
-      function formatMediaItems() {
-        const grid = document.getElementById('media-grid');
-        if (!grid) return;
-
-        if (grid.classList.contains('list-view')) {
-          grid.querySelectorAll('.media-list-row').forEach(row => {
-            if (row.dataset.cleaned === '1') return;
-            row.dataset.cleaned = '1';
-
-            const subMeta = row.querySelector('.list-sub-meta');
-            if (subMeta) {
-              const catTag = subMeta.querySelector('.list-cat-tag');
-              const repeatTag = subMeta.querySelector('.list-repeat-tag');
-              const cleanItems = [];
-              if (catTag) cleanItems.push(catTag);
-              if (repeatTag) cleanItems.push(repeatTag);
-
-              subMeta.innerHTML = '';
-              cleanItems.forEach((el, idx) => {
-                if (idx > 0) {
-                  const sep = document.createElement('span');
-                  sep.className = 'list-meta-sep';
-                  sep.textContent = '•';
-                  subMeta.appendChild(sep);
-                }
-                subMeta.appendChild(el);
-              });
-            }
-
-            const rightMeta = row.querySelector('.list-right-meta');
-            if (rightMeta) {
-              const ratingEl = rightMeta.querySelector('.list-rating-pill');
-              const editBtn = rightMeta.querySelector('.list-edit-btn');
-              rightMeta.innerHTML = '';
-              if (ratingEl) rightMeta.appendChild(ratingEl);
-              if (editBtn) rightMeta.appendChild(editBtn);
-            }
-          });
-          return;
-        }
-
-        // Poster Grid Mode: Full Cover + Title at Bottom with Dark Gradient Shadow
-        grid.querySelectorAll('.media-card').forEach(card => {
-          if (card.dataset.posterMode === '1') return;
-          card.dataset.posterMode = '1';
-
-          const coverWrap = card.querySelector('.media-cover-wrap');
-          const body = card.querySelector('.media-body');
-          const titleEl = card.querySelector('.media-title');
-          const seasonsBadge = card.querySelector('.badge-seasons');
-
-          // If total entries / seasons badge indicates exactly 2, hide the badge on grid card
-          if (seasonsBadge) {
-            const badgeText = seasonsBadge.textContent.trim().toLowerCase();
-            if (badgeText.includes('2')) {
-              seasonsBadge.style.display = 'none';
-            }
-          }
-
-          if (coverWrap && titleEl) {
-            const titleText = titleEl.textContent.trim();
-            const overlay = document.createElement('div');
-            overlay.className = 'poster-bottom-overlay';
-
-            const overlayTitle = document.createElement('h3');
-            overlayTitle.className = 'poster-overlay-title';
-            overlayTitle.textContent = titleText;
-            overlayTitle.title = titleText;
-
-            overlay.appendChild(overlayTitle);
-            coverWrap.appendChild(overlay);
-          }
-
-          if (body) {
-            body.remove();
-          }
-        });
-      }
-
-      const mediaGridEl = document.getElementById('media-grid');
-      if (mediaGridEl) {
-        new MutationObserver(formatMediaItems).observe(mediaGridEl, {
-          childList: true,
-          attributes: true,
-          attributeFilter: ['class']
-        });
-      }
-
-      updatePageSizeLabels();
-      if (typeof window.selectItemsPerPage === 'function') {
-        window.selectItemsPerPage(getDeviceLimits()[activeSizePreset]);
-      }
-
-      let lastIsMobile = window.innerWidth <= 680;
-      window.addEventListener('resize', () => {
-        const nowMobile = window.innerWidth <= 680;
-        if (nowMobile !== lastIsMobile) {
-          lastIsMobile = nowMobile;
-          window.selectPresetPageSize(activeSizePreset);
-        }
-      });
-    })();
-  </script>
+  <script src="./assets/js/script.js?v=400"></script>
 </body>
 
 </html>
