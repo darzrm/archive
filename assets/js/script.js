@@ -82,7 +82,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupFilterListeners();
     updateSortUIControls();
 
-    // Sync view mode buttons to Compact List default
     const gridBtn = document.getElementById('btn-view-grid');
     const listBtn = document.getElementById('btn-view-list');
     if (gridBtn) gridBtn.classList.toggle('active', libraryViewMode === 'grid');
@@ -907,16 +906,6 @@ function getItemGalleryUrls(item) {
   return urls;
 }
 
-function getSeriesGraphRatingClass(rating) {
-  if (rating === null || rating === undefined || Number.isNaN(Number(rating))) return 'sg-unrated';
-  const r = Number(rating);
-  if (r >= 9.5) return 'sg-goat';
-  if (r >= 8.5) return 'sg-great';
-  if (r >= 7.5) return 'sg-good';
-  if (r >= 6.0) return 'sg-mid';
-  return 'sg-low';
-}
-
 function getAllItemUnits(item) {
   return getItemTracks(item);
 }
@@ -1304,21 +1293,26 @@ function renderMediaGrid() {
     }
   }
 
-  // COMPACT LIST VIEW RENDER (DEFAULT)
+  // COMPACT LIST VIEW RENDER: "TV SHOW / MOVIE · COMPLETED · REVIEWED"
   if (libraryViewMode === 'list') {
     grid.innerHTML = displayedItems.map(item => {
       const safeId = escapeHtml(String(item.id));
       const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/120x180/1e1e1f/888888?text=?';
       const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
       const cats = getItemCategories(item);
+      const allUnits = getAllItemUnits(item);
+      const synced = computeSyncedStatus(allUnits);
       const epReviews = getItemEpisodeReviews(item);
       const repeatCount = Number(item.repeat_count) || 0;
 
-      const catLabels = cats.map(c => CATEGORY_LABELS[c] || c).join(' / ');
-      const epTagHtml = epReviews.length > 0
-        ? `<span class="list-ep-review-tag">★ ${epReviews.length} Review</span>`
-        : '';
-      const repeatHtml = repeatCount > 0 ? `<span class="list-repeat-tag">↻ ${repeatCount}x</span>` : '';
+      const catLabels = cats.map(c => (CATEGORY_LABELS[c] || c).toUpperCase()).join(' / ');
+      const metaParts = [catLabels, synced.label.toUpperCase()];
+      if (epReviews.length > 0) metaParts.push('REVIEWED');
+      if (repeatCount > 0) metaParts.push(`↻ ${repeatCount}X`);
+
+      const subMetaHtml = metaParts
+        .map(part => `<span class="list-sub-meta-item">${escapeHtml(part)}</span>`)
+        .join('<span class="list-meta-sep">·</span>');
 
       const editBtnHtml = isAdminLoggedIn ? `
         <button type="button" class="list-edit-btn" onclick="event.stopPropagation(); openEditModal('${safeId}')" title="Edit">
@@ -1331,11 +1325,7 @@ function renderMediaGrid() {
           <img class="list-thumb" src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/120x180/1e1e1f/888888?text=?'">
           <div class="list-main-info">
             <div class="list-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
-            <div class="list-sub-meta">
-              <span class="list-cat-tag">${escapeHtml(catLabels)}</span>
-              ${epTagHtml ? `<span class="list-meta-sep">•</span>${epTagHtml}` : ''}
-              ${repeatHtml ? `<span class="list-meta-sep">•</span>${repeatHtml}` : ''}
-            </div>
+            <div class="list-sub-meta">${subMetaHtml}</div>
           </div>
           <div class="list-right-meta">
             <span class="list-rating-pill">${ratingText}</span>
@@ -1347,43 +1337,17 @@ function renderMediaGrid() {
     return;
   }
 
-  // POSTER GRID VIEW RENDER (NO STATUS & NO TOTAL COUNT)
+  // POSTER GRID VIEW RENDER: TITLE ONLY WITH SUBTLE DARK BOTTOM GRADIENT
   grid.innerHTML = displayedItems.map(item => {
     const safeId = escapeHtml(String(item.id));
     const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
-    const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
-    const repeatCount = Number(item.repeat_count) || 0;
-    const cats = getItemCategories(item);
-    const epReviews = getItemEpisodeReviews(item);
-
-    const catBadgesHtml = cats.map(c => `<span class="badge-cat">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('');
-    const repeatBadgeHtml = repeatCount > 0
-      ? `<span class="badge-repeat" title="Rewatch">↻ ${repeatCount}x</span>`
-      : '';
-
-    const epBadgeHtml = epReviews.length > 0
-      ? `<span class="badge-seasons">★ ${epReviews.length}</span>`
-      : '';
-
-    const coverEditHtml = isAdminLoggedIn ? `
-      <button type="button" class="cover-edit-btn" onclick="event.stopPropagation(); openEditModal('${safeId}')" title="Edit">
-        <ion-icon name="create-outline"></ion-icon>
-      </button>
-    ` : '';
 
     return `
       <div class="media-card" onclick="openMediaDetailModal('${safeId}')">
         <div class="media-cover-wrap">
           <img src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=No+Cover'">
-          <div class="cover-left-badges">
-            <div class="badge-cat-row">${catBadgesHtml}</div>
-            <span class="badge-rating">${ratingText}</span>
-            ${repeatBadgeHtml}
-          </div>
-          ${epBadgeHtml}
-          ${coverEditHtml}
           <div class="poster-bottom-overlay">
-            <h3 class="poster-overlay-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h3>
+            <h3 class="poster-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h3>
           </div>
         </div>
       </div>
@@ -1392,7 +1356,7 @@ function renderMediaGrid() {
 }
 
 // ==========================================
-// 4B. MEDIA DETAIL MODAL (ONLY SHOWS REVIEW SECTION IF REVIEWS EXIST)
+// 4B. MEDIA DETAIL MODAL (PLAIN MONOCHROME LABELS + THIN DIVIDER FOR NOTES)
 // ==========================================
 window.openMediaDetailModal = function (id) {
   const item = allMediaLogs.find(m => String(m.id) === String(id));
@@ -1426,12 +1390,12 @@ window.openMediaDetailModal = function (id) {
           <strong style="color: var(--white-1);">${escapeHtml(CATEGORY_LABELS[t.category] || t.category)}</strong>
           <span style="color: var(--light-gray-70); margin-left: 8px;">${progStr}</span>
         </div>
-        <span class="status-pill ${t.status}">${t.status}</span>
+        <span class="detail-plain-badge">${escapeHtml(t.status)}</span>
       </div>
     `;
   }).join('');
 
-  // Render Review section ONLY if epReviews has entries
+  // Render Review section ONLY if epReviews has entries (plain text + thin line above notes)
   let epReviewsHtml = '';
   if (epReviews.length > 0) {
     const ratedEps = epReviews.filter(e => e.rating !== null && !Number.isNaN(e.rating));
@@ -1443,23 +1407,21 @@ window.openMediaDetailModal = function (id) {
       <div>
         <div class="ep-graph-header">
           <div class="detail-section-title" style="margin-bottom: 0;">Review (${epReviews.length})</div>
-          ${avgEpScore ? `<span class="ep-graph-avg">★ Avg ${avgEpScore}</span>` : ''}
+          ${avgEpScore ? `<span class="detail-plain-badge">★ Avg ${avgEpScore}</span>` : ''}
         </div>
         <div class="ep-review-cards-list">
           ${epReviews.map((ep, idx) => {
-            const numLabel = ep.number || `#${idx + 1}`;
+            const partLabel = ep.number || `#${idx + 1}`;
             const hasScore = ep.rating !== null && !Number.isNaN(ep.rating);
             const scoreStr = hasScore ? `★ ${Number(ep.rating).toFixed(1)}` : '';
-            const tierClass = getSeriesGraphRatingClass(ep.rating);
 
             return `
               <div class="ep-review-card">
                 <div class="ep-review-main">
                   <div class="ep-review-left">
-                    <span class="ep-num-badge">${escapeHtml(numLabel)}</span>
-                    ${ep.title ? `<span class="ep-title-text" title="${escapeHtml(ep.title)}">${escapeHtml(ep.title)}</span>` : ''}
+                    <span class="ep-part-text">${escapeHtml(partLabel)}</span>
                   </div>
-                  ${hasScore ? `<span class="sg-rating-badge ${tierClass}">${scoreStr}</span>` : ''}
+                  ${hasScore ? `<span class="ep-score-plain">${scoreStr}</span>` : ''}
                 </div>
                 ${ep.note ? `<div class="ep-review-note">${escapeHtml(ep.note)}</div>` : ''}
               </div>
@@ -1479,17 +1441,23 @@ window.openMediaDetailModal = function (id) {
     </div>
   ` : '';
 
+  const heroMetaParts = [
+    cats.map(c => (CATEGORY_LABELS[c] || c).toUpperCase()).join(' / '),
+    synced.label.toUpperCase(),
+    ratingText
+  ];
+  if (repeatCount > 0) heroMetaParts.push(`↻ ${repeatCount}X`);
+
+  const heroMetaHtml = heroMetaParts
+    .map(p => `<span>${escapeHtml(p)}</span>`)
+    .join('<span class="meta-dot">·</span>');
+
   document.getElementById('media-detail-body').innerHTML = `
     <div class="detail-hero">
       ${heroVisualHtml}
       <div class="detail-meta-col">
-        <div class="badge-cat-row">
-          ${cats.map(c => `<span class="badge-cat">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('')}
-        </div>
-        <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-          <span class="status-pill ${synced.key}">${escapeHtml(synced.label)}</span>
-          <span class="badge-rating">${ratingText}</span>
-          ${repeatCount > 0 ? `<span class="badge-repeat">↻ ${repeatCount}x</span>` : ''}
+        <div class="detail-plain-meta-row">
+          ${heroMetaHtml}
         </div>
         <div style="font-size: 11px; color: var(--light-gray-70);">
           Updated ${formatStatusDate(item.updated_at || item.created_at)}
@@ -1514,7 +1482,7 @@ window.closeMediaDetailModal = function () {
 };
 
 // ==========================================
-// 5. ADD / EDIT MODAL (50:50 COVER & 50:50 REVIEW)
+// 5. ADD / EDIT MEDIA MODAL (50:50 COVER & 50:50 REVIEW)
 // ==========================================
 window.addMediaImageRow = function (url = '') {
   const container = document.getElementById('media-gallery-editor');
@@ -1524,14 +1492,16 @@ window.addMediaImageRow = function (url = '') {
   row.className = 'cover-split-row';
   row.innerHTML = `
     <input type="url" class="form-input media-gallery-url-input" placeholder="Cover URL" value="${escapeHtml(url)}">
-    <label class="equal-upload-btn" title="Upload">
-      <ion-icon name="cloud-upload-outline"></ion-icon>
-      <span>Upload</span>
-      <input type="file" accept="image/*" hidden onchange="handleSingleCoverRowUpload(event, this)">
-    </label>
-    <button type="button" class="social-remove-btn" onclick="removeMediaImageRow(this)" title="Remove">
-      <ion-icon name="trash-outline"></ion-icon>
-    </button>
+    <div class="row-right-controls">
+      <label class="equal-upload-btn" title="Upload">
+        <ion-icon name="cloud-upload-outline"></ion-icon>
+        <span>Upload</span>
+        <input type="file" accept="image/*" hidden onchange="handleSingleCoverRowUpload(event, this)">
+      </label>
+      <button type="button" class="social-remove-btn" onclick="removeMediaImageRow(this)" title="Remove">
+        <ion-icon name="trash-outline"></ion-icon>
+      </button>
+    </div>
   `;
   container.appendChild(row);
 };
@@ -1652,7 +1622,7 @@ window.onTrackStatusOrTotalChange = function (el) {
   }
 };
 
-// Review Row Builder (50% Part + 50% Notes)
+// Review Row Builder (50% Part + 50% Notes + Delete)
 window.addEpisodeReviewRow = function (ep = null) {
   const container = document.getElementById('media-ep-reviews-editor');
   if (!container) return;
@@ -1668,10 +1638,12 @@ window.addEpisodeReviewRow = function (ep = null) {
       <input type="text" class="form-input ep-num-input" placeholder="Ch / Eps" value="${escapeHtml(numVal)}">
       <input type="number" class="form-input ep-rating-input" step="0.1" min="1.0" max="10.0" placeholder="Rating" value="${ratingVal}">
     </div>
-    <input type="text" class="form-input ep-note-input" placeholder="Notes" value="${escapeHtml(noteVal)}">
-    <button type="button" class="social-remove-btn" onclick="this.closest('.review-split-row').remove()" title="Remove">
-      <ion-icon name="trash-outline"></ion-icon>
-    </button>
+    <div class="row-right-controls">
+      <input type="text" class="form-input ep-note-input" placeholder="Notes" value="${escapeHtml(noteVal)}">
+      <button type="button" class="social-remove-btn" onclick="this.closest('.review-split-row').remove()" title="Remove">
+        <ion-icon name="trash-outline"></ion-icon>
+      </button>
+    </div>
   `;
   container.appendChild(row);
 };
@@ -1698,7 +1670,6 @@ window.openMediaModal = function () {
     addMediaTrackRow({ category: 'tv_show', status: 'completed', progress: 0, total_units: '', unit_label: 'eps' });
   }
 
-  // Auto-add 1 empty Review row so user doesn't have to click Add
   const epEditor = document.getElementById('media-ep-reviews-editor');
   if (epEditor) {
     epEditor.innerHTML = '';
@@ -2182,7 +2153,6 @@ if (mediaForm) {
     const existingItem = id ? allMediaLogs.find(m => String(m.id) === String(id)) : null;
     const oldGallery = existingItem ? getItemGalleryUrls(existingItem) : [];
 
-    // Collect gallery image URLs
     const galleryInputs = document.querySelectorAll('#media-gallery-editor .media-gallery-url-input');
     const galleryUrls = [];
     galleryInputs.forEach(inp => {
@@ -2193,7 +2163,6 @@ if (mediaForm) {
     });
     const newPrimaryCover = galleryUrls[0] || null;
 
-    // Collect progress tracks
     const trackCards = document.querySelectorAll('#media-tracks-editor .track-edit-card');
     const tracks = [];
     trackCards.forEach(card => {
@@ -2222,7 +2191,6 @@ if (mediaForm) {
       return;
     }
 
-    // Collect Reviews (ignore empty rows)
     const epRows = document.querySelectorAll('#media-ep-reviews-editor .review-split-row');
     const episodeReviews = [];
     epRows.forEach(row => {
@@ -2299,8 +2267,8 @@ window.deleteCurrentModalMedia = async function () {
     text: 'Remove this entry from your library?',
     icon: 'warning',
     showCancelButton: true,
-    confirmButtonColor: '#ff5f5f',
-    confirmButtonText: 'Delete',
+    confirmButtonColor: '#ffffff',
+    confirmButtonText: '<span style="color:#111;">Delete</span>',
     cancelButtonText: 'Cancel',
     background: '#1e1e1f',
     color: '#fff'
@@ -2326,7 +2294,7 @@ window.deleteCurrentModalMedia = async function () {
 };
 
 // ==========================================
-// 7. PERSONAL NOTES / POSTS + MULTI-IMAGE SLIDER
+// 7. PERSONAL NOTES / POSTS + PUBLIC/PRIVATE + 50:50 IMAGE ROWS
 // ==========================================
 function getPostImageUrls(post) {
   const urls = [];
@@ -2427,7 +2395,9 @@ function renderBlogPosts() {
   const listEl = document.getElementById('blog-feed-list');
   if (!listEl) return;
 
-  if (allBlogPosts.length === 0) {
+  const visiblePosts = allBlogPosts.filter(p => !p.is_private || isAdminLoggedIn);
+
+  if (visiblePosts.length === 0) {
     listEl.innerHTML = `<p class="empty-state">No notes yet.</p>`;
     return;
   }
@@ -2435,19 +2405,20 @@ function renderBlogPosts() {
   const avatarSrc = normalizeImageUrl(currentProfile.avatar_url) || TRANSPARENT_PIXEL;
   const authorName = escapeHtml(currentProfile.name || '');
 
-  listEl.innerHTML = allBlogPosts.map(post => {
+  listEl.innerHTML = visiblePosts.map(post => {
     const safePostId = escapeHtml(String(post.id));
     const postImages = getPostImageUrls(post);
     const timeLabel = formatPostDateTime(post.created_at, post.updated_at);
     const detectedUrl = extractFirstUrl(post.content);
     const linkPreviewHtml = detectedUrl ? buildLinkPreviewCard(detectedUrl) : '';
+    const privateBadge = post.is_private ? `<span>·</span><ion-icon name="lock-closed-outline" title="Private"></ion-icon>` : '';
 
     const adminControls = isAdminLoggedIn ? `
       <div class="blog-post-actions">
         <button type="button" class="blog-icon-btn" onclick="openEditPostModal('${safePostId}')" title="Edit">
           <ion-icon name="create-outline"></ion-icon>
         </button>
-        <button type="button" class="blog-icon-btn delete" onclick="deleteBlogPost('${safePostId}')" title="Delete">
+        <button type="button" class="blog-icon-btn" onclick="deleteBlogPost('${safePostId}')" title="Delete">
           <ion-icon name="trash-outline"></ion-icon>
         </button>
       </div>
@@ -2464,7 +2435,7 @@ function renderBlogPosts() {
             <img class="blog-post-avatar" src="${avatarSrc}" alt="" onerror="this.src='${TRANSPARENT_PIXEL}'">
             <div class="blog-post-meta">
               <span class="blog-post-name">${authorName}</span>
-              <span class="blog-post-time">${timeLabel}</span>
+              <span class="blog-post-time">${timeLabel} ${privateBadge}</span>
             </div>
           </div>
           ${adminControls}
@@ -2477,41 +2448,57 @@ function renderBlogPosts() {
   }).join('');
 }
 
+function updatePostVisibilityUI(isPrivate) {
+  const hiddenInput = document.getElementById('post-is-private');
+  const iconEl = document.getElementById('post-vis-icon');
+  const labelEl = document.getElementById('post-vis-label');
+
+  if (hiddenInput) hiddenInput.value = isPrivate ? 'true' : 'false';
+  if (iconEl) iconEl.setAttribute('name', isPrivate ? 'lock-closed-outline' : 'globe-outline');
+  if (labelEl) labelEl.textContent = isPrivate ? 'Private' : 'Public';
+}
+
+window.togglePostVisibilityState = function () {
+  const hiddenInput = document.getElementById('post-is-private');
+  const currentlyPrivate = hiddenInput ? hiddenInput.value === 'true' : false;
+  updatePostVisibilityUI(!currentlyPrivate);
+};
+
+// Post Image Row: 50% Image URL | 50% (Upload + Delete)
 window.addPostImageRow = function (url = '') {
   const container = document.getElementById('post-images-editor');
   if (!container) return;
 
-  const clean = normalizeImageUrl(url);
   const row = document.createElement('div');
-  row.className = 'multi-img-row';
+  row.className = 'post-img-split-row';
   row.innerHTML = `
-    <img class="multi-img-thumb" src="${clean || TRANSPARENT_PIXEL}" alt="" onerror="this.src='${TRANSPARENT_PIXEL}'">
-    <input type="url" class="form-input post-image-url-input" placeholder="Image URL" value="${escapeHtml(url)}" oninput="this.previousElementSibling.src = this.value.trim() || '${TRANSPARENT_PIXEL}'">
-    <button type="button" class="social-remove-btn" onclick="this.parentElement.remove()" title="Remove">
-      <ion-icon name="trash-outline"></ion-icon>
-    </button>
+    <input type="url" class="form-input post-image-url-input" placeholder="Image URL" value="${escapeHtml(url)}">
+    <div class="row-right-controls">
+      <label class="equal-upload-btn" title="Upload">
+        <ion-icon name="cloud-upload-outline"></ion-icon>
+        <span>Upload</span>
+        <input type="file" accept="image/*" hidden onchange="handleSinglePostRowUpload(event, this)">
+      </label>
+      <button type="button" class="social-remove-btn" onclick="this.closest('.post-img-split-row').remove()" title="Delete">
+        <ion-icon name="trash-outline"></ion-icon>
+      </button>
+    </div>
   `;
   container.appendChild(row);
 };
 
-window.handlePostImagesUpload = async function (event) {
-  const files = event.target.files ? Array.from(event.target.files) : [];
+window.handleSinglePostRowUpload = async function (event, fileInput) {
+  const file = event.target.files ? event.target.files[0] : null;
   event.target.value = '';
-  if (files.length === 0) return;
+  if (!file) return;
+
+  const row = fileInput.closest('.post-img-split-row');
+  const urlInput = row ? row.querySelector('.post-image-url-input') : null;
 
   setElText('post-upload-status', 'Uploading...');
   try {
-    for (const file of files) {
-      const publicUrl = await uploadImageToSupabase(file, 'posts');
-      const existingInputs = Array.from(document.querySelectorAll('#post-images-editor .post-image-url-input'));
-      const emptyInput = existingInputs.find(inp => !inp.value.trim());
-      if (emptyInput) {
-        emptyInput.value = publicUrl;
-        if (emptyInput.previousElementSibling) emptyInput.previousElementSibling.src = publicUrl;
-      } else {
-        addPostImageRow(publicUrl);
-      }
-    }
+    const publicUrl = await uploadImageToSupabase(file, 'posts');
+    if (urlInput) urlInput.value = publicUrl;
     setElText('post-upload-status', 'Uploaded!');
     showToast('Uploaded', 'success');
   } catch (err) {
@@ -2525,6 +2512,7 @@ window.openPostModal = function () {
   document.getElementById('post-modal-title').textContent = 'New Post';
   document.getElementById('post-form').reset();
   document.getElementById('post-id').value = '';
+  updatePostVisibilityUI(false);
   setElText('post-upload-status', '');
 
   const imgEditor = document.getElementById('post-images-editor');
@@ -2541,6 +2529,7 @@ window.openEditPostModal = function (id) {
   document.getElementById('post-modal-title').textContent = 'Edit Post';
   document.getElementById('post-id').value = post.id;
   document.getElementById('post-content').value = post.content || '';
+  updatePostVisibilityUI(Boolean(post.is_private));
   setElText('post-upload-status', '');
 
   const imgEditor = document.getElementById('post-images-editor');
@@ -2579,24 +2568,30 @@ if (postForm) {
     const contentVal = document.getElementById('post-content').value.trim();
     if (!contentVal) return;
 
+    const isPrivateVal = document.getElementById('post-is-private')?.value === 'true';
     const nowIso = new Date().toISOString();
     const payload = {
       content: contentVal,
       image_url: imageUrls[0] || null,
       image_urls: imageUrls,
+      is_private: isPrivateVal,
       updated_at: nowIso
     };
 
-    let error;
-    if (id) {
-      ({ error } = await supabaseClient.from('blog_posts').update(payload).eq('id', id));
-    } else {
-      payload.created_at = nowIso;
-      ({ error } = await supabaseClient.from('blog_posts').insert([payload]));
+    let res = id
+      ? await supabaseClient.from('blog_posts').update(payload).eq('id', id)
+      : await supabaseClient.from('blog_posts').insert([{ ...payload, created_at: nowIso }]);
+
+    // Fallback if is_private column hasn't been added to blog_posts yet
+    if (res.error && res.error.message && res.error.message.includes('is_private')) {
+      delete payload.is_private;
+      res = id
+        ? await supabaseClient.from('blog_posts').update(payload).eq('id', id)
+        : await supabaseClient.from('blog_posts').insert([{ ...payload, created_at: nowIso }]);
     }
 
-    if (error) {
-      showToast(error.message, 'error');
+    if (res.error) {
+      showToast(res.error.message, 'error');
     } else {
       await cleanupPendingUploads(imageUrls);
       const keepSet = new Set(imageUrls);
@@ -2619,8 +2614,8 @@ window.deleteBlogPost = async function (id) {
     text: 'Delete this post permanently?',
     icon: 'warning',
     showCancelButton: true,
-    confirmButtonColor: '#ff5f5f',
-    confirmButtonText: 'Delete',
+    confirmButtonColor: '#ffffff',
+    confirmButtonText: '<span style="color:#111;">Delete</span>',
     cancelButtonText: 'Cancel',
     background: '#1e1e1f',
     color: '#fff'
