@@ -214,7 +214,7 @@ window.switchMainView = function (viewName) {
 
   currentMainView = viewName;
 
-  document.querySelectorAll('.nav-icon-tab-btn, .mini-nav-btn').forEach(btn => {
+  document.querySelectorAll('.nav-clean-tab-btn, .mini-nav-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === viewName);
   });
 
@@ -861,14 +861,6 @@ const UNIT_SHORT_LABELS = {
   item: 'ITEM'
 };
 
-function getStatusBadgeClass(statusKey) {
-  const key = (statusKey || 'planned').toLowerCase().trim();
-  if (key === 'completed') return 'badge-status-completed';
-  if (key === 'ongoing') return 'badge-status-ongoing';
-  if (key === 'dropped') return 'badge-status-dropped';
-  return 'badge-status-planned';
-}
-
 function getLegacyCategory(item) {
   const rawCat = (item.category || '').toLowerCase().trim();
   if (rawCat === 'series' || rawCat === 'tv_show') return 'tv_show';
@@ -1377,7 +1369,7 @@ function renderMediaGrid() {
 }
 
 // ==========================================
-// 4B. MEDIA DETAIL MODAL (NEW BADGE PALETTE, PROGRESS BAR CARDS & LIGHT REVIEW RATING)
+// 4B. MEDIA DETAIL MODAL (STRICT MONOCHROME THEME + INTER TABULAR-NUMS)
 // ==========================================
 window.openMediaDetailModal = function (id) {
   const item = allMediaLogs.find(m => String(m.id) === String(id));
@@ -1392,7 +1384,6 @@ window.openMediaDetailModal = function (id) {
   const epReviews = getItemEpisodeReviews(item);
   const cats = getItemCategories(item);
   const synced = computeSyncedStatus(tracks);
-  const syncedStatusClass = getStatusBadgeClass(synced.key);
   const hasRating = item.rating !== null && item.rating !== undefined && item.rating !== '';
   const ratingText = hasRating ? `★ ${Number(item.rating).toFixed(1)}` : 'UNRATED';
   const repeatCount = Number(item.repeat_count) || 0;
@@ -1403,7 +1394,7 @@ window.openMediaDetailModal = function (id) {
     ? buildImageCarouselHtml(posterSlides, 'detail-gallery-carousel')
     : `<img class="detail-poster" src="${posterSlides[0]}" alt="${escapeHtml(item.title)}" onerror="this.src='${fallbackPoster}'">`;
 
-  // Progress Section: Visual Progress Bar + Percentage + Status Pill
+  // Progress Section: Monochrome Progress Bar + Inter Tabular Percentage + Monochrome Status Pill
   const tracksHtml = tracks.map(t => {
     const hasTotal = t.total_units !== null && t.total_units > 0;
     const unitShort = UNIT_SHORT_LABELS[t.unit_label] || (t.unit_label || '').toUpperCase();
@@ -1418,8 +1409,9 @@ window.openMediaDetailModal = function (id) {
       pct = 45;
     }
 
-    const statusBadgeClass = getStatusBadgeClass(t.status);
-    const fillClass = `fill-${(t.status || 'planned').toLowerCase().trim()}`;
+    const statusKey = (t.status || 'planned').toLowerCase().trim();
+    const statusBadgeClass = statusKey === 'completed' ? 'badge-mono-soft' : 'badge-mono-subtle';
+    const fillClass = `fill-${statusKey}`;
 
     return `
       <div class="detail-progress-card">
@@ -1438,7 +1430,7 @@ window.openMediaDetailModal = function (id) {
     `;
   }).join('');
 
-  // Review Section: Bright light-colored rating pill (no dark background)
+  // Review Section: Balanced Monochrome Rating Pill
   let epReviewsHtml = '';
   if (epReviews.length > 0) {
     epReviewsHtml = `
@@ -1481,12 +1473,12 @@ window.openMediaDetailModal = function (id) {
       ${heroVisualHtml}
       <div class="detail-meta-col">
         <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-          ${cats.map(c => `<span class="detail-pill-badge badge-cat">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('')}
+          ${cats.map(c => `<span class="detail-pill-badge badge-mono-subtle">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('')}
         </div>
         <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-          <span class="detail-pill-badge ${syncedStatusClass}">${escapeHtml(synced.label)}</span>
-          <span class="detail-pill-badge ${hasRating ? 'badge-rating' : 'badge-cat'}">${escapeHtml(ratingText)}</span>
-          ${repeatCount > 0 ? `<span class="detail-pill-badge badge-cat">↻ ${repeatCount}X</span>` : ''}
+          <span class="detail-pill-badge ${synced.key === 'completed' ? 'badge-mono-soft' : 'badge-mono-subtle'}">${escapeHtml(synced.label)}</span>
+          <span class="detail-pill-badge ${hasRating ? 'badge-mono-soft' : 'badge-mono-subtle'}">${escapeHtml(ratingText)}</span>
+          ${repeatCount > 0 ? `<span class="detail-pill-badge badge-mono-subtle">↻ ${repeatCount}X</span>` : ''}
         </div>
         <div style="font-size: 11px; color: var(--light-gray-70);">
           Updated ${formatStatusDate(item.updated_at || item.created_at)}
