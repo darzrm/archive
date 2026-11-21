@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=311">
+  <link rel="stylesheet" href="./assets/css/style.css?v=312">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -753,7 +753,7 @@
   <!-- Main JS -->
   <script src="./assets/js/script.js?v=53"></script>
 
-  <!-- Sync Helper: Grid Poster Overlay, Entry 2 Badge Hiding & Form Layout Fixes -->
+  <!-- Sync Helper: Grid Poster Overlay, Entry 2 Badge Hiding & Clean Modal Form Layout -->
   <script>
     (function () {
       let activeSizePreset = 'small';
@@ -846,6 +846,104 @@
           attributes: true,
           attributeFilter: ['style']
         });
+      }
+
+      // Normalize Modal Form Cards (Remove +1 inside cards & enforce exact 3-row layout)
+      function normalizeMediaModalCards() {
+        // 1. Categories & Progress cards:
+        // Row 1: [CATEGORY] [DELETE]
+        // Row 2: [STATUS] [JENIS COUNT]
+        // Row 3: [EPS] [MAX EPS]
+        document.querySelectorAll('#media-tracks-editor .track-edit-card').forEach(card => {
+          if (card.dataset.normalized === '1') return;
+          card.dataset.normalized = '1';
+
+          // Remove any +1 button inside track card
+          card.querySelectorAll('.step-plus-btn').forEach(btn => btn.remove());
+
+          const selects = Array.from(card.querySelectorAll('select'));
+          const numInputs = Array.from(card.querySelectorAll('input[type="number"]'));
+          const delBtn = card.querySelector('.social-remove-btn');
+
+          if (selects.length >= 3 && numInputs.length >= 2 && delBtn) {
+            const row1 = document.createElement('div');
+            row1.className = 'clean-card-row-cat';
+            row1.appendChild(selects[0]); // Category
+            row1.appendChild(delBtn);     // Delete
+
+            const row2 = document.createElement('div');
+            row2.className = 'clean-card-row-2col';
+            row2.appendChild(selects[1]); // Status
+            row2.appendChild(selects[2]); // Jenis Count
+
+            const row3 = document.createElement('div');
+            row3.className = 'clean-card-row-eps';
+            const slash = document.createElement('span');
+            slash.className = 'eps-slash';
+            slash.textContent = '/';
+            row3.appendChild(numInputs[0]); // Current Eps
+            row3.appendChild(slash);
+            row3.appendChild(numInputs[1]); // Max Eps
+
+            card.innerHTML = '';
+            card.appendChild(row1);
+            card.appendChild(row2);
+            card.appendChild(row3);
+          }
+        });
+
+        // 2. Additional Entries cards:
+        // Row 1: [CATEGORY] [NAMA ADDITIONAL] [DELETE]
+        // Row 2: [STATUS] [JENIS COUNT]
+        // Row 3: [EPS] [MAX EPS]
+        document.querySelectorAll('#media-seasons-editor .season-edit-card').forEach(card => {
+          if (card.dataset.normalized === '1') return;
+          card.dataset.normalized = '1';
+
+          // Remove any +1 button inside additional entry card
+          card.querySelectorAll('.step-plus-btn').forEach(btn => btn.remove());
+
+          const selects = Array.from(card.querySelectorAll('select'));
+          const textInput = card.querySelector('input[type="text"]');
+          const numInputs = Array.from(card.querySelectorAll('input[type="number"]'));
+          const delBtn = card.querySelector('.social-remove-btn');
+
+          if (selects.length >= 3 && textInput && numInputs.length >= 2 && delBtn) {
+            const row1 = document.createElement('div');
+            row1.className = 'clean-card-row-add';
+            row1.appendChild(selects[0]); // Category
+            row1.appendChild(textInput);  // Nama Additional
+            row1.appendChild(delBtn);     // Delete
+
+            const row2 = document.createElement('div');
+            row2.className = 'clean-card-row-2col';
+            row2.appendChild(selects[1]); // Status
+            row2.appendChild(selects[2]); // Jenis Count
+
+            const row3 = document.createElement('div');
+            row3.className = 'clean-card-row-eps';
+            const slash = document.createElement('span');
+            slash.className = 'eps-slash';
+            slash.textContent = '/';
+            row3.appendChild(numInputs[0]); // Current Eps
+            row3.appendChild(slash);
+            row3.appendChild(numInputs[1]); // Max Eps
+
+            card.innerHTML = '';
+            card.appendChild(row1);
+            card.appendChild(row2);
+            card.appendChild(row3);
+          }
+        });
+      }
+
+      const tracksEditor = document.getElementById('media-tracks-editor');
+      const seasonsEditor = document.getElementById('media-seasons-editor');
+      if (tracksEditor) {
+        new MutationObserver(normalizeMediaModalCards).observe(tracksEditor, { childList: true });
+      }
+      if (seasonsEditor) {
+        new MutationObserver(normalizeMediaModalCards).observe(seasonsEditor, { childList: true });
       }
 
       // Format Grid (Full Cover + Title with Bottom Dark Shadow) & Hide badge if total entries === 2
