@@ -82,6 +82,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupFilterListeners();
     updateSortUIControls();
 
+    // Sync view mode buttons to Compact List default
+    const gridBtn = document.getElementById('btn-view-grid');
+    const listBtn = document.getElementById('btn-view-list');
+    if (gridBtn) gridBtn.classList.toggle('active', libraryViewMode === 'grid');
+    if (listBtn) listBtn.classList.toggle('active', libraryViewMode === 'list');
+
     await checkAdminSession();
     await fetchProfileSettings();
     await Promise.all([fetchBlogPosts(), fetchMediaLogs()]);
@@ -192,11 +198,9 @@ window.switchMainView = function (viewName) {
 
   currentMainView = viewName;
 
-  document.querySelectorAll('.bottom-nav-item').forEach(btn => {
+  document.querySelectorAll('.nav-segment-btn, .mini-nav-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === viewName);
   });
-
-  setElText('sticky-active-view-badge', viewName === 'library' ? 'Library' : 'Notes');
 
   const libView = document.getElementById('view-library');
   const blogView = document.getElementById('view-blog');
@@ -296,6 +300,7 @@ window.toggleLibraryStats = function () {
 function updateAdminActionButtons() {
   const centerActionBtn = document.getElementById('btn-center-action');
   const centerActionIcon = document.getElementById('center-action-icon');
+  const centerActionLabel = document.getElementById('center-action-label');
 
   if (!centerActionBtn) return;
 
@@ -310,8 +315,10 @@ function updateAdminActionButtons() {
   if (centerActionIcon) {
     centerActionIcon.setAttribute('name', inLibrary ? 'add-outline' : 'create-outline');
   }
+  if (centerActionLabel) {
+    centerActionLabel.textContent = inLibrary ? 'Add Media' : 'New Post';
+  }
   centerActionBtn.title = inLibrary ? 'Add Media' : 'New Post';
-  centerActionBtn.setAttribute('aria-label', inLibrary ? 'Add Media' : 'New Post');
 }
 
 async function checkAdminSession() {
@@ -470,7 +477,6 @@ async function cleanupPendingUploads(keepUrls = []) {
   pendingUploadedUrls = [];
 }
 
-// Reusable Image Slider / Carousel Builder & Controller
 function buildImageCarouselHtml(urls, extraClass = '') {
   const cleanUrls = (Array.isArray(urls) ? urls : [])
     .map(u => normalizeImageUrl(u))
@@ -677,7 +683,7 @@ window.addSocialLinkRow = function (label = '', url = '') {
   const row = document.createElement('div');
   row.className = 'social-edit-row';
   row.innerHTML = `
-    <input type="text" class="form-input social-label-input" placeholder="Label (e.g. GitHub)" value="${escapeHtml(label)}">
+    <input type="text" class="form-input social-label-input" placeholder="Label" value="${escapeHtml(label)}">
     <input type="url" class="form-input social-url-input" placeholder="https://..." value="${escapeHtml(url)}">
     <button type="button" class="social-remove-btn" onclick="this.parentElement.remove()" title="Remove">
       <ion-icon name="trash-outline"></ion-icon>
@@ -719,7 +725,7 @@ window.closeProfileModal = async function () {
 
 window.clearBannerInput = function () {
   document.getElementById('edit-profile-banner').value = '';
-  setElText('banner-upload-status', 'Banner removed (click Save Settings).');
+  setElText('banner-upload-status', 'Banner removed.');
 };
 
 window.handleBannerImageUpload = async function (event) {
@@ -727,14 +733,14 @@ window.handleBannerImageUpload = async function (event) {
   event.target.value = '';
   if (!file) return;
 
-  setElText('banner-upload-status', 'Uploading banner...');
+  setElText('banner-upload-status', 'Uploading...');
   try {
     const publicUrl = await uploadImageToSupabase(file, 'banners');
     document.getElementById('edit-profile-banner').value = publicUrl;
-    setElText('banner-upload-status', 'Banner uploaded! Click Save Settings.');
+    setElText('banner-upload-status', 'Uploaded!');
     showToast('Banner uploaded', 'success');
   } catch (err) {
-    setElText('banner-upload-status', `Upload failed: ${err.message}`);
+    setElText('banner-upload-status', `Failed: ${err.message}`);
     showToast(err.message, 'error');
   }
 };
@@ -744,14 +750,14 @@ window.handleProfileImageUpload = async function (event) {
   event.target.value = '';
   if (!file) return;
 
-  setElText('profile-upload-status', 'Uploading avatar...');
+  setElText('profile-upload-status', 'Uploading...');
   try {
     const publicUrl = await uploadImageToSupabase(file, 'avatars');
     document.getElementById('edit-profile-avatar').value = publicUrl;
-    setElText('profile-upload-status', 'Avatar uploaded! Click Save Settings.');
+    setElText('profile-upload-status', 'Uploaded!');
     showToast('Avatar uploaded', 'success');
   } catch (err) {
-    setElText('profile-upload-status', `Upload failed: ${err.message}`);
+    setElText('profile-upload-status', `Failed: ${err.message}`);
     showToast(err.message, 'error');
   }
 };
@@ -876,12 +882,14 @@ function getItemTracks(item) {
 
 function getItemEpisodeReviews(item) {
   if (!Array.isArray(item.episode_reviews)) return [];
-  return item.episode_reviews.map(r => ({
-    number: (r.number || '').toString().trim(),
-    title: (r.title || '').toString().trim(),
-    rating: (r.rating !== null && r.rating !== undefined && r.rating !== '') ? Number(r.rating) : null,
-    note: (r.note || '').toString().trim()
-  }));
+  return item.episode_reviews
+    .map(r => ({
+      number: (r.number || '').toString().trim(),
+      title: (r.title || '').toString().trim(),
+      rating: (r.rating !== null && r.rating !== undefined && r.rating !== '') ? Number(r.rating) : null,
+      note: (r.note || '').toString().trim()
+    }))
+    .filter(r => r.number || r.title || r.rating !== null || r.note);
 }
 
 function getItemGalleryUrls(item) {
@@ -942,33 +950,6 @@ function computeSyncedStatus(unitsList) {
     return { key: 'dropped', label: 'Dropped' };
   }
   return { key: 'planned', label: 'Planned' };
-}
-
-function computeCombinedProgress(unitsList, syncedStatusKey) {
-  const totalProgress = unitsList.reduce((sum, t) => sum + (Number(t.progress) || 0), 0);
-  const allHaveTotal = unitsList.every(t => t.total_units !== null && Number(t.total_units) > 0);
-  const totalUnits = allHaveTotal
-    ? unitsList.reduce((sum, t) => sum + Number(t.total_units), 0)
-    : null;
-
-  const text = totalUnits !== null ? `${totalProgress}/${totalUnits}` : `${totalProgress}/?`;
-
-  let percent = 0;
-  if (syncedStatusKey === 'completed') {
-    percent = 100;
-  } else if (totalUnits !== null && totalUnits > 0) {
-    percent = Math.min(100, Math.max(0, Math.round((totalProgress / totalUnits) * 100)));
-  } else if (syncedStatusKey === 'planned') {
-    percent = 100;
-  } else {
-    percent = totalProgress > 0 ? 45 : 0;
-  }
-
-  return {
-    text,
-    percent,
-    isPlannedEmpty: syncedStatusKey === 'planned' && totalProgress === 0
-  };
 }
 
 // ==========================================
@@ -1078,7 +1059,7 @@ function updateStatsUI() {
 }
 
 // ==========================================
-// 4. FILTER (CUSTOM RANGES), SORT (2-WAY), PAGINATION & RENDER MEDIA
+// 4. FILTER, SORT, PAGINATION & RENDER MEDIA
 // ==========================================
 function resetPaginationAndRender() {
   visibleMediaLimit = itemsPerPage;
@@ -1269,7 +1250,8 @@ function renderMediaGrid() {
     const matchTitle = (item.title || '').toLowerCase().includes(query);
     const matchEpReview = epReviews.some(ep =>
       (ep.title || '').toLowerCase().includes(query) ||
-      (ep.number || '').toLowerCase().includes(query)
+      (ep.number || '').toLowerCase().includes(query) ||
+      (ep.note || '').toLowerCase().includes(query)
     );
     const matchQuery = !query || matchTitle || matchEpReview;
 
@@ -1322,7 +1304,7 @@ function renderMediaGrid() {
     }
   }
 
-  // COMPACT LIST VIEW RENDER
+  // COMPACT LIST VIEW RENDER (DEFAULT)
   if (libraryViewMode === 'list') {
     grid.innerHTML = displayedItems.map(item => {
       const safeId = escapeHtml(String(item.id));
@@ -1334,12 +1316,12 @@ function renderMediaGrid() {
 
       const catLabels = cats.map(c => CATEGORY_LABELS[c] || c).join(' / ');
       const epTagHtml = epReviews.length > 0
-        ? `<span class="list-ep-review-tag">★ ${epReviews.length} Ep Reviews</span>`
+        ? `<span class="list-ep-review-tag">★ ${epReviews.length} Review</span>`
         : '';
       const repeatHtml = repeatCount > 0 ? `<span class="list-repeat-tag">↻ ${repeatCount}x</span>` : '';
 
       const editBtnHtml = isAdminLoggedIn ? `
-        <button type="button" class="list-edit-btn" onclick="event.stopPropagation(); openEditModal('${safeId}')" title="Edit Entry">
+        <button type="button" class="list-edit-btn" onclick="event.stopPropagation(); openEditModal('${safeId}')" title="Edit">
           <ion-icon name="create-outline"></ion-icon>
         </button>
       ` : '';
@@ -1365,29 +1347,26 @@ function renderMediaGrid() {
     return;
   }
 
-  // GRID VIEW RENDER
+  // POSTER GRID VIEW RENDER (NO STATUS & NO TOTAL COUNT)
   grid.innerHTML = displayedItems.map(item => {
     const safeId = escapeHtml(String(item.id));
     const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
     const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
     const repeatCount = Number(item.repeat_count) || 0;
-    const allUnits = getAllItemUnits(item);
     const cats = getItemCategories(item);
     const epReviews = getItemEpisodeReviews(item);
-    const synced = computeSyncedStatus(allUnits);
-    const combined = computeCombinedProgress(allUnits, synced.key);
 
     const catBadgesHtml = cats.map(c => `<span class="badge-cat">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('');
     const repeatBadgeHtml = repeatCount > 0
-      ? `<span class="badge-repeat" title="Rewatch / Reread count">↻ ${repeatCount}x</span>`
+      ? `<span class="badge-repeat" title="Rewatch">↻ ${repeatCount}x</span>`
       : '';
 
     const epBadgeHtml = epReviews.length > 0
-      ? `<span class="badge-seasons">${epReviews.length} Ep</span>`
+      ? `<span class="badge-seasons">★ ${epReviews.length}</span>`
       : '';
 
     const coverEditHtml = isAdminLoggedIn ? `
-      <button type="button" class="cover-edit-btn" onclick="event.stopPropagation(); openEditModal('${safeId}')" title="Edit Entry">
+      <button type="button" class="cover-edit-btn" onclick="event.stopPropagation(); openEditModal('${safeId}')" title="Edit">
         <ion-icon name="create-outline"></ion-icon>
       </button>
     ` : '';
@@ -1403,14 +1382,8 @@ function renderMediaGrid() {
           </div>
           ${epBadgeHtml}
           ${coverEditHtml}
-        </div>
-        <div class="media-body">
-          <h3 class="media-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h3>
-          <div class="media-bottom-stack">
-            <div class="media-meta-row">
-              <span class="status-pill ${synced.key}">${escapeHtml(synced.label)}</span>
-              <span class="progress-pill ${synced.key}">${combined.text}</span>
-            </div>
+          <div class="poster-bottom-overlay">
+            <h3 class="poster-overlay-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h3>
           </div>
         </div>
       </div>
@@ -1419,7 +1392,7 @@ function renderMediaGrid() {
 }
 
 // ==========================================
-// 4B. MEDIA DETAIL MODAL (WITH GALLERY SLIDER & IMDb/SERIESGRAPH EPISODE REVIEWS)
+// 4B. MEDIA DETAIL MODAL (ONLY SHOWS REVIEW SECTION IF REVIEWS EXIST)
 // ==========================================
 window.openMediaDetailModal = function (id) {
   const item = allMediaLogs.find(m => String(m.id) === String(id));
@@ -1458,7 +1431,7 @@ window.openMediaDetailModal = function (id) {
     `;
   }).join('');
 
-  // Episode / Chapter Reviews Section (IMDb / SeriesGraph style)
+  // Render Review section ONLY if epReviews has entries
   let epReviewsHtml = '';
   if (epReviews.length > 0) {
     const ratedEps = epReviews.filter(e => e.rating !== null && !Number.isNaN(e.rating));
@@ -1469,15 +1442,14 @@ window.openMediaDetailModal = function (id) {
     epReviewsHtml = `
       <div>
         <div class="ep-graph-header">
-          <div class="detail-section-title" style="margin-bottom: 0;">Episode / Chapter Reviews (${epReviews.length})</div>
+          <div class="detail-section-title" style="margin-bottom: 0;">Review (${epReviews.length})</div>
           ${avgEpScore ? `<span class="ep-graph-avg">★ Avg ${avgEpScore}</span>` : ''}
         </div>
         <div class="ep-review-cards-list">
           ${epReviews.map((ep, idx) => {
             const numLabel = ep.number || `#${idx + 1}`;
-            const titleLabel = ep.title || `Episode ${idx + 1}`;
             const hasScore = ep.rating !== null && !Number.isNaN(ep.rating);
-            const scoreStr = hasScore ? `★ ${Number(ep.rating).toFixed(1)}` : '—';
+            const scoreStr = hasScore ? `★ ${Number(ep.rating).toFixed(1)}` : '';
             const tierClass = getSeriesGraphRatingClass(ep.rating);
 
             return `
@@ -1485,9 +1457,9 @@ window.openMediaDetailModal = function (id) {
                 <div class="ep-review-main">
                   <div class="ep-review-left">
                     <span class="ep-num-badge">${escapeHtml(numLabel)}</span>
-                    <span class="ep-title-text" title="${escapeHtml(titleLabel)}">${escapeHtml(titleLabel)}</span>
+                    ${ep.title ? `<span class="ep-title-text" title="${escapeHtml(ep.title)}">${escapeHtml(ep.title)}</span>` : ''}
                   </div>
-                  <span class="sg-rating-badge ${tierClass}">${scoreStr}</span>
+                  ${hasScore ? `<span class="sg-rating-badge ${tierClass}">${scoreStr}</span>` : ''}
                 </div>
                 ${ep.note ? `<div class="ep-review-note">${escapeHtml(ep.note)}</div>` : ''}
               </div>
@@ -1502,7 +1474,7 @@ window.openMediaDetailModal = function (id) {
     <div class="modal-submit-row">
       <button type="button" class="form-btn primary-submit" onclick="closeMediaDetailModal(); openEditModal('${safeId}');">
         <ion-icon name="create-outline"></ion-icon>
-        <span>Edit Entry</span>
+        <span>Edit</span>
       </button>
     </div>
   ` : '';
@@ -1526,7 +1498,7 @@ window.openMediaDetailModal = function (id) {
     </div>
 
     <div>
-      <div class="detail-section-title">Progress Tracks</div>
+      <div class="detail-section-title">Progress</div>
       <div class="detail-list">${tracksHtml}</div>
     </div>
 
@@ -1542,48 +1514,56 @@ window.closeMediaDetailModal = function () {
 };
 
 // ==========================================
-// 5. ADD / EDIT MODAL (MULTI-IMAGE SLIDER & EPISODE REVIEWS)
+// 5. ADD / EDIT MODAL (50:50 COVER & 50:50 REVIEW)
 // ==========================================
 window.addMediaImageRow = function (url = '') {
   const container = document.getElementById('media-gallery-editor');
   if (!container) return;
 
-  const clean = normalizeImageUrl(url);
   const row = document.createElement('div');
-  row.className = 'multi-img-row';
+  row.className = 'cover-split-row';
   row.innerHTML = `
-    <img class="multi-img-thumb" src="${clean || TRANSPARENT_PIXEL}" alt="" onerror="this.src='${TRANSPARENT_PIXEL}'">
-    <input type="url" class="form-input media-gallery-url-input" placeholder="Image URL (https://...)" value="${escapeHtml(url)}" oninput="this.previousElementSibling.src = this.value.trim() || '${TRANSPARENT_PIXEL}'">
-    <button type="button" class="social-remove-btn" onclick="this.parentElement.remove()" title="Remove Image">
+    <input type="url" class="form-input media-gallery-url-input" placeholder="Cover URL" value="${escapeHtml(url)}">
+    <label class="equal-upload-btn" title="Upload">
+      <ion-icon name="cloud-upload-outline"></ion-icon>
+      <span>Upload</span>
+      <input type="file" accept="image/*" hidden onchange="handleSingleCoverRowUpload(event, this)">
+    </label>
+    <button type="button" class="social-remove-btn" onclick="removeMediaImageRow(this)" title="Remove">
       <ion-icon name="trash-outline"></ion-icon>
     </button>
   `;
   container.appendChild(row);
 };
 
-window.handleMediaGalleryUpload = async function (event) {
-  const files = event.target.files ? Array.from(event.target.files) : [];
-  event.target.value = '';
-  if (files.length === 0) return;
+window.removeMediaImageRow = function (btn) {
+  const container = document.getElementById('media-gallery-editor');
+  const row = btn.closest('.cover-split-row');
+  if (!row || !container) return;
+  if (container.children.length <= 1) {
+    const inp = row.querySelector('.media-gallery-url-input');
+    if (inp) inp.value = '';
+    return;
+  }
+  row.remove();
+};
 
-  setElText('cover-upload-status', `Uploading ${files.length} image(s)...`);
+window.handleSingleCoverRowUpload = async function (event, fileInput) {
+  const file = event.target.files ? event.target.files[0] : null;
+  event.target.value = '';
+  if (!file) return;
+
+  const row = fileInput.closest('.cover-split-row');
+  const urlInput = row ? row.querySelector('.media-gallery-url-input') : null;
+
+  setElText('cover-upload-status', 'Uploading...');
   try {
-    for (const file of files) {
-      const publicUrl = await uploadImageToSupabase(file, 'covers');
-      // If first row is empty, fill it instead of leaving blank row
-      const existingInputs = Array.from(document.querySelectorAll('#media-gallery-editor .media-gallery-url-input'));
-      const emptyInput = existingInputs.find(inp => !inp.value.trim());
-      if (emptyInput) {
-        emptyInput.value = publicUrl;
-        if (emptyInput.previousElementSibling) emptyInput.previousElementSibling.src = publicUrl;
-      } else {
-        addMediaImageRow(publicUrl);
-      }
-    }
-    setElText('cover-upload-status', `${files.length} image(s) uploaded!`);
-    showToast('Images uploaded', 'success');
+    const publicUrl = await uploadImageToSupabase(file, 'covers');
+    if (urlInput) urlInput.value = publicUrl;
+    setElText('cover-upload-status', 'Uploaded!');
+    showToast('Cover uploaded', 'success');
   } catch (err) {
-    setElText('cover-upload-status', `Upload failed: ${err.message}`);
+    setElText('cover-upload-status', `Failed: ${err.message}`);
     showToast(err.message, 'error');
   }
 };
@@ -1610,7 +1590,7 @@ window.addMediaTrackRow = function (track = null) {
         <option value="game" ${cat === 'game' ? 'selected' : ''}>Game</option>
         <option value="music" ${cat === 'music' ? 'selected' : ''}>Music</option>
       </select>
-      <button type="button" class="social-remove-btn" onclick="removeMediaTrackRow(this)" title="Remove Category">
+      <button type="button" class="social-remove-btn" onclick="removeMediaTrackRow(this)" title="Remove">
         <ion-icon name="trash-outline"></ion-icon>
       </button>
     </div>
@@ -1642,7 +1622,7 @@ window.addMediaTrackRow = function (track = null) {
 window.removeMediaTrackRow = function (btn) {
   const container = document.getElementById('media-tracks-editor');
   if (container && container.children.length <= 1) {
-    showToast('At least 1 category track is required', 'info');
+    showToast('At least 1 progress track is required', 'info');
     return;
   }
   const card = btn.closest('.track-edit-card');
@@ -1672,30 +1652,28 @@ window.onTrackStatusOrTotalChange = function (el) {
   }
 };
 
-// Episode / Chapter Review Row Builder
+// Review Row Builder (50% Part + 50% Notes)
 window.addEpisodeReviewRow = function (ep = null) {
   const container = document.getElementById('media-ep-reviews-editor');
   if (!container) return;
 
-  const numVal = (ep && ep.number) ? ep.number : `Ep ${container.children.length + 1}`;
-  const titleVal = (ep && ep.title) ? ep.title : '';
+  const numVal = (ep && ep.number) ? ep.number : '';
   const ratingVal = (ep && ep.rating !== null && ep.rating !== undefined && ep.rating !== '') ? ep.rating : '';
-  const noteVal = (ep && ep.note) ? ep.note : '';
+  const noteVal = (ep && (ep.note || ep.title)) ? (ep.note || ep.title) : '';
 
-  const card = document.createElement('div');
-  card.className = 'ep-review-edit-card';
-  card.innerHTML = `
-    <div class="ep-review-edit-top">
-      <input type="text" class="form-input ep-num-input" placeholder="Ep 1 / Ch 1" value="${escapeHtml(numVal)}">
-      <input type="text" class="form-input ep-title-input" placeholder="Episode / Chapter name..." value="${escapeHtml(titleVal)}">
-      <input type="number" class="form-input ep-rating-input" step="0.1" min="1.0" max="10.0" placeholder="★ 1-10" value="${ratingVal}">
-      <button type="button" class="social-remove-btn" onclick="this.closest('.ep-review-edit-card').remove()" title="Remove Review">
-        <ion-icon name="trash-outline"></ion-icon>
-      </button>
+  const row = document.createElement('div');
+  row.className = 'review-split-row';
+  row.innerHTML = `
+    <div class="review-part-group">
+      <input type="text" class="form-input ep-num-input" placeholder="Ch / Eps" value="${escapeHtml(numVal)}">
+      <input type="number" class="form-input ep-rating-input" step="0.1" min="1.0" max="10.0" placeholder="Rating" value="${ratingVal}">
     </div>
-    <input type="text" class="form-input ep-note-input" placeholder="Optional note / mini review..." value="${escapeHtml(noteVal)}">
+    <input type="text" class="form-input ep-note-input" placeholder="Notes" value="${escapeHtml(noteVal)}">
+    <button type="button" class="social-remove-btn" onclick="this.closest('.review-split-row').remove()" title="Remove">
+      <ion-icon name="trash-outline"></ion-icon>
+    </button>
   `;
-  container.appendChild(card);
+  container.appendChild(row);
 };
 
 window.openMediaModal = function () {
@@ -1720,8 +1698,12 @@ window.openMediaModal = function () {
     addMediaTrackRow({ category: 'tv_show', status: 'completed', progress: 0, total_units: '', unit_label: 'eps' });
   }
 
+  // Auto-add 1 empty Review row so user doesn't have to click Add
   const epEditor = document.getElementById('media-ep-reviews-editor');
-  if (epEditor) epEditor.innerHTML = '';
+  if (epEditor) {
+    epEditor.innerHTML = '';
+    addEpisodeReviewRow();
+  }
 
   document.getElementById('media-modal').classList.add('active');
 };
@@ -1767,7 +1749,12 @@ window.openEditModal = function (id) {
   const epEditor = document.getElementById('media-ep-reviews-editor');
   if (epEditor) {
     epEditor.innerHTML = '';
-    getItemEpisodeReviews(item).forEach(ep => addEpisodeReviewRow(ep));
+    const existingReviews = getItemEpisodeReviews(item);
+    if (existingReviews.length > 0) {
+      existingReviews.forEach(ep => addEpisodeReviewRow(ep));
+    } else {
+      addEpisodeReviewRow();
+    }
   }
 
   document.getElementById('media-modal').classList.add('active');
@@ -2109,7 +2096,7 @@ window.searchExternalAPI = async function () {
   lastApiResults = items;
 
   if (items.length === 0) {
-    resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">No results found. Please fill in the fields manually below.</p>`;
+    resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">No results found.</p>`;
     return;
   }
 
@@ -2139,7 +2126,6 @@ window.applyApiResult = async function (idx) {
     if (!hasAnyCover) {
       if (existingInputs[0]) {
         existingInputs[0].value = item.cover;
-        if (existingInputs[0].previousElementSibling) existingInputs[0].previousElementSibling.src = item.cover;
       } else {
         addMediaImageRow(item.cover);
       }
@@ -2207,7 +2193,7 @@ if (mediaForm) {
     });
     const newPrimaryCover = galleryUrls[0] || null;
 
-    // Collect category tracks
+    // Collect progress tracks
     const trackCards = document.querySelectorAll('#media-tracks-editor .track-edit-card');
     const tracks = [];
     trackCards.forEach(card => {
@@ -2232,24 +2218,23 @@ if (mediaForm) {
     });
 
     if (tracks.length === 0) {
-      showToast('Please add at least 1 category track', 'error');
+      showToast('At least 1 progress track is required', 'error');
       return;
     }
 
-    // Collect Episode / Chapter Reviews
-    const epCards = document.querySelectorAll('#media-ep-reviews-editor .ep-review-edit-card');
+    // Collect Reviews (ignore empty rows)
+    const epRows = document.querySelectorAll('#media-ep-reviews-editor .review-split-row');
     const episodeReviews = [];
-    epCards.forEach(card => {
-      const numStr = card.querySelector('.ep-num-input')?.value.trim() || '';
-      const titleStr = card.querySelector('.ep-title-input')?.value.trim() || '';
-      const ratingRaw = card.querySelector('.ep-rating-input')?.value ?? '';
-      const noteStr = card.querySelector('.ep-note-input')?.value.trim() || '';
+    epRows.forEach(row => {
+      const numStr = row.querySelector('.ep-num-input')?.value.trim() || '';
+      const ratingRaw = row.querySelector('.ep-rating-input')?.value ?? '';
+      const noteStr = row.querySelector('.ep-note-input')?.value.trim() || '';
 
-      if (!numStr && !titleStr && ratingRaw === '' && !noteStr) return;
+      if (!numStr && ratingRaw === '' && !noteStr) return;
 
       episodeReviews.push({
         number: numStr,
-        title: titleStr,
+        title: '',
         rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null,
         note: noteStr
       });
@@ -2299,7 +2284,7 @@ if (mediaForm) {
       }
       document.getElementById('media-modal').classList.remove('active');
       await fetchMediaLogs();
-      showToast(id ? 'Media entry updated' : 'Media entry added', 'success');
+      showToast(id ? 'Updated' : 'Saved', 'success');
     }
   });
 }
@@ -2335,7 +2320,7 @@ window.deleteCurrentModalMedia = async function () {
       }
       document.getElementById('media-modal').classList.remove('active');
       await fetchMediaLogs();
-      showToast('Entry deleted', 'info');
+      showToast('Deleted', 'info');
     }
   }
 };
@@ -2459,10 +2444,10 @@ function renderBlogPosts() {
 
     const adminControls = isAdminLoggedIn ? `
       <div class="blog-post-actions">
-        <button type="button" class="blog-icon-btn" onclick="openEditPostModal('${safePostId}')" title="Edit Post">
+        <button type="button" class="blog-icon-btn" onclick="openEditPostModal('${safePostId}')" title="Edit">
           <ion-icon name="create-outline"></ion-icon>
         </button>
-        <button type="button" class="blog-icon-btn delete" onclick="deleteBlogPost('${safePostId}')" title="Delete Post">
+        <button type="button" class="blog-icon-btn delete" onclick="deleteBlogPost('${safePostId}')" title="Delete">
           <ion-icon name="trash-outline"></ion-icon>
         </button>
       </div>
@@ -2501,8 +2486,8 @@ window.addPostImageRow = function (url = '') {
   row.className = 'multi-img-row';
   row.innerHTML = `
     <img class="multi-img-thumb" src="${clean || TRANSPARENT_PIXEL}" alt="" onerror="this.src='${TRANSPARENT_PIXEL}'">
-    <input type="url" class="form-input post-image-url-input" placeholder="Image URL (https://...)" value="${escapeHtml(url)}" oninput="this.previousElementSibling.src = this.value.trim() || '${TRANSPARENT_PIXEL}'">
-    <button type="button" class="social-remove-btn" onclick="this.parentElement.remove()" title="Remove Photo">
+    <input type="url" class="form-input post-image-url-input" placeholder="Image URL" value="${escapeHtml(url)}" oninput="this.previousElementSibling.src = this.value.trim() || '${TRANSPARENT_PIXEL}'">
+    <button type="button" class="social-remove-btn" onclick="this.parentElement.remove()" title="Remove">
       <ion-icon name="trash-outline"></ion-icon>
     </button>
   `;
@@ -2514,7 +2499,7 @@ window.handlePostImagesUpload = async function (event) {
   event.target.value = '';
   if (files.length === 0) return;
 
-  setElText('post-upload-status', `Uploading ${files.length} photo(s)...`);
+  setElText('post-upload-status', 'Uploading...');
   try {
     for (const file of files) {
       const publicUrl = await uploadImageToSupabase(file, 'posts');
@@ -2527,10 +2512,10 @@ window.handlePostImagesUpload = async function (event) {
         addPostImageRow(publicUrl);
       }
     }
-    setElText('post-upload-status', `${files.length} photo(s) uploaded!`);
-    showToast('Photos uploaded', 'success');
+    setElText('post-upload-status', 'Uploaded!');
+    showToast('Uploaded', 'success');
   } catch (err) {
-    setElText('post-upload-status', `Upload failed: ${err.message}`);
+    setElText('post-upload-status', `Failed: ${err.message}`);
     showToast(err.message, 'error');
   }
 };
@@ -2622,7 +2607,7 @@ if (postForm) {
       }
       document.getElementById('post-modal').classList.remove('active');
       await fetchBlogPosts();
-      showToast(id ? 'Post updated' : 'Post published', 'success');
+      showToast(id ? 'Updated' : 'Published', 'success');
     }
   });
 }
@@ -2653,7 +2638,7 @@ window.deleteBlogPost = async function (id) {
         }
       }
       await fetchBlogPosts();
-      showToast('Post deleted', 'info');
+      showToast('Deleted', 'info');
     }
   }
 };
