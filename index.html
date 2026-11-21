@@ -9,13 +9,13 @@
 
   <link id="favicon-link" rel="icon" type="image/png" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
 
-  <!-- Google Fonts: Inter -->
+  <!-- Google Fonts: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=360">
+  <link rel="stylesheet" href="./assets/css/style.css?v=370">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -27,7 +27,7 @@
   <!-- Minimalist Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <!-- STICKY MINI HEADER ON SCROLL -->
+  <!-- STICKY MINI HEADER ON SCROLL (LARGER + ICON-ONLY SEPARATE TABS) -->
   <header class="sticky-mini-header" id="sticky-mini-header">
     <div class="sticky-mini-inner">
       <div class="sticky-mini-profile" onclick="scrollToTopSmooth()" title="Scroll to top">
@@ -36,8 +36,12 @@
       </div>
 
       <div class="sticky-mini-nav">
-        <button type="button" class="mini-nav-btn active" data-view="blog" onclick="switchMainView('blog')">Notes</button>
-        <button type="button" class="mini-nav-btn" id="mini-tab-library" data-view="library" onclick="switchMainView('library')">Library</button>
+        <button type="button" class="mini-nav-btn active" data-view="blog" onclick="switchMainView('blog')" title="Notes" aria-label="Notes">
+          <ion-icon name="document-text-outline"></ion-icon>
+        </button>
+        <button type="button" class="mini-nav-btn" id="mini-tab-library" data-view="library" onclick="switchMainView('library')" title="Library" aria-label="Library">
+          <ion-icon name="albums-outline"></ion-icon>
+        </button>
       </div>
     </div>
   </header>
@@ -78,18 +82,18 @@
         <div class="profile-socials-bar" id="profile-socials-bar" style="display: none;"></div>
       </div>
 
-      <!-- INTEGRATED MAIN NAVIGATION BAR -->
+      <!-- INTEGRATED MAIN NAVIGATION BAR (SEPARATE ICON-ONLY BUTTONS) -->
       <nav class="primary-nav-bar" aria-label="Primary Navigation">
-        <div class="segmented-nav-tabs" role="tablist">
-          <button type="button" class="nav-segment-btn active" id="tab-btn-blog" data-view="blog" onclick="switchMainView('blog')">
+        <div class="separate-nav-tabs" role="tablist">
+          <button type="button" class="nav-icon-tab-btn active" id="tab-btn-blog" data-view="blog" onclick="switchMainView('blog')" title="Notes" aria-label="Notes">
             <ion-icon name="document-text-outline"></ion-icon>
-            <span>Notes</span>
           </button>
 
-          <button type="button" class="nav-segment-btn" id="bottom-tab-library" data-view="library" onclick="switchMainView('library')">
+          <button type="button" class="nav-icon-tab-btn" id="bottom-tab-library" data-view="library" onclick="switchMainView('library')" title="Library" aria-label="Library">
             <ion-icon name="albums-outline"></ion-icon>
-            <span>Library</span>
-            <ion-icon name="lock-closed" id="library-private-lock" class="nav-lock-tag" style="display: none;" title="Private (Admin Only)"></ion-icon>
+            <span id="library-private-lock" class="nav-lock-dot" style="display: none;" title="Private (Admin Only)">
+              <ion-icon name="lock-closed"></ion-icon>
+            </span>
           </button>
         </div>
 
@@ -277,7 +281,7 @@
         </ul>
       </nav>
 
-      <!-- SEARCH, POPOVER FILTER, SORT, CUSTOM PAGES POPOVER & VIEW SWITCHER -->
+      <!-- SEARCH, FILTER, SORT & UNIFIED DISPLAY/VIEW MODAL BUTTON -->
       <section class="library-toolbar">
         <div class="search-box">
           <ion-icon name="search-outline"></ion-icon>
@@ -288,7 +292,7 @@
           <!-- Filter Popover Button -->
           <div class="popover-wrapper" id="filter-popover-wrap">
             <button type="button" class="toolbar-btn" id="btn-filter-toggle" onclick="toggleToolbarPopover('filter')">
-              <ion-icon name="options-outline"></ion-icon>
+              <ion-icon name="funnel-outline"></ion-icon>
               <span>Filter</span>
               <span class="active-indicator-dot" id="filter-active-dot" style="display: none;"></span>
             </button>
@@ -366,46 +370,10 @@
             </div>
           </div>
 
-          <!-- Custom Icon-Only Per Page Popover (DEFAULT: MEDIUM) -->
-          <div class="popover-wrapper" id="pages-popover-wrap">
-            <button type="button" class="toolbar-btn icon-only-btn" id="btn-pages-toggle" onclick="toggleToolbarPopover('pages')" title="Display size" aria-label="Display size">
-              <ion-icon name="layers-outline"></ion-icon>
-            </button>
-
-            <div class="toolbar-popover-menu compact-popover-menu" id="pages-popover-menu">
-              <div class="popover-header">
-                <span>Display Size</span>
-              </div>
-              <div class="page-option-list">
-                <button type="button" class="page-option-item" data-size="small" data-limit="8" onclick="selectPresetPageSize('small')">
-                  <span>Small <small class="size-count-hint">(8)</small></span>
-                  <ion-icon name="checkmark-outline"></ion-icon>
-                </button>
-                <button type="button" class="page-option-item active" data-size="medium" data-limit="16" onclick="selectPresetPageSize('medium')">
-                  <span>Medium <small class="size-count-hint">(16)</small></span>
-                  <ion-icon name="checkmark-outline"></ion-icon>
-                </button>
-                <button type="button" class="page-option-item" data-size="large" data-limit="32" onclick="selectPresetPageSize('large')">
-                  <span>Large <small class="size-count-hint">(32)</small></span>
-                  <ion-icon name="checkmark-outline"></ion-icon>
-                </button>
-                <button type="button" class="page-option-item" data-size="all" data-limit="all" onclick="selectPresetPageSize('all')">
-                  <span>All</span>
-                  <ion-icon name="checkmark-outline"></ion-icon>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Grid / List View Switcher (DEFAULT: POSTER GRID) -->
-          <div class="view-mode-toggle" title="Switch layout">
-            <button type="button" id="btn-view-grid" class="view-mode-btn active" onclick="setLibraryViewMode('grid')" aria-label="Poster Grid View">
-              <ion-icon name="grid-outline"></ion-icon>
-            </button>
-            <button type="button" id="btn-view-list" class="view-mode-btn" onclick="setLibraryViewMode('list')" aria-label="Compact List View">
-              <ion-icon name="list-outline"></ion-icon>
-            </button>
-          </div>
+          <!-- SINGLE UNIFIED BUTTON FOR DISPLAY SIZE & VIEW MODE MODAL -->
+          <button type="button" class="toolbar-btn icon-only-btn" id="btn-display-options" onclick="openDisplayOptionsModal()" title="Display & Layout" aria-label="Display & Layout">
+            <ion-icon name="grid-outline" id="display-options-icon"></ion-icon>
+          </button>
         </div>
       </section>
 
@@ -434,6 +402,61 @@
   <button type="button" id="btn-back-to-top" class="back-to-top-btn" onclick="scrollToTopSmooth()" title="Back to top" aria-label="Back to top">
     <ion-icon name="arrow-up-outline"></ion-icon>
   </button>
+
+  <!-- ========================================== -->
+  <!-- MODAL 0: DISPLAY SIZE & VIEW MODE          -->
+  <!-- ========================================== -->
+  <div class="modal-overlay" id="display-options-modal" onclick="if(event.target === this) closeDisplayOptionsModal()">
+    <div class="modal-box" style="max-width: 390px;">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="modal-icon-badge">
+            <ion-icon name="options-outline"></ion-icon>
+          </div>
+          <h3>Display & Layout</h3>
+        </div>
+        <button type="button" class="close-modal-btn" onclick="closeDisplayOptionsModal()">&times;</button>
+      </div>
+
+      <div class="modal-form">
+        <div class="form-group">
+          <label>View Mode</label>
+          <div class="display-mode-grid">
+            <button type="button" id="modal-btn-view-grid" class="display-choice-card active" onclick="setLibraryViewMode('grid')">
+              <ion-icon name="grid-outline"></ion-icon>
+              <span>Poster Grid</span>
+            </button>
+            <button type="button" id="modal-btn-view-list" class="display-choice-card" onclick="setLibraryViewMode('list')">
+              <ion-icon name="list-outline"></ion-icon>
+              <span>Compact List</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Display Size</label>
+          <div class="page-option-list">
+            <button type="button" class="page-option-item" data-size="small" data-limit="8" onclick="selectPresetPageSize('small')">
+              <span>Small <small class="size-count-hint">(8)</small></span>
+              <ion-icon name="checkmark-outline"></ion-icon>
+            </button>
+            <button type="button" class="page-option-item active" data-size="medium" data-limit="16" onclick="selectPresetPageSize('medium')">
+              <span>Medium <small class="size-count-hint">(16)</small></span>
+              <ion-icon name="checkmark-outline"></ion-icon>
+            </button>
+            <button type="button" class="page-option-item" data-size="large" data-limit="32" onclick="selectPresetPageSize('large')">
+              <span>Large <small class="size-count-hint">(32)</small></span>
+              <ion-icon name="checkmark-outline"></ion-icon>
+            </button>
+            <button type="button" class="page-option-item" data-size="all" data-limit="all" onclick="selectPresetPageSize('all')">
+              <span>All Entries</span>
+              <ion-icon name="checkmark-outline"></ion-icon>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ========================================== -->
   <!-- MODAL 1: ADD / EDIT MEDIA                  -->
@@ -574,7 +597,7 @@
           <textarea id="post-content" class="form-input note-textarea-large" rows="6" required placeholder="Write something..."></textarea>
         </div>
 
-        <!-- IMAGE SECTION: Header with Add button on far right + at least 1 row (50% URL | 50% Upload + Delete) -->
+        <!-- IMAGE SECTION -->
         <div class="form-group">
           <div class="social-editor-header">
             <label style="margin: 0;">Image</label>
@@ -741,7 +764,7 @@
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 
   <!-- Main JS -->
-  <script src="./assets/js/script.js?v=74"></script>
+  <script src="./assets/js/script.js?v=75"></script>
 
   <!-- Sync Helper: Default Medium Size, Settings Nav & Clean Track Cards -->
   <script>
@@ -815,7 +838,7 @@
         if (typeof origSwitch === 'function') {
           origSwitch(view);
         }
-        document.querySelectorAll('.nav-segment-btn, .mini-nav-btn').forEach(btn => {
+        document.querySelectorAll('.nav-icon-tab-btn, .mini-nav-btn').forEach(btn => {
           btn.classList.toggle('active', btn.dataset.view === view);
         });
         const actionLabel = document.getElementById('center-action-label');
