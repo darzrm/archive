@@ -24,12 +24,24 @@ let allGoals = [];
 let allJournalEntries = [];
 let allBookmarks = [];
 
+// Phase 3 Knowledge Base State
+let allQuotes = [];
+let allVocabulary = [];
+let allConcepts = [];
+let isVocabStudyMode = false;
+
+// Phase 4 & 5 State
+let categoryChartInstance = null;
+let ratingChartInstance = null;
+let allAiMessages = [];
+
 let lastApiResults = [];
 let pendingUploadedUrls = [];
 
 let currentCategory = 'all';
 let currentMainView = 'overview';
 let currentWorkspaceTab = 'tasks';
+let currentKnowledgeTab = 'quotes';
 let libraryViewMode = 'grid';
 let itemsPerPage = 20;
 let visibleMediaLimit = 20;
@@ -40,7 +52,6 @@ let isProfileLoaded = false;
 let currentSortField = 'rating';
 let currentSortDir = 'desc';
 
-// Journal Calendar State
 let journalCalYear = new Date().getFullYear();
 let journalCalMonth = new Date().getMonth();
 let selectedJournalDate = null;
@@ -216,10 +227,6 @@ function showToast(message, type = 'success', duration = 2600) {
   }, duration);
 }
 
-window.showPhaseNotice = function (moduleName, phaseNum) {
-  showToast(`${moduleName} is scheduled for Phase ${phaseNum}.`, 'info', 3000);
-};
-
 // ==========================================
 // 3. INITIALIZATION & NAVIGATION
 // ==========================================
@@ -243,12 +250,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       fetchMediaLogs(),
       fetchCollections(),
       fetchActivityLogs(),
-      fetchWorkspaceData()
+      fetchWorkspaceData(),
+      fetchKnowledgeData(),
+      fetchAiConversations()
     ]);
 
     renderOverviewDashboard();
     renderCollectionsView();
     renderAllWorkspaceViews();
+    renderAllKnowledgeViews();
+    renderAiChatFeed();
   } catch (err) {
     console.error('Initialization error:', err);
     showToast('Init error: ' + err.message, 'error', 5000);
@@ -313,7 +324,10 @@ window.switchMainView = function (viewName) {
     library: { el: 'view-library', title: 'Media Library' },
     notes: { el: 'view-notes', title: 'Notes & Feed' },
     collections: { el: 'view-collections', title: 'Collections' },
-    workspace: { el: 'view-workspace', title: 'Personal Workspace' }
+    workspace: { el: 'view-workspace', title: 'Personal Workspace' },
+    knowledge: { el: 'view-knowledge', title: 'Knowledge Base' },
+    statistics: { el: 'view-statistics', title: 'Statistics & Analytics' },
+    ai: { el: 'view-ai', title: 'AI Assistant' }
   };
 
   Object.entries(viewMap).forEach(([key, cfg]) => {
@@ -330,20 +344,33 @@ window.switchMainView = function (viewName) {
     }
   });
 
-  if (viewName === 'workspace') {
-    renderAllWorkspaceViews();
-  }
+  if (viewName === 'workspace') renderAllWorkspaceViews();
+  if (viewName === 'knowledge') renderAllKnowledgeViews();
+  if (viewName === 'statistics') renderStatisticsAnalytics();
+  if (viewName === 'ai') renderAiChatFeed();
 
   updateAdminActionButtons();
 };
 
 window.switchWorkspaceTab = function (tabKey) {
   currentWorkspaceTab = tabKey;
-  document.querySelectorAll('.ws-tab').forEach(btn => {
+  document.querySelectorAll('.ws-tab[data-ws]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.ws === tabKey);
   });
   ['tasks', 'journal', 'goals', 'projects', 'bookmarks'].forEach(k => {
     const panel = document.getElementById(`ws-panel-${k}`);
+    if (panel) panel.style.display = k === tabKey ? 'block' : 'none';
+  });
+  updateAdminActionButtons();
+};
+
+window.switchKnowledgeTab = function (tabKey) {
+  currentKnowledgeTab = tabKey;
+  document.querySelectorAll('.kb-tab[data-kb]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.kb === tabKey);
+  });
+  ['quotes', 'vocabulary', 'concepts'].forEach(k => {
+    const panel = document.getElementById(`kb-panel-${k}`);
     if (panel) panel.style.display = k === tabKey ? 'block' : 'none';
   });
   updateAdminActionButtons();
@@ -403,6 +430,10 @@ function updateAdminUI() {
 
   const wsLocked = document.getElementById('workspace-locked-notice');
   const wsActive = document.getElementById('workspace-active-shell');
+  const kbLocked = document.getElementById('knowledge-locked-notice');
+  const kbActive = document.getElementById('knowledge-active-shell');
+  const aiLocked = document.getElementById('ai-locked-notice');
+  const aiActive = document.getElementById('ai-active-shell');
 
   if (isAdminLoggedIn) {
     if (editProfileBtn) editProfileBtn.style.display = 'flex';
@@ -412,6 +443,10 @@ function updateAdminUI() {
     if (newColBtn) newColBtn.style.display = 'inline-flex';
     if (wsLocked) wsLocked.style.display = 'none';
     if (wsActive) wsActive.style.display = 'block';
+    if (kbLocked) kbLocked.style.display = 'none';
+    if (kbActive) kbActive.style.display = 'block';
+    if (aiLocked) aiLocked.style.display = 'none';
+    if (aiActive) aiActive.style.display = 'flex';
     if (lockIcon) lockIcon.setAttribute('name', 'log-out-outline');
     if (btnText) btnText.textContent = 'Logout';
   } else {
@@ -422,6 +457,10 @@ function updateAdminUI() {
     if (newColBtn) newColBtn.style.display = 'none';
     if (wsLocked) wsLocked.style.display = 'flex';
     if (wsActive) wsActive.style.display = 'none';
+    if (kbLocked) kbLocked.style.display = 'flex';
+    if (kbActive) kbActive.style.display = 'none';
+    if (aiLocked) aiLocked.style.display = 'flex';
+    if (aiActive) aiActive.style.display = 'none';
     if (lockIcon) lockIcon.setAttribute('name', 'lock-closed-outline');
     if (btnText) btnText.textContent = 'Admin';
   }
@@ -455,7 +494,7 @@ function updateAdminActionButtons() {
   const label = document.getElementById('primary-action-label');
 
   if (!btn) return;
-  if (!isAdminLoggedIn) {
+  if (!isAdminLoggedIn || currentMainView === 'statistics' || currentMainView === 'ai') {
     btn.style.display = 'none';
     return;
   }
@@ -477,6 +516,14 @@ function updateAdminActionButtons() {
     };
     if (icon) icon.setAttribute('name', 'add-outline');
     if (label) label.textContent = wsLabels[currentWorkspaceTab] || 'Add Item';
+  } else if (currentMainView === 'knowledge') {
+    const kbLabels = {
+      quotes: 'Add Quote',
+      vocabulary: 'Add Word',
+      concepts: 'New Concept'
+    };
+    if (icon) icon.setAttribute('name', 'add-outline');
+    if (label) label.textContent = kbLabels[currentKnowledgeTab] || 'Add Entry';
   } else {
     if (icon) icon.setAttribute('name', 'add-outline');
     if (label) label.textContent = 'Add Media';
@@ -493,6 +540,10 @@ window.handlePrimaryContextAction = function () {
     else if (currentWorkspaceTab === 'projects') openProjectModal();
     else if (currentWorkspaceTab === 'bookmarks') openBookmarkModal();
     else openTaskModal();
+  } else if (currentMainView === 'knowledge') {
+    if (currentKnowledgeTab === 'vocabulary') openVocabModal();
+    else if (currentKnowledgeTab === 'concepts') openConceptModal();
+    else openQuoteModal();
   } else {
     openMediaModal();
   }
@@ -517,6 +568,10 @@ window.handleAdminAuthClick = async function () {
       allGoals = [];
       allJournalEntries = [];
       allBookmarks = [];
+      allQuotes = [];
+      allVocabulary = [];
+      allConcepts = [];
+      allAiMessages = [];
       updateAdminUI();
       showToast('Logged out', 'info');
     }
@@ -540,9 +595,15 @@ document.getElementById('admin-login-form')?.addEventListener('submit', async (e
   } else {
     isAdminLoggedIn = true;
     closeLoginModal();
-    await fetchWorkspaceData();
+    await Promise.all([
+      fetchWorkspaceData(),
+      fetchKnowledgeData(),
+      fetchAiConversations()
+    ]);
     updateAdminUI();
     renderAllWorkspaceViews();
+    renderAllKnowledgeViews();
+    renderAiChatFeed();
     showToast('Admin session active', 'success');
   }
 });
@@ -705,7 +766,6 @@ function renderOverviewDashboard() {
   const recentAddedEl = document.getElementById('dash-list-recent-media');
   if (recentAddedEl) recentAddedEl.innerHTML = buildMiniMediaRows(recentAdded, 'No media added yet.');
 
-  // Upcoming Tasks Widget
   const dashTasksEl = document.getElementById('dash-list-tasks');
   if (dashTasksEl) {
     if (!isAdminLoggedIn) {
@@ -725,7 +785,6 @@ function renderOverviewDashboard() {
     }
   }
 
-  // Active Goals Widget
   const dashGoalsEl = document.getElementById('dash-list-goals');
   if (dashGoalsEl) {
     if (!isAdminLoggedIn || !activeGoals.length) {
@@ -746,7 +805,6 @@ function renderOverviewDashboard() {
     }
   }
 
-  // Recent Notes
   const recentNotesEl = document.getElementById('dash-list-recent-notes');
   if (recentNotesEl) {
     if (!activeNotes.length) {
@@ -766,7 +824,6 @@ function renderOverviewDashboard() {
     }
   }
 
-  // Category Breakdown
   const catBreakdownEl = document.getElementById('dash-category-breakdown');
   if (catBreakdownEl) {
     const counts = {};
@@ -795,7 +852,6 @@ function renderOverviewDashboard() {
     }).join('');
   }
 
-  // Activity Timeline
   const actEl = document.getElementById('dash-activity-list');
   if (actEl) {
     if (!allActivityLogs.length) {
@@ -927,7 +983,7 @@ window.stepCarouselSlide = function (btnEl, delta) {
 };
 
 // ==========================================
-// 7. PROFILE SETTINGS
+// 7. PROFILE SETTINGS & FULL BACKUP EXPORT
 // ==========================================
 function detectSocialIcon(url) {
   const lower = (url || '').toLowerCase();
@@ -1017,6 +1073,34 @@ function applyProfileToUI() {
 
   updateLibraryTabVisibility();
 }
+
+window.exportFullArchiveJson = function () {
+  const backupData = {
+    exported_at: new Date().toISOString(),
+    profile: currentProfile,
+    media_logs: allMediaLogs,
+    blog_posts: allBlogPosts,
+    collections: allCollections,
+    collection_items: allCollectionItems,
+    projects: allProjects,
+    tasks: allTasks,
+    goals: allGoals,
+    journal_entries: allJournalEntries,
+    bookmarks: allBookmarks,
+    quotes: allQuotes,
+    vocabulary: allVocabulary,
+    concepts: allConcepts
+  };
+
+  const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `archive-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Full JSON backup downloaded', 'success');
+};
 
 window.navigateSettingsStep = function (step) {
   const rootPanel = document.getElementById('settings-step-root');
@@ -2277,7 +2361,6 @@ function renderSafeMarkdown(rawText) {
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
-  // Internal Wiki-Links: [[Note Title]]
   html = html.replace(/\[\[([^\]]+)\]\]/g, (_, targetTitle) => {
     const cleanTarget = targetTitle.trim();
     return `<span class="internal-note-link" onclick="jumpToLinkedNote('${escapeHtml(cleanTarget)}')">[[${escapeHtml(cleanTarget)}]]</span>`;
@@ -2371,7 +2454,6 @@ function renderBlogPosts() {
     const tags = Array.isArray(post.tags) ? post.tags : [];
     const linkedProj = post.project_id ? allProjects.find(pr => String(pr.id) === String(post.project_id)) : null;
 
-    // Backlinks detection: find notes that mention [[this note's title]]
     const backlinks = post.title
       ? allBlogPosts.filter(other => other.id !== post.id && (other.content || '').toLowerCase().includes(`[[${post.title.toLowerCase()}]]`))
       : [];
@@ -2719,7 +2801,6 @@ function renderAllWorkspaceViews() {
   renderOverviewDashboard();
 }
 
-// --- A. TASKS ---
 function renderWorkspaceTasks() {
   const container = document.getElementById('workspace-tasks-list');
   if (!container) return;
@@ -2868,7 +2949,6 @@ window.deleteCurrentTask = async function () {
   }
 };
 
-// --- B. JOURNAL & CALENDAR ---
 function renderJournalCalendar() {
   const grid = document.getElementById('journal-calendar-grid');
   if (!grid) return;
@@ -3033,7 +3113,6 @@ window.deleteCurrentJournal = async function () {
   }
 };
 
-// --- C. GOALS ---
 function renderGoals() {
   const grid = document.getElementById('workspace-goals-grid');
   if (!grid) return;
@@ -3169,7 +3248,6 @@ window.deleteCurrentGoal = async function () {
   }
 };
 
-// --- D. PROJECTS ---
 function renderProjects() {
   const grid = document.getElementById('workspace-projects-grid');
   if (!grid) return;
@@ -3268,7 +3346,6 @@ window.deleteCurrentProject = async function () {
   }
 };
 
-// --- E. BOOKMARKS ---
 function renderBookmarks() {
   const grid = document.getElementById('workspace-bookmarks-grid');
   const catSelect = document.getElementById('filter-bookmark-cat');
@@ -3311,15 +3388,18 @@ function renderBookmarks() {
       <div class="collection-card" style="cursor:default;">
         <div class="collection-card-top">
           <div style="min-width:0;">
-            <a href="${escapeHtml(b.url)}" target="_blank" rel="noopener noreferrer" style="font-size:14px; font-weight:600; color:var(--white-1); display:block;">${escapeHtml(b.title)} ↗</a>
-            <span style="font-size:11px; color:var(--mono-dim);">${escapeHtml(domain)} · ${escapeHtml(b.category || 'General')}</span>
+            <h3 style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(b.title)}</h3>
+            <a href="${escapeHtml(b.url)}" target="_blank" rel="noopener noreferrer" class="bookmark-domain-link">${escapeHtml(domain)} ↗</a>
           </div>
           <button type="button" class="blog-icon-btn" onclick="openEditBookmarkModal('${safeId}')">
             <ion-icon name="create-outline"></ion-icon>
           </button>
         </div>
         ${b.description ? `<p>${escapeHtml(b.description)}</p>` : ''}
-        ${tags.length ? `<div class="note-tags-row" style="margin-top:auto;">${tags.map(t => `<span class="tag-pill">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+        <div class="note-tags-row" style="margin-top:auto;">
+          <span class="tag-pill">${escapeHtml(b.category || 'General')}</span>
+          ${tags.map(t => `<span class="tag-pill">#${escapeHtml(t)}</span>`).join('')}
+        </div>
       </div>
     `;
   }).join('');
@@ -3329,7 +3409,6 @@ window.openBookmarkModal = function () {
   setElText('bookmark-modal-title', 'Save Bookmark');
   document.getElementById('bookmark-form').reset();
   document.getElementById('bookmark-id').value = '';
-  document.getElementById('bookmark-category').value = 'General';
   document.getElementById('btn-delete-bookmark').style.display = 'none';
   document.getElementById('bookmark-modal').classList.add('active');
 };
@@ -3360,8 +3439,7 @@ document.getElementById('bookmark-form')?.addEventListener('submit', async (e) =
     url: document.getElementById('bookmark-url').value.trim(),
     category: document.getElementById('bookmark-category').value.trim() || 'General',
     tags: document.getElementById('bookmark-tags').value.split(',').map(s => s.trim()).filter(Boolean),
-    description: document.getElementById('bookmark-desc').value.trim() || null,
-    updated_at: new Date().toISOString()
+    description: document.getElementById('bookmark-desc').value.trim() || null
   };
 
   const res = id
@@ -3390,113 +3468,692 @@ window.deleteCurrentBookmark = async function () {
 };
 
 // ==========================================
-// 14. GLOBAL SEARCH / COMMAND PALETTE & QUICK CAPTURE
+// 14. PHASE 3: KNOWLEDGE BASE (QUOTES, VOCABULARY, CONCEPTS)
+// ==========================================
+async function fetchKnowledgeData() {
+  if (!isAdminLoggedIn) return;
+  const [qRes, vRes, cRes] = await Promise.all([
+    supabaseClient.from('quotes').select('*').order('created_at', { ascending: false }),
+    supabaseClient.from('vocabulary').select('*').order('created_at', { ascending: false }),
+    supabaseClient.from('concepts').select('*').order('created_at', { ascending: false })
+  ]);
+
+  if (!qRes.error) allQuotes = qRes.data || [];
+  if (!vRes.error) allVocabulary = vRes.data || [];
+  if (!cRes.error) allConcepts = cRes.data || [];
+}
+
+function renderAllKnowledgeViews() {
+  renderQuotes();
+  renderVocabulary();
+  renderConcepts();
+}
+
+function renderQuotes() {
+  const list = document.getElementById('kb-quotes-list');
+  if (!list) return;
+
+  const q = (document.getElementById('search-quotes')?.value || '').toLowerCase().trim();
+  const filtered = allQuotes.filter(item => {
+    if (!q) return true;
+    const hay = [item.quote_text, item.author, item.source_title, ...(Array.isArray(item.tags) ? item.tags : [])].filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(q);
+  });
+
+  if (!filtered.length) {
+    list.innerHTML = `<p class="empty-state">No quotes saved yet.</p>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(item => {
+    const safeId = escapeHtml(String(item.id));
+    const tags = Array.isArray(item.tags) ? item.tags : [];
+    const attrParts = [item.author, item.source_title].filter(Boolean).join(' — ');
+    return `
+      <div class="quote-card">
+        <div class="quote-text-body">“${escapeHtml(item.quote_text)}”</div>
+        <div class="quote-attribution">
+          <span>${escapeHtml(attrParts || 'Unknown Source')}</span>
+          <button type="button" class="blog-icon-btn" onclick="openEditQuoteModal('${safeId}')">
+            <ion-icon name="create-outline"></ion-icon>
+          </button>
+        </div>
+        ${tags.length ? `<div class="note-tags-row">${tags.map(t => `<span class="tag-pill">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+window.openQuoteModal = function () {
+  setElText('quote-modal-title', 'Save Quote');
+  document.getElementById('quote-form').reset();
+  document.getElementById('quote-id').value = '';
+  document.getElementById('btn-delete-quote').style.display = 'none';
+  document.getElementById('quote-modal').classList.add('active');
+};
+
+window.openEditQuoteModal = function (id) {
+  const item = allQuotes.find(x => String(x.id) === String(id));
+  if (!item) return;
+  setElText('quote-modal-title', 'Edit Quote');
+  document.getElementById('quote-id').value = item.id;
+  document.getElementById('quote-text').value = item.quote_text;
+  document.getElementById('quote-author').value = item.author || '';
+  document.getElementById('quote-source').value = item.source_title || '';
+  document.getElementById('quote-tags').value = Array.isArray(item.tags) ? item.tags.join(', ') : '';
+  document.getElementById('btn-delete-quote').style.display = 'inline-flex';
+  document.getElementById('quote-modal').classList.add('active');
+};
+
+window.closeQuoteModal = function () {
+  document.getElementById('quote-modal').classList.remove('active');
+};
+
+document.getElementById('quote-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('quote-id').value;
+  const payload = {
+    quote_text: document.getElementById('quote-text').value.trim(),
+    author: document.getElementById('quote-author').value.trim() || null,
+    source_title: document.getElementById('quote-source').value.trim() || null,
+    tags: document.getElementById('quote-tags').value.split(',').map(s => s.trim()).filter(Boolean)
+  };
+
+  const res = id
+    ? await supabaseClient.from('quotes').update(payload).eq('id', id)
+    : await supabaseClient.from('quotes').insert([payload]);
+
+  if (res.error) showToast(res.error.message, 'error');
+  else {
+    closeQuoteModal();
+    await fetchKnowledgeData();
+    renderQuotes();
+    showToast('Quote saved', 'success');
+  }
+});
+
+window.deleteCurrentQuote = async function () {
+  const id = document.getElementById('quote-id').value;
+  if (!id) return;
+  const { error } = await supabaseClient.from('quotes').delete().eq('id', id);
+  if (!error) {
+    closeQuoteModal();
+    await fetchKnowledgeData();
+    renderQuotes();
+    showToast('Quote deleted', 'info');
+  }
+};
+
+window.toggleVocabStudyMode = function () {
+  isVocabStudyMode = !isVocabStudyMode;
+  setElText('vocab-study-label', isVocabStudyMode ? 'Exit Study' : 'Study Mode');
+  renderVocabulary();
+};
+
+function renderVocabulary() {
+  const grid = document.getElementById('kb-vocab-grid');
+  const langSelect = document.getElementById('filter-vocab-lang');
+  if (!grid) return;
+
+  if (langSelect) {
+    const langs = new Set();
+    allVocabulary.forEach(v => { if (v.language) langs.add(v.language); });
+    const prev = langSelect.value;
+    langSelect.innerHTML = `<option value="all">All Languages</option>` +
+      Array.from(langs).map(l => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join('');
+    if ([...langs, 'all'].includes(prev)) langSelect.value = prev;
+  }
+
+  const q = (document.getElementById('search-vocab')?.value || '').toLowerCase().trim();
+  const langFilter = langSelect?.value || 'all';
+
+  const filtered = allVocabulary.filter(v => {
+    if (langFilter !== 'all' && v.language !== langFilter) return false;
+    if (q) {
+      const hay = [v.term, v.reading, v.meaning, v.example_sentence].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  if (!filtered.length) {
+    grid.innerHTML = `<p class="empty-state">No vocabulary words added yet.</p>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(v => {
+    const safeId = escapeHtml(String(v.id));
+    return `
+      <div class="collection-card" style="cursor:default;">
+        <div class="collection-card-top">
+          <div>
+            <h3 style="font-size:15px;">${escapeHtml(v.term)}</h3>
+            ${v.reading ? `<span style="font-size:11.5px; color:var(--mono-muted);">${escapeHtml(v.reading)}</span>` : ''}
+          </div>
+          <button type="button" class="blog-icon-btn" onclick="openEditVocabModal('${safeId}')">
+            <ion-icon name="create-outline"></ion-icon>
+          </button>
+        </div>
+        <p class="${isVocabStudyMode ? 'vocab-blurred' : ''}" style="color:var(--white-1); font-weight:500;">${escapeHtml(v.meaning)}</p>
+        ${v.example_sentence ? `<p style="font-size:11.5px; font-style:italic;">${escapeHtml(v.example_sentence)}</p>` : ''}
+        <div class="note-tags-row" style="margin-top:auto;">
+          <span class="tag-pill">${escapeHtml(v.language || 'Language')}</span>
+          <span class="tag-pill">${escapeHtml((v.mastery_level || 'learning').toUpperCase())}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+window.openVocabModal = function () {
+  setElText('vocab-modal-title', 'Add Vocabulary');
+  document.getElementById('vocab-form').reset();
+  document.getElementById('vocab-id').value = '';
+  document.getElementById('btn-delete-vocab').style.display = 'none';
+  document.getElementById('vocab-modal').classList.add('active');
+};
+
+window.openEditVocabModal = function (id) {
+  const v = allVocabulary.find(x => String(x.id) === String(id));
+  if (!v) return;
+  setElText('vocab-modal-title', 'Edit Vocabulary');
+  document.getElementById('vocab-id').value = v.id;
+  document.getElementById('vocab-term').value = v.term;
+  document.getElementById('vocab-reading').value = v.reading || '';
+  document.getElementById('vocab-meaning').value = v.meaning;
+  document.getElementById('vocab-language').value = v.language || 'Japanese';
+  document.getElementById('vocab-mastery').value = v.mastery_level || 'learning';
+  document.getElementById('vocab-example').value = v.example_sentence || '';
+  document.getElementById('btn-delete-vocab').style.display = 'inline-flex';
+  document.getElementById('vocab-modal').classList.add('active');
+};
+
+window.closeVocabModal = function () {
+  document.getElementById('vocab-modal').classList.remove('active');
+};
+
+document.getElementById('vocab-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('vocab-id').value;
+  const payload = {
+    term: document.getElementById('vocab-term').value.trim(),
+    reading: document.getElementById('vocab-reading').value.trim() || null,
+    meaning: document.getElementById('vocab-meaning').value.trim(),
+    language: document.getElementById('vocab-language').value.trim() || 'Japanese',
+    mastery_level: document.getElementById('vocab-mastery').value,
+    example_sentence: document.getElementById('vocab-example').value.trim() || null
+  };
+
+  const res = id
+    ? await supabaseClient.from('vocabulary').update(payload).eq('id', id)
+    : await supabaseClient.from('vocabulary').insert([payload]);
+
+  if (res.error) showToast(res.error.message, 'error');
+  else {
+    closeVocabModal();
+    await fetchKnowledgeData();
+    renderVocabulary();
+    showToast('Vocabulary saved', 'success');
+  }
+});
+
+window.deleteCurrentVocab = async function () {
+  const id = document.getElementById('vocab-id').value;
+  if (!id) return;
+  const { error } = await supabaseClient.from('vocabulary').delete().eq('id', id);
+  if (!error) {
+    closeVocabModal();
+    await fetchKnowledgeData();
+    renderVocabulary();
+    showToast('Deleted', 'info');
+  }
+};
+
+function renderConcepts() {
+  const grid = document.getElementById('kb-concepts-grid');
+  if (!grid) return;
+
+  const q = (document.getElementById('search-concepts')?.value || '').toLowerCase().trim();
+  const filtered = allConcepts.filter(c => {
+    if (!q) return true;
+    const hay = [c.title, c.category, c.summary, c.details, ...(Array.isArray(c.tags) ? c.tags : [])].filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(q);
+  });
+
+  if (!filtered.length) {
+    grid.innerHTML = `<p class="empty-state">No concepts documented yet.</p>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(c => {
+    const safeId = escapeHtml(String(c.id));
+    const tags = Array.isArray(c.tags) ? c.tags : [];
+    return `
+      <div class="collection-card" style="cursor:default;">
+        <div class="collection-card-top">
+          <div>
+            <h3>${escapeHtml(c.title)}</h3>
+            <span style="font-size:11px; color:var(--mono-dim);">${escapeHtml(c.category || 'General')}</span>
+          </div>
+          <button type="button" class="blog-icon-btn" onclick="openEditConceptModal('${safeId}')">
+            <ion-icon name="create-outline"></ion-icon>
+          </button>
+        </div>
+        <p style="color:var(--white-1);">${escapeHtml(c.summary)}</p>
+        ${c.details ? `<p style="font-size:11.5px; white-space:pre-wrap;">${escapeHtml(c.details)}</p>` : ''}
+        ${tags.length ? `<div class="note-tags-row" style="margin-top:auto;">${tags.map(t => `<span class="tag-pill">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+window.openConceptModal = function () {
+  setElText('concept-modal-title', 'New Concept');
+  document.getElementById('concept-form').reset();
+  document.getElementById('concept-id').value = '';
+  document.getElementById('btn-delete-concept').style.display = 'none';
+  document.getElementById('concept-modal').classList.add('active');
+};
+
+window.openEditConceptModal = function (id) {
+  const c = allConcepts.find(x => String(x.id) === String(id));
+  if (!c) return;
+  setElText('concept-modal-title', 'Edit Concept');
+  document.getElementById('concept-id').value = c.id;
+  document.getElementById('concept-title').value = c.title;
+  document.getElementById('concept-category').value = c.category || 'General';
+  document.getElementById('concept-summary').value = c.summary;
+  document.getElementById('concept-details').value = c.details || '';
+  document.getElementById('concept-tags').value = Array.isArray(c.tags) ? c.tags.join(', ') : '';
+  document.getElementById('btn-delete-concept').style.display = 'inline-flex';
+  document.getElementById('concept-modal').classList.add('active');
+};
+
+window.closeConceptModal = function () {
+  document.getElementById('concept-modal').classList.remove('active');
+};
+
+document.getElementById('concept-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('concept-id').value;
+  const payload = {
+    title: document.getElementById('concept-title').value.trim(),
+    category: document.getElementById('concept-category').value.trim() || 'General',
+    summary: document.getElementById('concept-summary').value.trim(),
+    details: document.getElementById('concept-details').value.trim() || null,
+    tags: document.getElementById('concept-tags').value.split(',').map(s => s.trim()).filter(Boolean),
+    updated_at: new Date().toISOString()
+  };
+
+  const res = id
+    ? await supabaseClient.from('concepts').update(payload).eq('id', id)
+    : await supabaseClient.from('concepts').insert([payload]);
+
+  if (res.error) showToast(res.error.message, 'error');
+  else {
+    closeConceptModal();
+    await fetchKnowledgeData();
+    renderConcepts();
+    showToast('Concept saved', 'success');
+  }
+});
+
+window.deleteCurrentConcept = async function () {
+  const id = document.getElementById('concept-id').value;
+  if (!id) return;
+  const { error } = await supabaseClient.from('concepts').delete().eq('id', id);
+  if (!error) {
+    closeConceptModal();
+    await fetchKnowledgeData();
+    renderConcepts();
+    showToast('Deleted', 'info');
+  }
+};
+
+// ==========================================
+// 15. PHASE 4: DEEP STATISTICS & ANALYTICS (CHART.JS)
+// ==========================================
+function renderStatisticsAnalytics() {
+  const activeMedia = allMediaLogs.filter(m => !m.is_archived && !m.deleted_at);
+  const rated = activeMedia.filter(m => m.rating !== null && m.rating !== undefined && m.rating !== '');
+  const meanScore = rated.length ? (rated.reduce((s, m) => s + Number(m.rating), 0) / rated.length).toFixed(2) : '0.0';
+  const totalUnits = activeMedia.reduce((s, m) => s + getItemTracks(m).reduce((ts, t) => ts + (Number(t.progress) || 0), 0), 0);
+
+  const doneTasks = allTasks.filter(t => t.status === 'done').length;
+  const taskRate = allTasks.length ? Math.round((doneTasks / allTasks.length) * 100) : 0;
+
+  const kbTotal = allQuotes.length + allVocabulary.length + allConcepts.length + allJournalEntries.length;
+
+  setElText('analytics-mean-score', meanScore);
+  setElText('analytics-rated-sub', `Across ${rated.length} rated entries`);
+  setElText('analytics-total-units', totalUnits.toLocaleString('en-US'));
+  setElText('analytics-task-rate', `${taskRate}%`);
+  setElText('analytics-task-sub', `${doneTasks} of ${allTasks.length} tasks done`);
+  setElText('analytics-kb-total', String(kbTotal));
+  setElText('analytics-kb-sub', `${allQuotes.length} quotes · ${allVocabulary.length} words · ${allConcepts.length} concepts`);
+
+  // Top Rated List
+  const topListEl = document.getElementById('analytics-top-rated-list');
+  if (topListEl) {
+    const topRated = [...rated].sort((a, b) => Number(b.rating) - Number(a.rating)).slice(0, 6);
+    if (!topRated.length) {
+      topListEl.innerHTML = `<p class="empty-state-compact">Rate your media entries to populate top highlights.</p>`;
+    } else {
+      topListEl.innerHTML = topRated.map(m => `
+        <div class="dash-media-row" onclick="openMediaDetailModal('${escapeHtml(String(m.id))}')">
+          <div class="dash-media-info">
+            <div class="dash-media-title">${escapeHtml(m.title)}</div>
+            <div class="dash-media-meta">${escapeHtml(CATEGORY_LABELS[getLegacyCategory(m)] || m.category)}${m.release_year ? ` · ${m.release_year}` : ''}</div>
+          </div>
+          <span class="dash-media-badge">★ ${Number(m.rating).toFixed(1)}</span>
+        </div>
+      `).join('');
+    }
+  }
+
+  if (typeof window.Chart === 'undefined') return;
+
+  // Chart 1: Category Breakdown
+  const catCounts = Object.keys(CATEGORY_LABELS).map(k => activeMedia.filter(m => getLegacyCategory(m) === k).length);
+  const ctx1 = document.getElementById('chart-media-categories');
+  if (ctx1) {
+    if (categoryChartInstance) categoryChartInstance.destroy();
+    categoryChartInstance = new Chart(ctx1, {
+      type: 'bar',
+      data: {
+        labels: Object.values(CATEGORY_LABELS),
+        datasets: [{
+          label: 'Entries',
+          data: catCounts,
+          backgroundColor: '#e4e4e7',
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#a1a1aa', font: { size: 10 } }, grid: { display: false } },
+          y: { ticks: { color: '#a1a1aa', precision: 0 }, grid: { color: '#27272a' } }
+        }
+      }
+    });
+  }
+
+  // Chart 2: Rating Distribution (1-10)
+  const buckets = ['≤4', '5', '6', '7', '8', '9', '10'];
+  const bucketCounts = [0, 0, 0, 0, 0, 0, 0];
+  rated.forEach(m => {
+    const r = Math.round(Number(m.rating));
+    if (r <= 4) bucketCounts[0]++;
+    else if (r === 5) bucketCounts[1]++;
+    else if (r === 6) bucketCounts[2]++;
+    else if (r === 7) bucketCounts[3]++;
+    else if (r === 8) bucketCounts[4]++;
+    else if (r === 9) bucketCounts[5]++;
+    else bucketCounts[6]++;
+  });
+
+  const ctx2 = document.getElementById('chart-rating-distribution');
+  if (ctx2) {
+    if (ratingChartInstance) ratingChartInstance.destroy();
+    ratingChartInstance = new Chart(ctx2, {
+      type: 'bar',
+      data: {
+        labels: buckets,
+        datasets: [{
+          label: 'Rated Media',
+          data: bucketCounts,
+          backgroundColor: '#a1a1aa',
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#a1a1aa' }, grid: { display: false } },
+          y: { ticks: { color: '#a1a1aa', precision: 0 }, grid: { color: '#27272a' } }
+        }
+      }
+    });
+  }
+}
+
+// ==========================================
+// 16. PHASE 5: AI ASSISTANT (GROQ EDGE FUNCTION)
+// ==========================================
+async function fetchAiConversations() {
+  if (!isAdminLoggedIn) return;
+  const { data, error } = await supabaseClient
+    .from('ai_conversations')
+    .select('*')
+    .order('created_at', { ascending: true })
+    .limit(40);
+
+  if (!error && data) {
+    allAiMessages = data;
+  }
+}
+
+function buildArchiveContextSummary() {
+  const topRated = allMediaLogs
+    .filter(m => m.rating !== null && m.rating !== undefined)
+    .sort((a, b) => Number(b.rating) - Number(a.rating))
+    .slice(0, 12)
+    .map(m => `${m.title} (${CATEGORY_LABELS[getLegacyCategory(m)]}, Rating: ${m.rating}/10)`);
+
+  const ongoing = allMediaLogs
+    .filter(m => computeSyncedStatus(getItemTracks(m)).key === 'ongoing')
+    .slice(0, 10)
+    .map(m => m.title);
+
+  const openTasks = allTasks.filter(t => t.status !== 'done').slice(0, 10).map(t => `[${t.priority}] ${t.title}`);
+  const activeGoals = allGoals.filter(g => g.status === 'active').slice(0, 6).map(g => `${g.title} (${g.current_value}/${g.target_value} ${g.unit})`);
+  const recentNotes = allBlogPosts.slice(0, 5).map(n => `${n.title || 'Note'}: ${(n.content || '').slice(0, 120)}`);
+  const vocabSample = allVocabulary.slice(0, 10).map(v => `${v.term} (${v.reading || ''}): ${v.meaning}`);
+  const conceptSample = allConcepts.slice(0, 6).map(c => `${c.title}: ${c.summary}`);
+
+  return [
+    `Total Media: ${allMediaLogs.length}. Top Rated: ${topRated.join('; ') || 'None'}.`,
+    `In Progress Media: ${ongoing.join(', ') || 'None'}.`,
+    `Open Tasks: ${openTasks.join('; ') || 'None'}.`,
+    `Active Goals: ${activeGoals.join('; ') || 'None'}.`,
+    `Recent Notes: ${recentNotes.join(' | ') || 'None'}.`,
+    `Vocabulary Sample: ${vocabSample.join('; ') || 'None'}.`,
+    `Concepts Sample: ${conceptSample.join('; ') || 'None'}.`
+  ].join('\n');
+}
+
+function renderAiChatFeed() {
+  const feed = document.getElementById('ai-chat-feed');
+  if (!feed) return;
+
+  if (!allAiMessages.length) {
+    feed.innerHTML = `<div class="ai-msg-bubble assistant">Hello! I am connected to your Personal Archive & Life OS. Ask me for media recommendations based on your top ratings, a weekly task review, note summaries, or a vocabulary quiz.</div>`;
+    return;
+  }
+
+  feed.innerHTML = allAiMessages.map(m => `
+    <div class="ai-msg-bubble ${m.role === 'user' ? 'user' : 'assistant'}">${escapeHtml(m.content)}</div>
+  `).join('');
+  feed.scrollTop = feed.scrollHeight;
+}
+
+window.sendQuickAiPrompt = function (promptText) {
+  const input = document.getElementById('ai-prompt-input');
+  if (input) {
+    input.value = promptText;
+    document.getElementById('ai-chat-form')?.dispatchEvent(new Event('submit'));
+  }
+};
+
+document.getElementById('ai-chat-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!isAdminLoggedIn) return;
+
+  const input = document.getElementById('ai-prompt-input');
+  const sendBtn = document.getElementById('btn-ai-send');
+  const promptText = input.value.trim();
+  if (!promptText) return;
+
+  input.value = '';
+  sendBtn.disabled = true;
+
+  allAiMessages.push({ role: 'user', content: promptText });
+  renderAiChatFeed();
+
+  await supabaseClient.from('ai_conversations').insert([{ role: 'user', content: promptText }]);
+
+  const feed = document.getElementById('ai-chat-feed');
+  const thinkingEl = document.createElement('div');
+  thinkingEl.className = 'ai-msg-bubble assistant';
+  thinkingEl.textContent = 'Thinking...';
+  feed.appendChild(thinkingEl);
+  feed.scrollTop = feed.scrollHeight;
+
+  try {
+    const { data, error } = await supabaseClient.functions.invoke('groq-assistant', {
+      body: {
+        prompt: promptText,
+        contextSummary: buildArchiveContextSummary(),
+        history: allAiMessages.slice(-8).map(m => ({ role: m.role, content: m.content }))
+      }
+    });
+
+    if (error) throw error;
+    const reply = data?.reply || 'No response received.';
+
+    allAiMessages.push({ role: 'assistant', content: reply });
+    await supabaseClient.from('ai_conversations').insert([{ role: 'assistant', content: reply }]);
+    renderAiChatFeed();
+  } catch (err) {
+    thinkingEl.textContent = `AI Error: ${err.message || 'Could not reach groq-assistant Edge Function.'}`;
+    showToast('AI request failed', 'error');
+  } finally {
+    sendBtn.disabled = false;
+  }
+});
+
+window.clearAiConversation = async function () {
+  if (!isAdminLoggedIn) return;
+  await supabaseClient.from('ai_conversations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  allAiMessages = [];
+  renderAiChatFeed();
+  showToast('Chat cleared', 'info');
+};
+
+// ==========================================
+// 17. GLOBAL SEARCH & QUICK CAPTURE
 // ==========================================
 window.openGlobalSearchModal = function () {
   const modal = document.getElementById('global-search-modal');
   const input = document.getElementById('global-search-input');
-  modal.classList.add('active');
-  input.value = '';
-  handleGlobalSearchInput();
-  setTimeout(() => input.focus(), 40);
+  if (modal) modal.classList.add('active');
+  if (input) {
+    input.value = '';
+    handleGlobalSearchInput();
+    setTimeout(() => input.focus(), 40);
+  }
 };
 
 window.closeGlobalSearchModal = function () {
-  document.getElementById('global-search-modal').classList.remove('active');
+  document.getElementById('global-search-modal')?.classList.remove('active');
 };
 
 window.handleGlobalSearchInput = function () {
   const q = (document.getElementById('global-search-input')?.value || '').toLowerCase().trim();
-  const body = document.getElementById('global-search-results');
-  if (!body) return;
+  const container = document.getElementById('global-search-results');
+  if (!container) return;
 
-  const navItems = [
-    { label: 'Go to Overview Dashboard', meta: 'View', action: "closeGlobalSearchModal(); switchMainView('overview');" },
-    { label: 'Go to Media Library', meta: 'View', action: "closeGlobalSearchModal(); switchMainView('library');" },
-    { label: 'Go to Notes & Feed', meta: 'View', action: "closeGlobalSearchModal(); switchMainView('notes');" },
-    { label: 'Go to Collections', meta: 'View', action: "closeGlobalSearchModal(); switchMainView('collections');" },
-    { label: 'Go to Personal Workspace', meta: 'View', action: "closeGlobalSearchModal(); switchMainView('workspace');" }
-  ];
+  const results = [];
+
+  if (!currentProfile.is_library_private || isAdminLoggedIn) {
+    allMediaLogs.filter(m => !m.is_archived && !m.deleted_at).forEach(m => {
+      const hay = [m.title, m.original_title, m.creator, ...(m.genres || []), ...(m.tags || [])].filter(Boolean).join(' ').toLowerCase();
+      if (!q || hay.includes(q)) {
+        results.push({
+          type: 'Media',
+          title: m.title,
+          sub: `${CATEGORY_LABELS[getLegacyCategory(m)] || m.category}${m.release_year ? ` · ${m.release_year}` : ''}`,
+          action: () => { closeGlobalSearchModal(); openMediaDetailModal(String(m.id)); }
+        });
+      }
+    });
+  }
+
+  allBlogPosts.filter(p => !p.is_archived && !p.deleted_at && (!p.is_private || isAdminLoggedIn)).forEach(p => {
+    const title = p.title || (p.content || '').slice(0, 44);
+    const hay = [p.title, p.content, p.folder, ...(p.tags || [])].filter(Boolean).join(' ').toLowerCase();
+    if (!q || hay.includes(q)) {
+      results.push({
+        type: 'Note',
+        title,
+        sub: p.folder || 'General',
+        action: () => { closeGlobalSearchModal(); switchMainView('notes'); }
+      });
+    }
+  });
 
   if (isAdminLoggedIn) {
-    navItems.unshift(
-      { label: 'Add New Media Entry', meta: 'Action', action: 'closeGlobalSearchModal(); openMediaModal();' },
-      { label: 'Create New Note', meta: 'Action', action: 'closeGlobalSearchModal(); openPostModal();' },
-      { label: 'Add New Task', meta: 'Action', action: 'closeGlobalSearchModal(); openTaskModal();' },
-      { label: 'Write Journal Entry', meta: 'Action', action: 'closeGlobalSearchModal(); openJournalModal();' }
-    );
+    allTasks.filter(t => !t.is_archived).forEach(t => {
+      if (!q || (t.title || '').toLowerCase().includes(q)) {
+        results.push({
+          type: 'Task',
+          title: t.title,
+          sub: `${t.priority.toUpperCase()} · ${t.status}`,
+          action: () => { closeGlobalSearchModal(); switchMainView('workspace'); switchWorkspaceTab('tasks'); }
+        });
+      }
+    });
+
+    allQuotes.forEach(qt => {
+      if (!q || [qt.quote_text, qt.author, qt.source_title].filter(Boolean).join(' ').toLowerCase().includes(q)) {
+        results.push({
+          type: 'Quote',
+          title: (qt.quote_text || '').slice(0, 52) + '...',
+          sub: qt.author || qt.source_title || 'Quote',
+          action: () => { closeGlobalSearchModal(); switchMainView('knowledge'); switchKnowledgeTab('quotes'); }
+        });
+      }
+    });
+
+    allVocabulary.forEach(v => {
+      if (!q || [v.term, v.reading, v.meaning].filter(Boolean).join(' ').toLowerCase().includes(q)) {
+        results.push({
+          type: 'Vocab',
+          title: `${v.term} — ${v.meaning}`,
+          sub: v.language || 'Language',
+          action: () => { closeGlobalSearchModal(); switchMainView('knowledge'); switchKnowledgeTab('vocabulary'); }
+        });
+      }
+    });
   }
 
-  const matchedNav = navItems.filter(n => !q || n.label.toLowerCase().includes(q));
-  const matchedMedia = q
-    ? allMediaLogs.filter(m => !m.is_archived && !m.deleted_at && [m.title, m.original_title, m.creator].filter(Boolean).join(' ').toLowerCase().includes(q)).slice(0, 5)
-    : [];
-  const matchedNotes = q
-    ? allBlogPosts.filter(p => !p.is_archived && (!p.is_private || isAdminLoggedIn) && [p.title, p.content, p.folder].filter(Boolean).join(' ').toLowerCase().includes(q)).slice(0, 4)
-    : [];
-  const matchedTasks = (q && isAdminLoggedIn)
-    ? allTasks.filter(t => !t.is_archived && [t.title, t.description].filter(Boolean).join(' ').toLowerCase().includes(q)).slice(0, 4)
-    : [];
-  const matchedBookmarks = (q && isAdminLoggedIn)
-    ? allBookmarks.filter(b => !b.is_archived && [b.title, b.url, b.description].filter(Boolean).join(' ').toLowerCase().includes(q)).slice(0, 4)
-    : [];
-
-  let html = '';
-  if (matchedNav.length) {
-    html += `<div class="cmd-group-label">Navigation & Commands</div>` + matchedNav.map(n => `
-      <button type="button" class="cmd-item" onclick="${n.action}">
-        <span class="cmd-item-left"><ion-icon name="arrow-forward-circle-outline"></ion-icon><span>${escapeHtml(n.label)}</span></span>
-        <span class="cmd-item-meta">${escapeHtml(n.meta)}</span>
-      </button>
-    `).join('');
+  if (!results.length) {
+    container.innerHTML = `<p class="empty-state-compact" style="padding:16px;">No matching items across your archive.</p>`;
+    return;
   }
 
-  if (matchedMedia.length) {
-    html += `<div class="cmd-group-label">Media Library</div>` + matchedMedia.map(m => `
-      <button type="button" class="cmd-item" onclick="closeGlobalSearchModal(); openMediaDetailModal('${escapeHtml(String(m.id))}');">
-        <span class="cmd-item-left"><ion-icon name="albums-outline"></ion-icon><span>${escapeHtml(m.title)}</span></span>
-        <span class="cmd-item-meta">${escapeHtml(CATEGORY_LABELS[getLegacyCategory(m)] || '')}</span>
-      </button>
-    `).join('');
-  }
-
-  if (matchedNotes.length) {
-    html += `<div class="cmd-group-label">Notes</div>` + matchedNotes.map(p => `
-      <button type="button" class="cmd-item" onclick="closeGlobalSearchModal(); switchMainView('notes');">
-        <span class="cmd-item-left"><ion-icon name="document-text-outline"></ion-icon><span>${escapeHtml(p.title || (p.content || '').slice(0, 45))}</span></span>
-        <span class="cmd-item-meta">${escapeHtml(p.folder || 'General')}</span>
-      </button>
-    `).join('');
-  }
-
-  if (matchedTasks.length) {
-    html += `<div class="cmd-group-label">Tasks</div>` + matchedTasks.map(t => `
-      <button type="button" class="cmd-item" onclick="closeGlobalSearchModal(); switchMainView('workspace'); switchWorkspaceTab('tasks');">
-        <span class="cmd-item-left"><ion-icon name="checkbox-outline"></ion-icon><span>${escapeHtml(t.title)}</span></span>
-        <span class="cmd-item-meta">${escapeHtml(t.status)}</span>
-      </button>
-    `).join('');
-  }
-
-  if (matchedBookmarks.length) {
-    html += `<div class="cmd-group-label">Bookmarks</div>` + matchedBookmarks.map(b => `
-      <a href="${escapeHtml(b.url)}" target="_blank" rel="noopener noreferrer" class="cmd-item" onclick="closeGlobalSearchModal();">
-        <span class="cmd-item-left"><ion-icon name="bookmark-outline"></ion-icon><span>${escapeHtml(b.title)}</span></span>
-        <span class="cmd-item-meta">Open ↗</span>
-      </a>
-    `).join('');
-  }
-
-  if (!html) {
-    html = `<p class="empty-state-compact">No matching results for "${escapeHtml(q)}"</p>`;
-  }
-  body.innerHTML = html;
+  window._cmdResults = results.slice(0, 14);
+  container.innerHTML = window._cmdResults.map((r, i) => `
+    <div class="cmd-result-row" onclick="window._cmdResults[${i}].action()">
+      <div>
+        <div class="cmd-result-title">${escapeHtml(r.title)}</div>
+        <div class="cmd-result-sub">${escapeHtml(r.sub)}</div>
+      </div>
+      <span class="cmd-type-pill">${escapeHtml(r.type)}</span>
+    </div>
+  `).join('');
 };
 
 window.openQuickCaptureModal = function () {
-  document.getElementById('quick-capture-modal').classList.add('active');
+  if (!isAdminLoggedIn) return;
+  document.getElementById('quick-capture-modal')?.classList.add('active');
 };
 
 window.closeQuickCaptureModal = function () {
-  document.getElementById('quick-capture-modal').classList.remove('active');
+  document.getElementById('quick-capture-modal')?.classList.remove('active');
 };
