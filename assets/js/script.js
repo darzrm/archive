@@ -4,7 +4,7 @@
 // 1. SUPABASE & CONFIGURATION
 // ==========================================
 const SUPABASE_URL = 'https://uendrdxiixmikkeanlod.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_IdPLjwQhVQwXGGxUnBVblg_oIQ5Zz89';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlbmRyZHhpaXhtaWtrZWFubG9kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ5NDY2MDQsImV4cCI6MjExMDUyMjYwNH0.RDOdaZ9qtcF9oFyvLqQLAHPYQUJLsBfFmGVQa0BLAnI';
 const STORAGE_BUCKET = 'media-assets';
 const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
