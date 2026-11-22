@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=400">
+  <link rel="stylesheet" href="./assets/css/style.css?v=402">
 
   <!-- Supabase & SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -83,12 +83,14 @@
           <span>Collections</span>
         </button>
 
-        <div class="sidebar-section-label">COMING IN PHASE 2–5</div>
-        <button type="button" class="sidebar-nav-item is-phase-upcoming" onclick="showPhaseNotice('Workspace (Journal, Tasks, Goals, Projects)', 2)">
+        <div class="sidebar-section-label">PERSONAL WORKSPACE</div>
+        <button type="button" class="sidebar-nav-item" id="nav-item-workspace" data-view="workspace" onclick="switchMainView('workspace')">
           <ion-icon name="checkbox-outline"></ion-icon>
           <span>Workspace</span>
-          <span class="phase-pill">P2</span>
+          <span class="nav-badge" id="nav-tasks-count">0</span>
         </button>
+
+        <div class="sidebar-section-label">COMING IN PHASE 3–5</div>
         <button type="button" class="sidebar-nav-item is-phase-upcoming" onclick="showPhaseNotice('Knowledge Base (Quotes, Vocabulary, Concepts)', 3)">
           <ion-icon name="library-outline"></ion-icon>
           <span>Knowledge Base</span>
@@ -196,9 +198,17 @@
                   <ion-icon name="create-outline"></ion-icon>
                   <span>Create Note</span>
                 </button>
-                <button type="button" class="quick-action-chip" onclick="openCollectionModal()">
-                  <ion-icon name="folder-open-outline"></ion-icon>
-                  <span>New Collection</span>
+                <button type="button" class="quick-action-chip" onclick="openTaskModal()">
+                  <ion-icon name="checkbox-outline"></ion-icon>
+                  <span>Add Task</span>
+                </button>
+                <button type="button" class="quick-action-chip" onclick="openJournalModal()">
+                  <ion-icon name="book-outline"></ion-icon>
+                  <span>Write Journal</span>
+                </button>
+                <button type="button" class="quick-action-chip" onclick="openBookmarkModal()">
+                  <ion-icon name="bookmark-outline"></ion-icon>
+                  <span>Save Bookmark</span>
                 </button>
               </div>
             </div>
@@ -233,15 +243,6 @@
               <div class="kpi-sub" id="dash-completion-rate">0% completion rate</div>
             </div>
 
-            <div class="kpi-card">
-              <div class="kpi-top">
-                <span class="kpi-label">Mean Rating</span>
-                <ion-icon name="star-outline"></ion-icon>
-              </div>
-              <div class="kpi-value" id="dash-mean-rating">—</div>
-              <div class="kpi-sub" id="dash-rated-count">0 rated entries</div>
-            </div>
-
             <div class="kpi-card" onclick="switchMainView('notes')">
               <div class="kpi-top">
                 <span class="kpi-label">Personal Notes</span>
@@ -249,6 +250,15 @@
               </div>
               <div class="kpi-value" id="dash-total-notes">0</div>
               <div class="kpi-sub" id="dash-pinned-notes">0 pinned</div>
+            </div>
+
+            <div class="kpi-card" onclick="switchMainView('workspace')">
+              <div class="kpi-top">
+                <span class="kpi-label">Open Tasks</span>
+                <ion-icon name="checkbox-outline"></ion-icon>
+              </div>
+              <div class="kpi-value" id="dash-open-tasks">0</div>
+              <div class="kpi-sub" id="dash-active-goals">0 active goals</div>
             </div>
           </div>
 
@@ -269,6 +279,20 @@
               </div>
             </div>
 
+            <!-- Widget: Upcoming Tasks & Active Goals (Admin) -->
+            <div class="dash-widget-card" id="widget-upcoming_tasks">
+              <div class="dash-widget-header">
+                <div class="dash-widget-title">
+                  <ion-icon name="checkbox-outline"></ion-icon>
+                  <h3>Upcoming Tasks</h3>
+                </div>
+                <button type="button" class="dash-link-btn" onclick="switchMainView('workspace')">Workspace</button>
+              </div>
+              <div class="dash-widget-body" id="dash-list-tasks">
+                <p class="empty-state-compact">Sign in as Admin to view personal tasks.</p>
+              </div>
+            </div>
+
             <!-- Widget: Recently Completed -->
             <div class="dash-widget-card" id="widget-recently_completed">
               <div class="dash-widget-header">
@@ -283,20 +307,6 @@
               </div>
             </div>
 
-            <!-- Widget: Recently Added Media -->
-            <div class="dash-widget-card" id="widget-recently_added">
-              <div class="dash-widget-header">
-                <div class="dash-widget-title">
-                  <ion-icon name="time-outline"></ion-icon>
-                  <h3>Recently Added Media</h3>
-                </div>
-                <button type="button" class="dash-link-btn" onclick="switchMainView('library')">Library</button>
-              </div>
-              <div class="dash-widget-body" id="dash-list-recent-media">
-                <p class="empty-state-compact">No media recorded yet.</p>
-              </div>
-            </div>
-
             <!-- Widget: Recent Personal Notes -->
             <div class="dash-widget-card" id="widget-recent_notes">
               <div class="dash-widget-header">
@@ -308,6 +318,34 @@
               </div>
               <div class="dash-widget-body" id="dash-list-recent-notes">
                 <p class="empty-state-compact">No notes yet.</p>
+              </div>
+            </div>
+
+            <!-- Widget: Active Goals Progress -->
+            <div class="dash-widget-card" id="widget-active_goals">
+              <div class="dash-widget-header">
+                <div class="dash-widget-title">
+                  <ion-icon name="flag-outline"></ion-icon>
+                  <h3>Active Goals</h3>
+                </div>
+                <button type="button" class="dash-link-btn" onclick="switchMainView('workspace'); switchWorkspaceTab('goals');">Goals</button>
+              </div>
+              <div class="dash-widget-body" id="dash-list-goals">
+                <p class="empty-state-compact">No active goals tracked.</p>
+              </div>
+            </div>
+
+            <!-- Widget: Recently Added Media -->
+            <div class="dash-widget-card" id="widget-recently_added">
+              <div class="dash-widget-header">
+                <div class="dash-widget-title">
+                  <ion-icon name="time-outline"></ion-icon>
+                  <h3>Recently Added Media</h3>
+                </div>
+                <button type="button" class="dash-link-btn" onclick="switchMainView('library')">Library</button>
+              </div>
+              <div class="dash-widget-body" id="dash-list-recent-media">
+                <p class="empty-state-compact">No media recorded yet.</p>
               </div>
             </div>
 
@@ -403,7 +441,7 @@
             </ul>
           </nav>
 
-          <!-- LIBRARY TOOLBAR (SEARCH, ADVANCED FILTERS, SORT, GRID/LIST/COMPACT) -->
+          <!-- LIBRARY TOOLBAR -->
           <div class="library-toolbar">
             <div class="search-box">
               <ion-icon name="search-outline"></ion-icon>
@@ -506,7 +544,7 @@
                 </div>
               </div>
 
-              <!-- View Switcher (Grid / List / Compact) -->
+              <!-- View Switcher -->
               <div class="view-mode-segmented" role="group" aria-label="Library View Mode">
                 <button type="button" class="view-seg-btn active" data-mode="grid" onclick="setLibraryViewMode('grid')" title="Grid View">
                   <ion-icon name="grid-outline"></ion-icon>
@@ -542,7 +580,7 @@
           <div class="notes-toolbar">
             <div class="search-box">
               <ion-icon name="search-outline"></ion-icon>
-              <input type="text" id="search-notes" placeholder="Search notes, folders, tags..." oninput="renderBlogPosts()">
+              <input type="text" id="search-notes" placeholder="Search notes, folders, tags, [[links]]..." oninput="renderBlogPosts()">
             </div>
             <select id="filter-note-folder" class="form-input notes-folder-select" onchange="renderBlogPosts()">
               <option value="all">All Folders</option>
@@ -574,6 +612,173 @@
           </div>
         </section>
 
+        <!-- ======================================================== -->
+        <!-- VIEW 5: PERSONAL WORKSPACE (PHASE 2)                     -->
+        <!-- ======================================================== -->
+        <section id="view-workspace" class="view-section" style="display: none;">
+
+          <!-- Admin Lock Banner if logged out -->
+          <div id="workspace-locked-notice" class="dash-widget-card" style="display: none; text-align: center; padding: 36px 20px;">
+            <ion-icon name="lock-closed-outline" style="font-size: 28px; margin: 0 auto; color: var(--mono-muted);"></ion-icon>
+            <h3 style="font-size: 15px; margin-top: 6px;">Private Personal Workspace</h3>
+            <p style="font-size: 12.5px; color: var(--mono-muted); max-width: 400px; margin: 0 auto;">
+              Journal, Tasks, Goals, Projects, and Bookmarks are protected by Row Level Security. Sign in as Admin to access your personal workspace.
+            </p>
+            <div>
+              <button type="button" class="primary-create-btn" onclick="handleAdminAuthClick()" style="margin-top: 8px;">Sign In as Admin</button>
+            </div>
+          </div>
+
+          <!-- Active Workspace Container -->
+          <div id="workspace-active-shell">
+            <!-- Workspace Sub-Navigation Tabs -->
+            <div class="workspace-tabs-bar">
+              <button type="button" class="ws-tab active" data-ws="tasks" onclick="switchWorkspaceTab('tasks')">
+                <ion-icon name="checkbox-outline"></ion-icon>
+                <span>Tasks</span>
+              </button>
+              <button type="button" class="ws-tab" data-ws="journal" onclick="switchWorkspaceTab('journal')">
+                <ion-icon name="book-outline"></ion-icon>
+                <span>Journal & Calendar</span>
+              </button>
+              <button type="button" class="ws-tab" data-ws="goals" onclick="switchWorkspaceTab('goals')">
+                <ion-icon name="flag-outline"></ion-icon>
+                <span>Goals</span>
+              </button>
+              <button type="button" class="ws-tab" data-ws="projects" onclick="switchWorkspaceTab('projects')">
+                <ion-icon name="folder-open-outline"></ion-icon>
+                <span>Projects</span>
+              </button>
+              <button type="button" class="ws-tab" data-ws="bookmarks" onclick="switchWorkspaceTab('bookmarks')">
+                <ion-icon name="bookmark-outline"></ion-icon>
+                <span>Bookmarks</span>
+              </button>
+            </div>
+
+            <!-- SUB-VIEW A: TASKS -->
+            <div id="ws-panel-tasks" class="ws-panel">
+              <div class="library-toolbar">
+                <div class="search-box">
+                  <ion-icon name="search-outline"></ion-icon>
+                  <input type="text" id="search-tasks" placeholder="Filter tasks..." oninput="renderWorkspaceTasks()">
+                </div>
+                <select id="filter-task-status" class="form-input" style="max-width: 150px;" onchange="renderWorkspaceTasks()">
+                  <option value="open">Open Tasks</option>
+                  <option value="all">All Tasks</option>
+                  <option value="todo">To Do</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="done">Completed</option>
+                </select>
+                <select id="filter-task-priority" class="form-input" style="max-width: 145px;" onchange="renderWorkspaceTasks()">
+                  <option value="all">All Priorities</option>
+                  <option value="high">High Priority</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+                <button type="button" class="primary-create-btn" onclick="openTaskModal()">
+                  <ion-icon name="add-outline"></ion-icon>
+                  <span>New Task</span>
+                </button>
+              </div>
+              <div class="tasks-list-container" id="workspace-tasks-list"></div>
+            </div>
+
+            <!-- SUB-VIEW B: JOURNAL + CALENDAR -->
+            <div id="ws-panel-journal" class="ws-panel" style="display: none;">
+              <div class="journal-layout-grid">
+                <!-- Interactive Month Calendar -->
+                <div class="dash-widget-card journal-calendar-card">
+                  <div class="dash-widget-header">
+                    <button type="button" class="blog-icon-btn" onclick="stepJournalCalendarMonth(-1)">
+                      <ion-icon name="chevron-back-outline"></ion-icon>
+                    </button>
+                    <h3 id="journal-cal-month-label" style="font-size: 13px;">Month Year</h3>
+                    <button type="button" class="blog-icon-btn" onclick="stepJournalCalendarMonth(1)">
+                      <ion-icon name="chevron-forward-outline"></ion-icon>
+                    </button>
+                  </div>
+                  <div class="calendar-weekdays">
+                    <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+                  </div>
+                  <div class="calendar-days-grid" id="journal-calendar-grid"></div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; padding-top:6px;">
+                    <button type="button" class="dash-link-btn" onclick="clearJournalDateFilter()">Show All Entries</button>
+                    <button type="button" class="primary-create-btn" onclick="openJournalModal()">
+                      <ion-icon name="add-outline"></ion-icon>
+                      <span>New Entry</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Journal Entries List -->
+                <div class="journal-entries-col">
+                  <div class="notes-toolbar">
+                    <div class="search-box">
+                      <ion-icon name="search-outline"></ion-icon>
+                      <input type="text" id="search-journal" placeholder="Search journal entries..." oninput="renderJournalEntries()">
+                    </div>
+                    <select id="filter-journal-period" class="form-input" style="max-width: 140px;" onchange="renderJournalEntries()">
+                      <option value="all">All Types</option>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </div>
+                  <div id="journal-entries-list" class="blog-feed-container"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SUB-VIEW C: GOALS -->
+            <div id="ws-panel-goals" class="ws-panel" style="display: none;">
+              <div class="section-top-bar">
+                <div>
+                  <h2 class="section-heading">Personal Goals & Targets</h2>
+                  <p class="section-sub">Track measurable milestones with live progress updates.</p>
+                </div>
+                <button type="button" class="primary-create-btn" onclick="openGoalModal()">
+                  <ion-icon name="add-outline"></ion-icon>
+                  <span>New Goal</span>
+                </button>
+              </div>
+              <div class="collections-grid" id="workspace-goals-grid"></div>
+            </div>
+
+            <!-- SUB-VIEW D: PROJECTS -->
+            <div id="ws-panel-projects" class="ws-panel" style="display: none;">
+              <div class="section-top-bar">
+                <div>
+                  <h2 class="section-heading">Projects</h2>
+                  <p class="section-sub">Organize tasks and notes under active initiatives.</p>
+                </div>
+                <button type="button" class="primary-create-btn" onclick="openProjectModal()">
+                  <ion-icon name="add-outline"></ion-icon>
+                  <span>New Project</span>
+                </button>
+              </div>
+              <div class="collections-grid" id="workspace-projects-grid"></div>
+            </div>
+
+            <!-- SUB-VIEW E: BOOKMARKS -->
+            <div id="ws-panel-bookmarks" class="ws-panel" style="display: none;">
+              <div class="library-toolbar">
+                <div class="search-box">
+                  <ion-icon name="search-outline"></ion-icon>
+                  <input type="text" id="search-bookmarks" placeholder="Search bookmarks, URLs, tags..." oninput="renderBookmarks()">
+                </div>
+                <select id="filter-bookmark-cat" class="form-input" style="max-width: 165px;" onchange="renderBookmarks()">
+                  <option value="all">All Categories</option>
+                </select>
+                <button type="button" class="primary-create-btn" onclick="openBookmarkModal()">
+                  <ion-icon name="add-outline"></ion-icon>
+                  <span>Save Bookmark</span>
+                </button>
+              </div>
+              <div class="collections-grid" id="workspace-bookmarks-grid"></div>
+            </div>
+          </div>
+        </section>
+
       </main>
 
       <!-- MINIMALIST FOOTER -->
@@ -590,7 +795,7 @@
   </button>
 
   <!-- ======================================================== -->
-  <!-- MODAL 1: ADD / EDIT MEDIA (12 CATEGORIES + SPECIFIC META) -->
+  <!-- MODAL 1: ADD / EDIT MEDIA                                -->
   <!-- ======================================================== -->
   <div class="modal-overlay" id="media-modal">
     <div class="modal-box modal-box-lg">
@@ -602,7 +807,6 @@
         <button type="button" class="close-modal-btn" onclick="closeMediaModal()">&times;</button>
       </div>
 
-      <!-- Optional Metadata Auto-Fill -->
       <div class="api-search-section">
         <label class="form-label">Auto-Fill Metadata (Optional)</label>
         <div class="api-search-bar">
@@ -678,10 +882,8 @@
           </div>
         </div>
 
-        <!-- DYNAMIC CATEGORY-SPECIFIC METADATA FIELDS -->
         <div id="category-specific-fields-box" class="category-meta-box"></div>
 
-        <!-- COVER GALLERY -->
         <div class="form-group">
           <div class="social-editor-header">
             <label style="margin: 0;">Cover / Poster</label>
@@ -693,7 +895,6 @@
           <span class="upload-status-text" id="cover-upload-status"></span>
         </div>
 
-        <!-- PROGRESS TRACKS -->
         <div class="form-group">
           <div class="social-editor-header">
             <label style="margin: 0;">Progress & Status</label>
@@ -704,7 +905,6 @@
           <div id="media-tracks-editor" class="tracks-editor-list"></div>
         </div>
 
-        <!-- RATING (0-10 WITH 0.5 STEP), DATES & FAVORITE -->
         <div class="form-row-3">
           <div class="form-group">
             <label>Personal Rating (0 – 10)</label>
@@ -734,13 +934,11 @@
           </div>
         </div>
 
-        <!-- COLLECTIONS ASSIGNMENT -->
         <div class="form-group" id="media-collections-assign-group" style="display: none;">
           <label>Assign to Collections</label>
           <div id="media-collections-checkboxes" class="collections-check-grid"></div>
         </div>
 
-        <!-- DESCRIPTION & PERSONAL REVIEW -->
         <div class="form-group">
           <label>Synopsis / Description</label>
           <textarea id="media-description" class="form-input" rows="2" placeholder="Brief summary..."></textarea>
@@ -751,7 +949,6 @@
           <textarea id="media-review" class="form-input" rows="3" placeholder="Your thoughts, critique, pros & cons..."></textarea>
         </div>
 
-        <!-- EPISODE / CHAPTER / ROUTE NOTES -->
         <div class="form-group">
           <div class="social-editor-header">
             <label style="margin: 0;">Episode / Chapter / Route Logs</label>
@@ -781,9 +978,7 @@
     </div>
   </div>
 
-  <!-- ======================================================== -->
-  <!-- MODAL 1B: MEDIA DETAIL VIEW                              -->
-  <!-- ======================================================== -->
+  <!-- MODAL 1B: MEDIA DETAIL VIEW -->
   <div class="modal-overlay" id="media-detail-modal">
     <div class="modal-box modal-box-lg">
       <div class="modal-header">
@@ -797,9 +992,7 @@
     </div>
   </div>
 
-  <!-- ======================================================== -->
-  <!-- MODAL 2: ADD / EDIT NOTE POST (MARKDOWN + FOLDERS + PIN) -->
-  <!-- ======================================================== -->
+  <!-- MODAL 2: ADD / EDIT NOTE POST (MARKDOWN + [[INTERNAL LINKS]] + PROJECT) -->
   <div class="modal-overlay" id="post-modal">
     <div class="modal-box modal-box-lg">
       <div class="modal-header">
@@ -813,23 +1006,29 @@
       <form id="post-form" class="modal-form">
         <input type="hidden" id="post-id">
 
-        <div class="form-row">
+        <div class="form-row-3">
           <div class="form-group">
             <label>Title (Optional)</label>
             <input type="text" id="post-title" class="form-input" placeholder="Note title...">
           </div>
           <div class="form-group">
             <label>Folder</label>
-            <input type="text" id="post-folder" class="form-input" value="General" placeholder="General, Ideas, Reflections...">
+            <input type="text" id="post-folder" class="form-input" value="General" placeholder="General, Ideas...">
+          </div>
+          <div class="form-group">
+            <label>Linked Project</label>
+            <select id="post-project-id" class="form-input">
+              <option value="">None</option>
+            </select>
           </div>
         </div>
 
         <div class="form-group">
           <div class="social-editor-header">
-            <label style="margin: 0;">Content (Markdown supported)</label>
+            <label style="margin: 0;">Content (Markdown & [[Note Title]] links supported)</label>
             <span class="autosave-hint" id="note-autosave-status"></span>
           </div>
-          <textarea id="post-content" class="form-input note-textarea-large" rows="7" required placeholder="Write your note... Supports **bold**, *italic*, `code`, lists, and links."></textarea>
+          <textarea id="post-content" class="form-input note-textarea-large" rows="7" required placeholder="Write your note... Use [[Other Note Title]] to link notes together."></textarea>
         </div>
 
         <div class="form-group">
@@ -866,9 +1065,7 @@
     </div>
   </div>
 
-  <!-- ======================================================== -->
-  <!-- MODAL 3: COLLECTION CREATE / EDIT                        -->
-  <!-- ======================================================== -->
+  <!-- MODAL 3: COLLECTION CREATE / EDIT -->
   <div class="modal-overlay" id="collection-modal">
     <div class="modal-box" style="max-width: 440px;">
       <div class="modal-header">
@@ -896,25 +1093,270 @@
     </div>
   </div>
 
-  <!-- ======================================================== -->
-  <!-- MODAL 4: GLOBAL SEARCH & COMMAND PALETTE (CTRL+K)        -->
-  <!-- ======================================================== -->
+  <!-- MODAL: TASK CREATE / EDIT -->
+  <div class="modal-overlay" id="task-modal">
+    <div class="modal-box" style="max-width: 480px;">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="modal-icon-badge"><ion-icon name="checkbox-outline"></ion-icon></div>
+          <h3 id="task-modal-title">New Task</h3>
+        </div>
+        <button type="button" class="close-modal-btn" onclick="closeTaskModal()">&times;</button>
+      </div>
+      <form id="task-form" class="modal-form">
+        <input type="hidden" id="task-id">
+        <div class="form-group">
+          <label>Task Title *</label>
+          <input type="text" id="task-title" class="form-input" required placeholder="What needs to be done?">
+        </div>
+        <div class="form-row-3">
+          <div class="form-group">
+            <label>Priority</label>
+            <select id="task-priority" class="form-input">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select id="task-status" class="form-input">
+              <option value="todo">To Do</option>
+              <option value="in_progress">In Progress</option>
+              <option value="done">Done</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Due Date</label>
+            <input type="date" id="task-due-date" class="form-input">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Project</label>
+            <select id="task-project-id" class="form-input">
+              <option value="">No Project</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Tags</label>
+            <input type="text" id="task-tags" class="form-input" placeholder="work, reading, urgent">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Notes / Details</label>
+          <textarea id="task-desc" class="form-input" rows="2" placeholder="Optional context..."></textarea>
+        </div>
+        <div class="modal-submit-row">
+          <button type="button" id="btn-delete-task" class="form-btn danger-btn" style="display: none;" onclick="deleteCurrentTask()">Delete</button>
+          <button type="submit" class="form-btn primary-submit">Save Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: JOURNAL ENTRY CREATE / EDIT -->
+  <div class="modal-overlay" id="journal-modal">
+    <div class="modal-box modal-box-lg">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="modal-icon-badge"><ion-icon name="book-outline"></ion-icon></div>
+          <h3 id="journal-modal-title">New Journal Entry</h3>
+        </div>
+        <button type="button" class="close-modal-btn" onclick="closeJournalModal()">&times;</button>
+      </div>
+      <form id="journal-form" class="modal-form">
+        <input type="hidden" id="journal-id">
+        <div class="form-row-3">
+          <div class="form-group">
+            <label>Date *</label>
+            <input type="date" id="journal-date" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label>Period Type</label>
+            <select id="journal-period" class="form-input">
+              <option value="daily">Daily Entry</option>
+              <option value="weekly">Weekly Review</option>
+              <option value="monthly">Monthly Reflection</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Mood / State</label>
+            <input type="text" id="journal-mood" class="form-input" placeholder="Focused, Calm, Tired...">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Title (Optional)</label>
+          <input type="text" id="journal-title" class="form-input" placeholder="Headline for this entry...">
+        </div>
+        <div class="form-group">
+          <label>Reflection *</label>
+          <textarea id="journal-content" class="form-input note-textarea-large" rows="7" required placeholder="Write your thoughts, highlights, or reflections..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Tags</label>
+          <input type="text" id="journal-tags" class="form-input" placeholder="gratitude, review, habits">
+        </div>
+        <div class="modal-submit-row">
+          <button type="button" id="btn-delete-journal" class="form-btn danger-btn" style="display: none;" onclick="deleteCurrentJournal()">Delete</button>
+          <button type="submit" class="form-btn primary-submit">Save Journal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: GOAL CREATE / EDIT -->
+  <div class="modal-overlay" id="goal-modal">
+    <div class="modal-box" style="max-width: 460px;">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="modal-icon-badge"><ion-icon name="flag-outline"></ion-icon></div>
+          <h3 id="goal-modal-title">New Goal</h3>
+        </div>
+        <button type="button" class="close-modal-btn" onclick="closeGoalModal()">&times;</button>
+      </div>
+      <form id="goal-form" class="modal-form">
+        <input type="hidden" id="goal-id">
+        <div class="form-group">
+          <label>Goal Title *</label>
+          <input type="text" id="goal-title" class="form-input" required placeholder="e.g. Read 24 Books in 2026">
+        </div>
+        <div class="form-row-3">
+          <div class="form-group">
+            <label>Current</label>
+            <input type="number" id="goal-current" class="form-input" step="any" value="0" required>
+          </div>
+          <div class="form-group">
+            <label>Target *</label>
+            <input type="number" id="goal-target" class="form-input" step="any" value="100" required>
+          </div>
+          <div class="form-group">
+            <label>Unit</label>
+            <input type="text" id="goal-unit" class="form-input" value="%" placeholder="books, hrs, %">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Category</label>
+            <input type="text" id="goal-category" class="form-input" value="Personal" placeholder="Reading, Health, Career">
+          </div>
+          <div class="form-group">
+            <label>Target Date</label>
+            <input type="date" id="goal-target-date" class="form-input">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="goal-desc" class="form-input" rows="2" placeholder="Why does this goal matter?"></textarea>
+        </div>
+        <div class="modal-submit-row">
+          <button type="button" id="btn-delete-goal" class="form-btn danger-btn" style="display: none;" onclick="deleteCurrentGoal()">Delete</button>
+          <button type="submit" class="form-btn primary-submit">Save Goal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: PROJECT CREATE / EDIT -->
+  <div class="modal-overlay" id="project-modal">
+    <div class="modal-box" style="max-width: 460px;">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="modal-icon-badge"><ion-icon name="folder-open-outline"></ion-icon></div>
+          <h3 id="project-modal-title">New Project</h3>
+        </div>
+        <button type="button" class="close-modal-btn" onclick="closeProjectModal()">&times;</button>
+      </div>
+      <form id="project-form" class="modal-form">
+        <input type="hidden" id="project-id">
+        <div class="form-group">
+          <label>Project Title *</label>
+          <input type="text" id="project-title" class="form-input" required placeholder="Project name">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Status</label>
+            <select id="project-status" class="form-input">
+              <option value="active">Active</option>
+              <option value="planning">Planning</option>
+              <option value="on_hold">On Hold</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Deadline</label>
+            <input type="date" id="project-deadline" class="form-input">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="project-desc" class="form-input" rows="3" placeholder="Scope and objectives..."></textarea>
+        </div>
+        <div class="modal-submit-row">
+          <button type="button" id="btn-delete-project" class="form-btn danger-btn" style="display: none;" onclick="deleteCurrentProject()">Delete</button>
+          <button type="submit" class="form-btn primary-submit">Save Project</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: BOOKMARK CREATE / EDIT -->
+  <div class="modal-overlay" id="bookmark-modal">
+    <div class="modal-box" style="max-width: 460px;">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="modal-icon-badge"><ion-icon name="bookmark-outline"></ion-icon></div>
+          <h3 id="bookmark-modal-title">Save Bookmark</h3>
+        </div>
+        <button type="button" class="close-modal-btn" onclick="closeBookmarkModal()">&times;</button>
+      </div>
+      <form id="bookmark-form" class="modal-form">
+        <input type="hidden" id="bookmark-id">
+        <div class="form-group">
+          <label>Title *</label>
+          <input type="text" id="bookmark-title" class="form-input" required placeholder="Article, Tool, or Reference title">
+        </div>
+        <div class="form-group">
+          <label>URL *</label>
+          <input type="url" id="bookmark-url" class="form-input" required placeholder="https://...">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Category</label>
+            <input type="text" id="bookmark-category" class="form-input" value="General" placeholder="Articles, Dev, Design, Music">
+          </div>
+          <div class="form-group">
+            <label>Tags</label>
+            <input type="text" id="bookmark-tags" class="form-input" placeholder="essay, tool, reference">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="bookmark-desc" class="form-input" rows="2" placeholder="Why did you save this link?"></textarea>
+        </div>
+        <div class="modal-submit-row">
+          <button type="button" id="btn-delete-bookmark" class="form-btn danger-btn" style="display: none;" onclick="deleteCurrentBookmark()">Delete</button>
+          <button type="submit" class="form-btn primary-submit">Save Bookmark</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 4: GLOBAL SEARCH & COMMAND PALETTE (CTRL+K) -->
   <div class="modal-overlay" id="global-search-modal" onclick="if(event.target === this) closeGlobalSearchModal()">
     <div class="modal-box command-palette-box">
       <div class="command-input-wrap">
         <ion-icon name="search-outline"></ion-icon>
-        <input type="text" id="global-search-input" placeholder="Search media, notes, collections, or jump to view..." oninput="handleGlobalSearchInput()">
+        <input type="text" id="global-search-input" placeholder="Search media, notes, tasks, journal, bookmarks..." oninput="handleGlobalSearchInput()">
         <button type="button" class="close-modal-btn" onclick="closeGlobalSearchModal()">&times;</button>
       </div>
       <div class="command-results-body" id="global-search-results"></div>
     </div>
   </div>
 
-  <!-- ======================================================== -->
-  <!-- MODAL 5: QUICK CAPTURE                                   -->
-  <!-- ======================================================== -->
+  <!-- MODAL 5: QUICK CAPTURE -->
   <div class="modal-overlay" id="quick-capture-modal" onclick="if(event.target === this) closeQuickCaptureModal()">
-    <div class="modal-box" style="max-width: 420px;">
+    <div class="modal-box" style="max-width: 460px;">
       <div class="modal-header">
         <div class="modal-title-group">
           <div class="modal-icon-badge"><ion-icon name="flash-outline"></ion-icon></div>
@@ -925,23 +1367,33 @@
       <div class="quick-capture-grid">
         <button type="button" class="qc-choice-btn" onclick="closeQuickCaptureModal(); openMediaModal();">
           <ion-icon name="film-outline"></ion-icon>
-          <span>Media Entry</span>
+          <span>Media</span>
         </button>
         <button type="button" class="qc-choice-btn" onclick="closeQuickCaptureModal(); openPostModal();">
           <ion-icon name="document-text-outline"></ion-icon>
-          <span>Personal Note</span>
+          <span>Note</span>
         </button>
-        <button type="button" class="qc-choice-btn" onclick="closeQuickCaptureModal(); openCollectionModal();">
-          <ion-icon name="bookmarks-outline"></ion-icon>
-          <span>Collection</span>
+        <button type="button" class="qc-choice-btn" onclick="closeQuickCaptureModal(); openTaskModal();">
+          <ion-icon name="checkbox-outline"></ion-icon>
+          <span>Task</span>
+        </button>
+        <button type="button" class="qc-choice-btn" onclick="closeQuickCaptureModal(); openJournalModal();">
+          <ion-icon name="book-outline"></ion-icon>
+          <span>Journal</span>
+        </button>
+        <button type="button" class="qc-choice-btn" onclick="closeQuickCaptureModal(); openGoalModal();">
+          <ion-icon name="flag-outline"></ion-icon>
+          <span>Goal</span>
+        </button>
+        <button type="button" class="qc-choice-btn" onclick="closeQuickCaptureModal(); openBookmarkModal();">
+          <ion-icon name="bookmark-outline"></ion-icon>
+          <span>Bookmark</span>
         </button>
       </div>
     </div>
   </div>
 
-  <!-- ======================================================== -->
-  <!-- MODAL 6: DASHBOARD WIDGET CUSTOMIZER                     -->
-  <!-- ======================================================== -->
+  <!-- MODAL 6: DASHBOARD WIDGET CUSTOMIZER -->
   <div class="modal-overlay" id="widget-modal" onclick="if(event.target === this) closeWidgetCustomizerModal()">
     <div class="modal-box" style="max-width: 400px;">
       <div class="modal-header">
@@ -955,9 +1407,7 @@
     </div>
   </div>
 
-  <!-- ======================================================== -->
-  <!-- MODAL 7: SETTINGS (ROOT & PROFILE)                       -->
-  <!-- ======================================================== -->
+  <!-- MODAL 7: SETTINGS -->
   <div class="modal-overlay" id="profile-modal">
     <div class="modal-box">
       <div class="modal-header">
@@ -1057,9 +1507,7 @@
     </div>
   </div>
 
-  <!-- ======================================================== -->
-  <!-- MODAL 8: ADMIN LOGIN                                     -->
-  <!-- ======================================================== -->
+  <!-- MODAL 8: ADMIN LOGIN -->
   <div class="modal-overlay" id="login-modal">
     <div class="modal-box" style="max-width: 380px;">
       <div class="modal-header">
@@ -1088,7 +1536,7 @@
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 
   <!-- Main JS -->
-  <script src="./assets/js/script.js?v=100"></script>
+  <script src="./assets/js/script.js?v=102"></script>
 </body>
 
 </html>
