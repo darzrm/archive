@@ -15,11 +15,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=402">
+  <link rel="stylesheet" href="./assets/css/style.css?v=500">
 
-  <!-- Supabase & SweetAlert2 -->
+  <!-- Supabase, SweetAlert2 & Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 
 <body>
@@ -83,28 +84,26 @@
           <span>Collections</span>
         </button>
 
-        <div class="sidebar-section-label">PERSONAL WORKSPACE</div>
-        <button type="button" class="sidebar-nav-item" id="nav-item-workspace" data-view="workspace" onclick="switchMainView('workspace')">
+        <div class="sidebar-section-label">LIFE OS</div>
+        <button type="button" class="sidebar-nav-item" data-view="workspace" onclick="switchMainView('workspace')">
           <ion-icon name="checkbox-outline"></ion-icon>
           <span>Workspace</span>
           <span class="nav-badge" id="nav-tasks-count">0</span>
         </button>
 
-        <div class="sidebar-section-label">COMING IN PHASE 3–5</div>
-        <button type="button" class="sidebar-nav-item is-phase-upcoming" onclick="showPhaseNotice('Knowledge Base (Quotes, Vocabulary, Concepts)', 3)">
+        <button type="button" class="sidebar-nav-item" data-view="knowledge" onclick="switchMainView('knowledge')">
           <ion-icon name="library-outline"></ion-icon>
           <span>Knowledge Base</span>
-          <span class="phase-pill">P3</span>
         </button>
-        <button type="button" class="sidebar-nav-item is-phase-upcoming" onclick="showPhaseNotice('Deep Statistics & Analytics', 4)">
+
+        <button type="button" class="sidebar-nav-item" data-view="statistics" onclick="switchMainView('statistics')">
           <ion-icon name="bar-chart-outline"></ion-icon>
           <span>Statistics</span>
-          <span class="phase-pill">P4</span>
         </button>
-        <button type="button" class="sidebar-nav-item is-phase-upcoming" onclick="showPhaseNotice('AI Assistant (Groq Edge Function)', 5)">
+
+        <button type="button" class="sidebar-nav-item" data-view="ai" onclick="switchMainView('ai')">
           <ion-icon name="sparkles-outline"></ion-icon>
           <span>AI Assistant</span>
-          <span class="phase-pill">P5</span>
         </button>
       </nav>
 
@@ -206,9 +205,13 @@
                   <ion-icon name="book-outline"></ion-icon>
                   <span>Write Journal</span>
                 </button>
-                <button type="button" class="quick-action-chip" onclick="openBookmarkModal()">
-                  <ion-icon name="bookmark-outline"></ion-icon>
-                  <span>Save Bookmark</span>
+                <button type="button" class="quick-action-chip" onclick="openQuoteModal()">
+                  <ion-icon name="chatbox-ellipses-outline"></ion-icon>
+                  <span>Save Quote</span>
+                </button>
+                <button type="button" class="quick-action-chip" onclick="switchMainView('ai')">
+                  <ion-icon name="sparkles-outline"></ion-icon>
+                  <span>Ask AI</span>
                 </button>
               </div>
             </div>
@@ -279,7 +282,7 @@
               </div>
             </div>
 
-            <!-- Widget: Upcoming Tasks & Active Goals (Admin) -->
+            <!-- Widget: Upcoming Tasks -->
             <div class="dash-widget-card" id="widget-upcoming_tasks">
               <div class="dash-widget-header">
                 <div class="dash-widget-title">
@@ -449,7 +452,6 @@
             </div>
 
             <div class="toolbar-controls-group">
-              <!-- Filter Popover -->
               <div class="popover-wrapper" id="filter-popover-wrap">
                 <button type="button" class="toolbar-btn" id="btn-filter-toggle" onclick="toggleToolbarPopover('filter')">
                   <ion-icon name="funnel-outline"></ion-icon>
@@ -514,7 +516,6 @@
                 </div>
               </div>
 
-              <!-- Sort Popover -->
               <div class="popover-wrapper" id="sort-popover-wrap">
                 <button type="button" class="toolbar-btn" id="btn-sort-toggle" onclick="toggleToolbarPopover('sort')">
                   <ion-icon name="swap-vertical-outline"></ion-icon>
@@ -544,7 +545,6 @@
                 </div>
               </div>
 
-              <!-- View Switcher -->
               <div class="view-mode-segmented" role="group" aria-label="Library View Mode">
                 <button type="button" class="view-seg-btn active" data-mode="grid" onclick="setLibraryViewMode('grid')" title="Grid View">
                   <ion-icon name="grid-outline"></ion-icon>
@@ -559,12 +559,10 @@
             </div>
           </div>
 
-          <!-- MEDIA CONTAINER -->
           <div class="media-grid" id="media-grid">
             <p class="empty-state">Loading library...</p>
           </div>
 
-          <!-- LOAD MORE PAGINATION -->
           <div id="load-more-wrap" class="load-more-wrap" style="display: none;">
             <button type="button" class="load-more-btn" onclick="loadMoreMedia()">
               <span id="load-more-text">Load More</span>
@@ -616,8 +614,6 @@
         <!-- VIEW 5: PERSONAL WORKSPACE (PHASE 2)                     -->
         <!-- ======================================================== -->
         <section id="view-workspace" class="view-section" style="display: none;">
-
-          <!-- Admin Lock Banner if logged out -->
           <div id="workspace-locked-notice" class="dash-widget-card" style="display: none; text-align: center; padding: 36px 20px;">
             <ion-icon name="lock-closed-outline" style="font-size: 28px; margin: 0 auto; color: var(--mono-muted);"></ion-icon>
             <h3 style="font-size: 15px; margin-top: 6px;">Private Personal Workspace</h3>
@@ -629,9 +625,7 @@
             </div>
           </div>
 
-          <!-- Active Workspace Container -->
           <div id="workspace-active-shell">
-            <!-- Workspace Sub-Navigation Tabs -->
             <div class="workspace-tabs-bar">
               <button type="button" class="ws-tab active" data-ws="tasks" onclick="switchWorkspaceTab('tasks')">
                 <ion-icon name="checkbox-outline"></ion-icon>
@@ -655,7 +649,7 @@
               </button>
             </div>
 
-            <!-- SUB-VIEW A: TASKS -->
+            <!-- TASKS -->
             <div id="ws-panel-tasks" class="ws-panel">
               <div class="library-toolbar">
                 <div class="search-box">
@@ -683,10 +677,9 @@
               <div class="tasks-list-container" id="workspace-tasks-list"></div>
             </div>
 
-            <!-- SUB-VIEW B: JOURNAL + CALENDAR -->
+            <!-- JOURNAL + CALENDAR -->
             <div id="ws-panel-journal" class="ws-panel" style="display: none;">
               <div class="journal-layout-grid">
-                <!-- Interactive Month Calendar -->
                 <div class="dash-widget-card journal-calendar-card">
                   <div class="dash-widget-header">
                     <button type="button" class="blog-icon-btn" onclick="stepJournalCalendarMonth(-1)">
@@ -710,7 +703,6 @@
                   </div>
                 </div>
 
-                <!-- Journal Entries List -->
                 <div class="journal-entries-col">
                   <div class="notes-toolbar">
                     <div class="search-box">
@@ -729,7 +721,7 @@
               </div>
             </div>
 
-            <!-- SUB-VIEW C: GOALS -->
+            <!-- GOALS -->
             <div id="ws-panel-goals" class="ws-panel" style="display: none;">
               <div class="section-top-bar">
                 <div>
@@ -744,7 +736,7 @@
               <div class="collections-grid" id="workspace-goals-grid"></div>
             </div>
 
-            <!-- SUB-VIEW D: PROJECTS -->
+            <!-- PROJECTS -->
             <div id="ws-panel-projects" class="ws-panel" style="display: none;">
               <div class="section-top-bar">
                 <div>
@@ -759,7 +751,7 @@
               <div class="collections-grid" id="workspace-projects-grid"></div>
             </div>
 
-            <!-- SUB-VIEW E: BOOKMARKS -->
+            <!-- BOOKMARKS -->
             <div id="ws-panel-bookmarks" class="ws-panel" style="display: none;">
               <div class="library-toolbar">
                 <div class="search-box">
@@ -776,6 +768,223 @@
               </div>
               <div class="collections-grid" id="workspace-bookmarks-grid"></div>
             </div>
+          </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- VIEW 6: KNOWLEDGE BASE (PHASE 3)                         -->
+        <!-- ======================================================== -->
+        <section id="view-knowledge" class="view-section" style="display: none;">
+          <div id="knowledge-locked-notice" class="dash-widget-card" style="display: none; text-align: center; padding: 36px 20px;">
+            <ion-icon name="lock-closed-outline" style="font-size: 28px; margin: 0 auto; color: var(--mono-muted);"></ion-icon>
+            <h3 style="font-size: 15px; margin-top: 6px;">Personal Knowledge Base</h3>
+            <p style="font-size: 12.5px; color: var(--mono-muted); max-width: 400px; margin: 0 auto;">
+              Quotes, Vocabulary decks, and Concept notes are private to your Admin session.
+            </p>
+            <div>
+              <button type="button" class="primary-create-btn" onclick="handleAdminAuthClick()" style="margin-top: 8px;">Sign In as Admin</button>
+            </div>
+          </div>
+
+          <div id="knowledge-active-shell">
+            <div class="workspace-tabs-bar">
+              <button type="button" class="kb-tab ws-tab active" data-kb="quotes" onclick="switchKnowledgeTab('quotes')">
+                <ion-icon name="chatbox-ellipses-outline"></ion-icon>
+                <span>Quotes & Highlights</span>
+              </button>
+              <button type="button" class="kb-tab ws-tab" data-kb="vocabulary" onclick="switchKnowledgeTab('vocabulary')">
+                <ion-icon name="language-outline"></ion-icon>
+                <span>Vocabulary & Study</span>
+              </button>
+              <button type="button" class="kb-tab ws-tab" data-kb="concepts" onclick="switchKnowledgeTab('concepts')">
+                <ion-icon name="bulb-outline"></ion-icon>
+                <span>Concepts & Ideas</span>
+              </button>
+            </div>
+
+            <!-- KB A: QUOTES & HIGHLIGHTS -->
+            <div id="kb-panel-quotes" class="kb-panel">
+              <div class="library-toolbar">
+                <div class="search-box">
+                  <ion-icon name="search-outline"></ion-icon>
+                  <input type="text" id="search-quotes" placeholder="Search quotes, authors, sources..." oninput="renderQuotes()">
+                </div>
+                <button type="button" class="primary-create-btn" onclick="openQuoteModal()">
+                  <ion-icon name="add-outline"></ion-icon>
+                  <span>Add Quote</span>
+                </button>
+              </div>
+              <div class="blog-feed-container" id="kb-quotes-list"></div>
+            </div>
+
+            <!-- KB B: VOCABULARY & LANGUAGE LEARNING -->
+            <div id="kb-panel-vocabulary" class="kb-panel" style="display: none;">
+              <div class="library-toolbar">
+                <div class="search-box">
+                  <ion-icon name="search-outline"></ion-icon>
+                  <input type="text" id="search-vocab" placeholder="Search word, reading, meaning..." oninput="renderVocabulary()">
+                </div>
+                <select id="filter-vocab-lang" class="form-input" style="max-width: 150px;" onchange="renderVocabulary()">
+                  <option value="all">All Languages</option>
+                </select>
+                <button type="button" class="toolbar-btn" id="btn-toggle-vocab-quiz" onclick="toggleVocabStudyMode()">
+                  <ion-icon name="eye-off-outline"></ion-icon>
+                  <span id="vocab-study-label">Study Mode</span>
+                </button>
+                <button type="button" class="primary-create-btn" onclick="openVocabModal()">
+                  <ion-icon name="add-outline"></ion-icon>
+                  <span>Add Word</span>
+                </button>
+              </div>
+              <div class="collections-grid" id="kb-vocab-grid"></div>
+            </div>
+
+            <!-- KB C: CONCEPTS & LEARNING NOTES -->
+            <div id="kb-panel-concepts" class="kb-panel" style="display: none;">
+              <div class="library-toolbar">
+                <div class="search-box">
+                  <ion-icon name="search-outline"></ion-icon>
+                  <input type="text" id="search-concepts" placeholder="Search concepts, frameworks, mental models..." oninput="renderConcepts()">
+                </div>
+                <button type="button" class="primary-create-btn" onclick="openConceptModal()">
+                  <ion-icon name="add-outline"></ion-icon>
+                  <span>New Concept</span>
+                </button>
+              </div>
+              <div class="collections-grid" id="kb-concepts-grid"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- VIEW 7: DEEP STATISTICS & ANALYTICS (PHASE 4)            -->
+        <!-- ======================================================== -->
+        <section id="view-statistics" class="view-section" style="display: none;">
+          <div class="section-top-bar">
+            <div>
+              <h2 class="section-heading">Statistics & Analytics</h2>
+              <p class="section-sub">Visual breakdown of your media archive, ratings, and personal productivity.</p>
+            </div>
+          </div>
+
+          <div class="dashboard-kpi-grid" style="margin-bottom: 16px;">
+            <div class="kpi-card">
+              <div class="kpi-top"><span class="kpi-label">Mean Media Score</span><ion-icon name="star-outline"></ion-icon></div>
+              <div class="kpi-value" id="analytics-mean-score">0.0</div>
+              <div class="kpi-sub" id="analytics-rated-sub">Across 0 rated entries</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-top"><span class="kpi-label">Total Units Consumed</span><ion-icon name="layers-outline"></ion-icon></div>
+              <div class="kpi-value" id="analytics-total-units">0</div>
+              <div class="kpi-sub">Episodes, chapters, pages & items</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-top"><span class="kpi-label">Task Completion</span><ion-icon name="checkmark-done-outline"></ion-icon></div>
+              <div class="kpi-value" id="analytics-task-rate">0%</div>
+              <div class="kpi-sub" id="analytics-task-sub">0 of 0 tasks done</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-top"><span class="kpi-label">Knowledge & Journal</span><ion-icon name="library-outline"></ion-icon></div>
+              <div class="kpi-value" id="analytics-kb-total">0</div>
+              <div class="kpi-sub" id="analytics-kb-sub">Quotes, words, concepts & entries</div>
+            </div>
+          </div>
+
+          <div class="dashboard-widgets-grid">
+            <div class="dash-widget-card">
+              <div class="dash-widget-header">
+                <div class="dash-widget-title">
+                  <ion-icon name="pie-chart-outline"></ion-icon>
+                  <h3>Entries by Media Category</h3>
+                </div>
+              </div>
+              <div class="chart-canvas-wrap">
+                <canvas id="chart-media-categories"></canvas>
+              </div>
+            </div>
+
+            <div class="dash-widget-card">
+              <div class="dash-widget-header">
+                <div class="dash-widget-title">
+                  <ion-icon name="bar-chart-outline"></ion-icon>
+                  <h3>Rating Score Distribution</h3>
+                </div>
+              </div>
+              <div class="chart-canvas-wrap">
+                <canvas id="chart-rating-distribution"></canvas>
+              </div>
+            </div>
+
+            <div class="dash-widget-card dash-widget-wide">
+              <div class="dash-widget-header">
+                <div class="dash-widget-title">
+                  <ion-icon name="ribbon-outline"></ion-icon>
+                  <h3>Top Rated Media Highlights</h3>
+                </div>
+              </div>
+              <div class="dash-widget-body" id="analytics-top-rated-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- VIEW 8: AI ASSISTANT (GROQ EDGE FUNCTION - PHASE 5)      -->
+        <!-- ======================================================== -->
+        <section id="view-ai" class="view-section" style="display: none;">
+          <div id="ai-locked-notice" class="dash-widget-card" style="display: none; text-align: center; padding: 36px 20px;">
+            <ion-icon name="sparkles-outline" style="font-size: 28px; margin: 0 auto; color: var(--mono-muted);"></ion-icon>
+            <h3 style="font-size: 15px; margin-top: 6px;">Personal Archive AI Assistant</h3>
+            <p style="font-size: 12.5px; color: var(--mono-muted); max-width: 420px; margin: 0 auto;">
+              Sign in as Admin to chat with your personal Groq AI assistant connected to your media ratings, notes, tasks, and knowledge base.
+            </p>
+            <div>
+              <button type="button" class="primary-create-btn" onclick="handleAdminAuthClick()" style="margin-top: 8px;">Sign In as Admin</button>
+            </div>
+          </div>
+
+          <div id="ai-active-shell" class="ai-assistant-shell">
+            <div class="ai-header-bar">
+              <div>
+                <h2 class="section-heading">Archive AI Assistant</h2>
+                <p class="section-sub">Powered by Groq Llama 3.3 70B via Supabase Edge Function · Context-aware of your personal archive.</p>
+              </div>
+              <button type="button" class="toolbar-btn" onclick="clearAiConversation()">
+                <ion-icon name="trash-outline"></ion-icon>
+                <span>Clear Chat</span>
+              </button>
+            </div>
+
+            <!-- Quick Prompt Chips -->
+            <div class="ai-prompts-row">
+              <button type="button" class="quick-action-chip" onclick="sendQuickAiPrompt('Based on my highest-rated media, suggest 5 movies, anime, or books I should experience next and explain why.')">
+                <ion-icon name="compass-outline"></ion-icon>
+                <span>Recommend Next Media</span>
+              </button>
+              <button type="button" class="quick-action-chip" onclick="sendQuickAiPrompt('Review my current open tasks, active goals, and in-progress media. Give me a focused plan for this week.')">
+                <ion-icon name="calendar-outline"></ion-icon>
+                <span>Weekly Focus Plan</span>
+              </button>
+              <button type="button" class="quick-action-chip" onclick="sendQuickAiPrompt('Summarize key themes across my recent personal notes and journal reflections.')">
+                <ion-icon name="document-text-outline"></ion-icon>
+                <span>Summarize Notes & Journal</span>
+              </button>
+              <button type="button" class="quick-action-chip" onclick="sendQuickAiPrompt('Quiz me on 3 words from my Vocabulary list or concepts from my Knowledge Base.')">
+                <ion-icon name="school-outline"></ion-icon>
+                <span>Quiz Vocabulary & Concepts</span>
+              </button>
+            </div>
+
+            <!-- Chat Messages Feed -->
+            <div class="ai-chat-feed" id="ai-chat-feed"></div>
+
+            <!-- Chat Input Form -->
+            <form id="ai-chat-form" class="ai-input-bar">
+              <input type="text" id="ai-prompt-input" class="form-input" placeholder="Ask anything about your media library, notes, tasks, or goals..." required>
+              <button type="submit" id="btn-ai-send" class="primary-create-btn">
+                <ion-icon name="send-outline"></ion-icon>
+                <span>Send</span>
+              </button>
+            </form>
           </div>
         </section>
 
@@ -892,7 +1101,6 @@
             </button>
           </div>
           <div id="media-gallery-editor" class="multi-img-editor-list"></div>
-          <span class="upload-status-text" id="cover-upload-status"></span>
         </div>
 
         <div class="form-group">
@@ -992,7 +1200,7 @@
     </div>
   </div>
 
-  <!-- MODAL 2: ADD / EDIT NOTE POST (MARKDOWN + [[INTERNAL LINKS]] + PROJECT) -->
+  <!-- MODAL 2: ADD / EDIT NOTE POST -->
   <div class="modal-overlay" id="post-modal">
     <div class="modal-box modal-box-lg">
       <div class="modal-header">
@@ -1044,7 +1252,6 @@
             </button>
           </div>
           <div id="post-images-editor" class="multi-img-editor-list"></div>
-          <span class="upload-status-text" id="post-upload-status"></span>
         </div>
 
         <div class="modal-inline-toggles">
@@ -1065,7 +1272,7 @@
     </div>
   </div>
 
-  <!-- MODAL 3: COLLECTION CREATE / EDIT -->
+  <!-- MODAL 3: COLLECTION -->
   <div class="modal-overlay" id="collection-modal">
     <div class="modal-box" style="max-width: 440px;">
       <div class="modal-header">
@@ -1093,7 +1300,7 @@
     </div>
   </div>
 
-  <!-- MODAL: TASK CREATE / EDIT -->
+  <!-- MODAL: TASK -->
   <div class="modal-overlay" id="task-modal">
     <div class="modal-box" style="max-width: 480px;">
       <div class="modal-header">
@@ -1155,7 +1362,7 @@
     </div>
   </div>
 
-  <!-- MODAL: JOURNAL ENTRY CREATE / EDIT -->
+  <!-- MODAL: JOURNAL -->
   <div class="modal-overlay" id="journal-modal">
     <div class="modal-box modal-box-lg">
       <div class="modal-header">
@@ -1205,7 +1412,7 @@
     </div>
   </div>
 
-  <!-- MODAL: GOAL CREATE / EDIT -->
+  <!-- MODAL: GOAL -->
   <div class="modal-overlay" id="goal-modal">
     <div class="modal-box" style="max-width: 460px;">
       <div class="modal-header">
@@ -1257,7 +1464,7 @@
     </div>
   </div>
 
-  <!-- MODAL: PROJECT CREATE / EDIT -->
+  <!-- MODAL: PROJECT -->
   <div class="modal-overlay" id="project-modal">
     <div class="modal-box" style="max-width: 460px;">
       <div class="modal-header">
@@ -1300,7 +1507,7 @@
     </div>
   </div>
 
-  <!-- MODAL: BOOKMARK CREATE / EDIT -->
+  <!-- MODAL: BOOKMARK -->
   <div class="modal-overlay" id="bookmark-modal">
     <div class="modal-box" style="max-width: 460px;">
       <div class="modal-header">
@@ -1323,7 +1530,7 @@
         <div class="form-row">
           <div class="form-group">
             <label>Category</label>
-            <input type="text" id="bookmark-category" class="form-input" value="General" placeholder="Articles, Dev, Design, Music">
+            <input type="text" id="bookmark-category" class="form-input" value="General" placeholder="Articles, Dev, Design">
           </div>
           <div class="form-group">
             <label>Tags</label>
@@ -1342,12 +1549,144 @@
     </div>
   </div>
 
+  <!-- MODAL: QUOTE (PHASE 3) -->
+  <div class="modal-overlay" id="quote-modal">
+    <div class="modal-box" style="max-width: 480px;">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="modal-icon-badge"><ion-icon name="chatbox-ellipses-outline"></ion-icon></div>
+          <h3 id="quote-modal-title">Save Quote</h3>
+        </div>
+        <button type="button" class="close-modal-btn" onclick="closeQuoteModal()">&times;</button>
+      </div>
+      <form id="quote-form" class="modal-form">
+        <input type="hidden" id="quote-id">
+        <div class="form-group">
+          <label>Quote / Highlight *</label>
+          <textarea id="quote-text" class="form-input" rows="4" required placeholder="Enter memorable passage or quote..."></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Author / Character</label>
+            <input type="text" id="quote-author" class="form-input" placeholder="Author or speaker">
+          </div>
+          <div class="form-group">
+            <label>Source Work</label>
+            <input type="text" id="quote-source" class="form-input" placeholder="Book, Movie, Anime title...">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Tags</label>
+          <input type="text" id="quote-tags" class="form-input" placeholder="philosophy, life, dialogue">
+        </div>
+        <div class="modal-submit-row">
+          <button type="button" id="btn-delete-quote" class="form-btn danger-btn" style="display: none;" onclick="deleteCurrentQuote()">Delete</button>
+          <button type="submit" class="form-btn primary-submit">Save Quote</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: VOCABULARY (PHASE 3) -->
+  <div class="modal-overlay" id="vocab-modal">
+    <div class="modal-box" style="max-width: 480px;">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="modal-icon-badge"><ion-icon name="language-outline"></ion-icon></div>
+          <h3 id="vocab-modal-title">Add Vocabulary</h3>
+        </div>
+        <button type="button" class="close-modal-btn" onclick="closeVocabModal()">&times;</button>
+      </div>
+      <form id="vocab-form" class="modal-form">
+        <input type="hidden" id="vocab-id">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Term / Word *</label>
+            <input type="text" id="vocab-term" class="form-input" required placeholder="e.g. 木漏れ日 or Ephemeral">
+          </div>
+          <div class="form-group">
+            <label>Reading / Phonetic</label>
+            <input type="text" id="vocab-reading" class="form-input" placeholder="e.g. こもれび / komorebi">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Meaning / Definition *</label>
+          <input type="text" id="vocab-meaning" class="form-input" required placeholder="Translation or definition">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Language</label>
+            <input type="text" id="vocab-language" class="form-input" value="Japanese" placeholder="Japanese, English, Korean...">
+          </div>
+          <div class="form-group">
+            <label>Mastery Level</label>
+            <select id="vocab-mastery" class="form-input">
+              <option value="new">New</option>
+              <option value="learning" selected>Learning</option>
+              <option value="mastered">Mastered</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Example Sentence / Context</label>
+          <textarea id="vocab-example" class="form-input" rows="2" placeholder="Sentence where you encountered this word..."></textarea>
+        </div>
+        <div class="modal-submit-row">
+          <button type="button" id="btn-delete-vocab" class="form-btn danger-btn" style="display: none;" onclick="deleteCurrentVocab()">Delete</button>
+          <button type="submit" class="form-btn primary-submit">Save Word</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: CONCEPT (PHASE 3) -->
+  <div class="modal-overlay" id="concept-modal">
+    <div class="modal-box modal-box-lg">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="modal-icon-badge"><ion-icon name="bulb-outline"></ion-icon></div>
+          <h3 id="concept-modal-title">New Concept</h3>
+        </div>
+        <button type="button" class="close-modal-btn" onclick="closeConceptModal()">&times;</button>
+      </div>
+      <form id="concept-form" class="modal-form">
+        <input type="hidden" id="concept-id">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Concept Title *</label>
+            <input type="text" id="concept-title" class="form-input" required placeholder="e.g. First Principles Thinking">
+          </div>
+          <div class="form-group">
+            <label>Domain / Category</label>
+            <input type="text" id="concept-category" class="form-input" value="General" placeholder="Psychology, Engineering, Art">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Core Summary *</label>
+          <textarea id="concept-summary" class="form-input" rows="2" required placeholder="Concise 1-2 sentence explanation..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Detailed Notes</label>
+          <textarea id="concept-details" class="form-input note-textarea-large" rows="5" placeholder="Examples, applications, and connections..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Tags</label>
+          <input type="text" id="concept-tags" class="form-input" placeholder="mental-model, learning">
+        </div>
+        <div class="modal-submit-row">
+          <button type="button" id="btn-delete-concept" class="form-btn danger-btn" style="display: none;" onclick="deleteCurrentConcept()">Delete</button>
+          <button type="submit" class="form-btn primary-submit">Save Concept</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- MODAL 4: GLOBAL SEARCH & COMMAND PALETTE (CTRL+K) -->
   <div class="modal-overlay" id="global-search-modal" onclick="if(event.target === this) closeGlobalSearchModal()">
     <div class="modal-box command-palette-box">
       <div class="command-input-wrap">
         <ion-icon name="search-outline"></ion-icon>
-        <input type="text" id="global-search-input" placeholder="Search media, notes, tasks, journal, bookmarks..." oninput="handleGlobalSearchInput()">
+        <input type="text" id="global-search-input" placeholder="Search media, notes, tasks, quotes, vocab..." oninput="handleGlobalSearchInput()">
         <button type="button" class="close-modal-btn" onclick="closeGlobalSearchModal()">&times;</button>
       </div>
       <div class="command-results-body" id="global-search-results"></div>
@@ -1356,7 +1695,7 @@
 
   <!-- MODAL 5: QUICK CAPTURE -->
   <div class="modal-overlay" id="quick-capture-modal" onclick="if(event.target === this) closeQuickCaptureModal()">
-    <div class="modal-box" style="max-width: 460px;">
+    <div class="modal-box" style="max-width: 480px;">
       <div class="modal-header">
         <div class="modal-title-group">
           <div class="modal-icon-badge"><ion-icon name="flash-outline"></ion-icon></div>
@@ -1381,13 +1720,13 @@
           <ion-icon name="book-outline"></ion-icon>
           <span>Journal</span>
         </button>
-        <button type="button" class="qc-choice-btn" onclick="closeQuickCaptureModal(); openGoalModal();">
-          <ion-icon name="flag-outline"></ion-icon>
-          <span>Goal</span>
+        <button type="button" class="qc-choice-btn" onclick="closeQuickCaptureModal(); openQuoteModal();">
+          <ion-icon name="chatbox-ellipses-outline"></ion-icon>
+          <span>Quote</span>
         </button>
-        <button type="button" class="qc-choice-btn" onclick="closeQuickCaptureModal(); openBookmarkModal();">
-          <ion-icon name="bookmark-outline"></ion-icon>
-          <span>Bookmark</span>
+        <button type="button" class="qc-choice-btn" onclick="closeQuickCaptureModal(); openVocabModal();">
+          <ion-icon name="language-outline"></ion-icon>
+          <span>Vocabulary</span>
         </button>
       </div>
     </div>
@@ -1407,7 +1746,7 @@
     </div>
   </div>
 
-  <!-- MODAL 7: SETTINGS -->
+  <!-- MODAL 7: SETTINGS & FULL BACKUP EXPORT/IMPORT (PHASE 5) -->
   <div class="modal-overlay" id="profile-modal">
     <div class="modal-box">
       <div class="modal-header">
@@ -1448,6 +1787,17 @@
             </label>
           </div>
 
+          <div class="settings-card-row">
+            <div class="settings-card-info">
+              <div class="settings-card-title">
+                <ion-icon name="download-outline"></ion-icon>
+                <span>Full Archive Backup (JSON)</span>
+              </div>
+              <p class="settings-card-desc">Download all media, notes, workspace & knowledge data.</p>
+            </div>
+            <button type="button" class="form-btn" onclick="exportFullArchiveJson()">Export</button>
+          </div>
+
           <div class="settings-root-save-wrap">
             <button type="submit" class="form-btn primary-submit settings-root-save-btn">Save</button>
           </div>
@@ -1479,7 +1829,6 @@
                 <input type="file" id="profile-avatar-file" accept="image/*" hidden onchange="handleProfileImageUpload(event)">
               </label>
             </div>
-            <span class="upload-status-text" id="profile-upload-status"></span>
           </div>
           <div class="form-group">
             <label>Banner</label>
@@ -1496,7 +1845,6 @@
                 </button>
               </div>
             </div>
-            <span class="upload-status-text" id="banner-upload-status"></span>
           </div>
           <div class="modal-submit-row">
             <button type="button" class="form-btn" onclick="navigateSettingsStep('root')">Back</button>
@@ -1536,7 +1884,7 @@
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
 
   <!-- Main JS -->
-  <script src="./assets/js/script.js?v=102"></script>
+  <script src="./assets/js/script.js?v=500"></script>
 </body>
 
 </html>
