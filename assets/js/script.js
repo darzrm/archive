@@ -4030,11 +4030,16 @@ document.getElementById('ai-chat-form')?.addEventListener('submit', async (e) =>
     await supabaseClient.from('ai_conversations').insert([{ role: 'assistant', content: reply }]);
     renderAiChatFeed();
   } catch (err) {
-    thinkingEl.textContent = `AI Error: ${err.message || 'Could not reach groq-assistant Edge Function.'}`;
+    let detailedMsg = err.message || 'Unknown error';
+    if (err.context && typeof err.context.json === 'function') {
+      try {
+        const errBody = await err.context.json();
+        if (errBody?.error) detailedMsg = errBody.error;
+      } catch (_) {}
+    }
+    thinkingEl.textContent = `AI Error: ${detailedMsg}`;
     showToast('AI request failed', 'error');
   } finally {
-    sendBtn.disabled = false;
-  }
 });
 
 window.clearAiConversation = async function () {
