@@ -10,18 +10,27 @@ const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAE
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Application State
+// Global Application State
 let allMediaLogs = [];
 let allBlogPosts = [];
 let allCollections = [];
 let allCollectionItems = [];
 let allActivityLogs = [];
+
+// Phase 2 Workspace State
+let allProjects = [];
+let allTasks = [];
+let allGoals = [];
+let allJournalEntries = [];
+let allBookmarks = [];
+
 let lastApiResults = [];
 let pendingUploadedUrls = [];
 
 let currentCategory = 'all';
 let currentMainView = 'overview';
-let libraryViewMode = 'grid'; // 'grid' | 'list' | 'compact'
+let currentWorkspaceTab = 'tasks';
+let libraryViewMode = 'grid';
 let itemsPerPage = 20;
 let visibleMediaLimit = 20;
 let isStatsExpanded = false;
@@ -30,6 +39,11 @@ let isProfileLoaded = false;
 
 let currentSortField = 'rating';
 let currentSortDir = 'desc';
+
+// Journal Calendar State
+let journalCalYear = new Date().getFullYear();
+let journalCalMonth = new Date().getMonth();
+let selectedJournalDate = null;
 
 let currentProfile = {
   name: 'Archive',
@@ -43,9 +57,11 @@ let currentProfile = {
 let dashboardWidgets = {
   stats: true,
   currently_consuming: true,
+  upcoming_tasks: true,
   recently_completed: true,
-  recently_added: true,
   recent_notes: true,
+  active_goals: true,
+  recently_added: true,
   category_overview: true,
   activity_timeline: true
 };
@@ -107,7 +123,6 @@ const SEASON_PART_OPTIONS = [
   'OVA', 'ONA', 'Movie', 'Special', 'Arc'
 ];
 
-// Category-Specific Metadata Schema
 const CATEGORY_SPECIFIC_SCHEMA = {
   movie: [
     { key: 'runtime', label: 'Runtime (mins)', type: 'number', placeholder: '142' },
@@ -227,11 +242,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       fetchBlogPosts(),
       fetchMediaLogs(),
       fetchCollections(),
-      fetchActivityLogs()
+      fetchActivityLogs(),
+      fetchWorkspaceData()
     ]);
 
     renderOverviewDashboard();
     renderCollectionsView();
+    renderAllWorkspaceViews();
   } catch (err) {
     console.error('Initialization error:', err);
     showToast('Init error: ' + err.message, 'error', 5000);
@@ -254,9 +271,7 @@ function setupScrollListeners() {
   const backToTopBtn = document.getElementById('btn-back-to-top');
   window.addEventListener('scroll', () => {
     const scrollY = window.scrollY || document.documentElement.scrollTop;
-    if (backToTopBtn) {
-      backToTopBtn.classList.toggle('visible', scrollY > 320);
-    }
+    if (backToTopBtn) backToTopBtn.classList.toggle('visible', scrollY > 320);
   }, { passive: true });
 }
 
@@ -297,7 +312,8 @@ window.switchMainView = function (viewName) {
     overview: { el: 'view-overview', title: 'Overview' },
     library: { el: 'view-library', title: 'Media Library' },
     notes: { el: 'view-notes', title: 'Notes & Feed' },
-    collections: { el: 'view-collections', title: 'Collections' }
+    collections: { el: 'view-collections', title: 'Collections' },
+    workspace: { el: 'view-workspace', title: 'Personal Workspace' }
   };
 
   Object.entries(viewMap).forEach(([key, cfg]) => {
@@ -314,6 +330,22 @@ window.switchMainView = function (viewName) {
     }
   });
 
+  if (viewName === 'workspace') {
+    renderAllWorkspaceViews();
+  }
+
+  updateAdminActionButtons();
+};
+
+window.switchWorkspaceTab = function (tabKey) {
+  currentWorkspaceTab = tabKey;
+  document.querySelectorAll('.ws-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.ws === tabKey);
+  });
+  ['tasks', 'journal', 'goals', 'projects', 'bookmarks'].forEach(k => {
+    const panel = document.getElementById(`ws-panel-${k}`);
+    if (panel) panel.style.display = k === tabKey ? 'block' : 'none';
+  });
   updateAdminActionButtons();
 };
 
@@ -369,12 +401,17 @@ function updateAdminUI() {
   const dashWidgetsBtn = document.getElementById('btn-customize-dashboard');
   const newColBtn = document.getElementById('btn-new-collection');
 
+  const wsLocked = document.getElementById('workspace-locked-notice');
+  const wsActive = document.getElementById('workspace-active-shell');
+
   if (isAdminLoggedIn) {
     if (editProfileBtn) editProfileBtn.style.display = 'flex';
     if (quickWrap) quickWrap.style.display = 'block';
     if (dashQuick) dashQuick.style.display = 'flex';
     if (dashWidgetsBtn) dashWidgetsBtn.style.display = 'inline-flex';
     if (newColBtn) newColBtn.style.display = 'inline-flex';
+    if (wsLocked) wsLocked.style.display = 'none';
+    if (wsActive) wsActive.style.display = 'block';
     if (lockIcon) lockIcon.setAttribute('name', 'log-out-outline');
     if (btnText) btnText.textContent = 'Logout';
   } else {
@@ -383,6 +420,8 @@ function updateAdminUI() {
     if (dashQuick) dashQuick.style.display = 'none';
     if (dashWidgetsBtn) dashWidgetsBtn.style.display = 'none';
     if (newColBtn) newColBtn.style.display = 'none';
+    if (wsLocked) wsLocked.style.display = 'flex';
+    if (wsActive) wsActive.style.display = 'none';
     if (lockIcon) lockIcon.setAttribute('name', 'lock-closed-outline');
     if (btnText) btnText.textContent = 'Admin';
   }
@@ -392,6 +431,7 @@ function updateAdminUI() {
   renderMediaGrid();
   renderCollectionsView();
   if (isProfileLoaded) renderBlogPosts();
+  renderOverviewDashboard();
 }
 
 function updateLibraryTabVisibility() {
@@ -427,6 +467,16 @@ function updateAdminActionButtons() {
   } else if (currentMainView === 'collections') {
     if (icon) icon.setAttribute('name', 'add-outline');
     if (label) label.textContent = 'New Collection';
+  } else if (currentMainView === 'workspace') {
+    const wsLabels = {
+      tasks: 'New Task',
+      journal: 'New Journal',
+      goals: 'New Goal',
+      projects: 'New Project',
+      bookmarks: 'Save Bookmark'
+    };
+    if (icon) icon.setAttribute('name', 'add-outline');
+    if (label) label.textContent = wsLabels[currentWorkspaceTab] || 'Add Item';
   } else {
     if (icon) icon.setAttribute('name', 'add-outline');
     if (label) label.textContent = 'Add Media';
@@ -437,7 +487,15 @@ window.handlePrimaryContextAction = function () {
   if (!isAdminLoggedIn) return;
   if (currentMainView === 'notes') openPostModal();
   else if (currentMainView === 'collections') openCollectionModal();
-  else openMediaModal();
+  else if (currentMainView === 'workspace') {
+    if (currentWorkspaceTab === 'journal') openJournalModal();
+    else if (currentWorkspaceTab === 'goals') openGoalModal();
+    else if (currentWorkspaceTab === 'projects') openProjectModal();
+    else if (currentWorkspaceTab === 'bookmarks') openBookmarkModal();
+    else openTaskModal();
+  } else {
+    openMediaModal();
+  }
 };
 
 window.handleAdminAuthClick = async function () {
@@ -454,6 +512,11 @@ window.handleAdminAuthClick = async function () {
     if (confirm.isConfirmed) {
       await supabaseClient.auth.signOut();
       isAdminLoggedIn = false;
+      allProjects = [];
+      allTasks = [];
+      allGoals = [];
+      allJournalEntries = [];
+      allBookmarks = [];
       updateAdminUI();
       showToast('Logged out', 'info');
     }
@@ -477,7 +540,9 @@ document.getElementById('admin-login-form')?.addEventListener('submit', async (e
   } else {
     isAdminLoggedIn = true;
     closeLoginModal();
+    await fetchWorkspaceData();
     updateAdminUI();
+    renderAllWorkspaceViews();
     showToast('Admin session active', 'success');
   }
 });
@@ -537,9 +602,11 @@ window.openWidgetCustomizerModal = function () {
   const labels = {
     stats: 'KPI Summary Strip',
     currently_consuming: 'Currently Consuming Media',
+    upcoming_tasks: 'Upcoming Tasks',
     recently_completed: 'Recently Completed Media',
-    recently_added: 'Recently Added Media',
     recent_notes: 'Recent Notes',
+    active_goals: 'Active Goals',
+    recently_added: 'Recently Added Media',
     category_overview: 'Media Consumption by Category',
     activity_timeline: 'Recent Activity Timeline'
   };
@@ -578,21 +645,18 @@ window.toggleDashboardWidget = async function (key, checked) {
 function renderOverviewDashboard() {
   const activeMedia = allMediaLogs.filter(m => !m.is_archived && !m.deleted_at);
   const activeNotes = allBlogPosts.filter(p => !p.is_archived && !p.deleted_at && (!p.is_private || isAdminLoggedIn));
+  const openTasks = allTasks.filter(t => !t.is_archived && t.status !== 'done');
+  const activeGoals = allGoals.filter(g => !g.is_archived && g.status === 'active');
 
   setElText('nav-media-count', String(activeMedia.length));
   setElText('nav-notes-count', String(activeNotes.length));
+  setElText('nav-tasks-count', String(openTasks.length));
 
-  // KPIs
   const consuming = activeMedia.filter(m => computeSyncedStatus(getItemTracks(m)).key === 'ongoing');
   const completed = activeMedia.filter(m => computeSyncedStatus(getItemTracks(m)).key === 'completed');
-  const rated = activeMedia.filter(m => m.rating !== null && m.rating !== undefined && m.rating !== '');
-  const meanRating = rated.length
-    ? (rated.reduce((acc, m) => acc + Number(m.rating), 0) / rated.length).toFixed(2)
-    : '—';
 
   const usedCats = new Set();
   activeMedia.forEach(m => getItemCategories(m).forEach(c => usedCats.add(c)));
-
   const compRate = activeMedia.length ? Math.round((completed.length / activeMedia.length) * 100) : 0;
 
   setElText('dash-total-media', activeMedia.length.toLocaleString('en-US'));
@@ -600,12 +664,11 @@ function renderOverviewDashboard() {
   setElText('dash-consuming-count', consuming.length.toLocaleString('en-US'));
   setElText('dash-completed-count', completed.length.toLocaleString('en-US'));
   setElText('dash-completion-rate', `${compRate}% completion rate`);
-  setElText('dash-mean-rating', meanRating);
-  setElText('dash-rated-count', `${rated.length} rated entries`);
   setElText('dash-total-notes', activeNotes.length.toLocaleString('en-US'));
   setElText('dash-pinned-notes', `${activeNotes.filter(n => n.is_pinned).length} pinned`);
+  setElText('dash-open-tasks', isAdminLoggedIn ? String(openTasks.length) : '—');
+  setElText('dash-active-goals', isAdminLoggedIn ? `${activeGoals.length} active goals` : 'Admin only');
 
-  // Helper for compact media rows
   const buildMiniMediaRows = (list, emptyMsg) => {
     if (!list.length) return `<p class="empty-state-compact">${emptyMsg}</p>`;
     return list.slice(0, 5).map(item => {
@@ -641,6 +704,47 @@ function renderOverviewDashboard() {
   const recentAdded = [...activeMedia].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
   const recentAddedEl = document.getElementById('dash-list-recent-media');
   if (recentAddedEl) recentAddedEl.innerHTML = buildMiniMediaRows(recentAdded, 'No media added yet.');
+
+  // Upcoming Tasks Widget
+  const dashTasksEl = document.getElementById('dash-list-tasks');
+  if (dashTasksEl) {
+    if (!isAdminLoggedIn) {
+      dashTasksEl.innerHTML = `<p class="empty-state-compact">Sign in as Admin to view personal tasks.</p>`;
+    } else if (!openTasks.length) {
+      dashTasksEl.innerHTML = `<p class="empty-state-compact">All tasks completed. Nice work.</p>`;
+    } else {
+      dashTasksEl.innerHTML = openTasks.slice(0, 5).map(t => `
+        <div class="dash-media-row" onclick="toggleTaskDone('${escapeHtml(String(t.id))}')">
+          <div class="dash-media-info">
+            <div class="dash-media-title">${escapeHtml(t.title)}</div>
+            <div class="dash-media-meta">${escapeHtml(t.priority.toUpperCase())}${t.due_date ? ` · Due ${t.due_date}` : ''}</div>
+          </div>
+          <span class="dash-media-badge">Done ✓</span>
+        </div>
+      `).join('');
+    }
+  }
+
+  // Active Goals Widget
+  const dashGoalsEl = document.getElementById('dash-list-goals');
+  if (dashGoalsEl) {
+    if (!isAdminLoggedIn || !activeGoals.length) {
+      dashGoalsEl.innerHTML = `<p class="empty-state-compact">${isAdminLoggedIn ? 'No active goals tracked.' : 'Admin only.'}</p>`;
+    } else {
+      dashGoalsEl.innerHTML = activeGoals.slice(0, 4).map(g => {
+        const pct = Math.min(100, Math.round((Number(g.current_value) / Math.max(1, Number(g.target_value))) * 100));
+        return `
+          <div class="dash-media-row" onclick="switchMainView('workspace'); switchWorkspaceTab('goals');">
+            <div class="dash-media-info">
+              <div class="dash-media-title">${escapeHtml(g.title)}</div>
+              <div class="cat-bar-track" style="margin-top:6px;"><div class="cat-bar-fill" style="width:${pct}%"></div></div>
+            </div>
+            <span class="dash-media-badge">${g.current_value}/${g.target_value} ${escapeHtml(g.unit || '')}</span>
+          </div>
+        `;
+      }).join('');
+    }
+  }
 
   // Recent Notes
   const recentNotesEl = document.getElementById('dash-list-recent-notes');
@@ -1039,7 +1143,7 @@ document.getElementById('profile-form')?.addEventListener('submit', async (e) =>
 });
 
 // ==========================================
-// 8. MEDIA DATA HELPERS (BACKWARD COMPATIBLE)
+// 8. MEDIA DATA HELPERS & LIBRARY
 // ==========================================
 function getLegacyCategory(item) {
   const raw = (item.category || '').toLowerCase().trim();
@@ -1128,9 +1232,6 @@ function formatStatusDate(isoString) {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// ==========================================
-// 9. FETCH & RENDER MEDIA LIBRARY
-// ==========================================
 async function fetchMediaLogs() {
   const { data, error } = await supabaseClient
     .from('media_logs')
@@ -1358,7 +1459,6 @@ function renderMediaGrid() {
     return true;
   });
 
-  // Sort
   filtered.sort((a, b) => {
     if (currentSortField === 'rating') {
       const aHas = a.rating !== null && a.rating !== undefined && a.rating !== '';
@@ -1404,7 +1504,6 @@ function renderMediaGrid() {
     setElText('load-more-text', `Load More (${remaining} remaining)`);
   }
 
-  // 1. COMPACT TABLE VIEW
   if (libraryViewMode === 'compact') {
     grid.innerHTML = `
       <div class="compact-table-wrap">
@@ -1447,7 +1546,6 @@ function renderMediaGrid() {
     return;
   }
 
-  // 2. LIST VIEW
   if (libraryViewMode === 'list') {
     grid.innerHTML = displayed.map(item => {
       const safeId = escapeHtml(String(item.id));
@@ -1479,7 +1577,6 @@ function renderMediaGrid() {
     return;
   }
 
-  // 3. GRID VIEW (DEFAULT)
   grid.innerHTML = displayed.map(item => {
     const safeId = escapeHtml(String(item.id));
     const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888?text=No+Cover';
@@ -1505,7 +1602,7 @@ function renderMediaGrid() {
 }
 
 // ==========================================
-// 10. MEDIA DETAIL MODAL
+// 9. MEDIA DETAIL MODAL & ADD/EDIT MODAL
 // ==========================================
 window.openMediaDetailModal = function (id) {
   const item = allMediaLogs.find(m => String(m.id) === String(id));
@@ -1625,9 +1722,6 @@ window.closeMediaDetailModal = function () {
   document.getElementById('media-detail-modal').classList.remove('active');
 };
 
-// ==========================================
-// 11. ADD / EDIT MEDIA MODAL & DYNAMIC FIELDS
-// ==========================================
 window.onPrimaryCategoryModalChange = function (existingMeta = {}) {
   const cat = document.getElementById('media-primary-cat').value;
   renderCategorySpecificFields(cat, existingMeta);
@@ -1870,7 +1964,6 @@ window.closeMediaModal = async function () {
   await cleanupPendingUploads([]);
 };
 
-// Save Media Entry
 document.getElementById('media-form')?.addEventListener('submit', async (e) => {
   e.preventDefault();
 
@@ -1984,7 +2077,6 @@ document.getElementById('media-form')?.addEventListener('submit', async (e) => {
     return;
   }
 
-  // Sync collection assignments
   if (savedId && allCollections.length) {
     const selectedColIds = Array.from(document.querySelectorAll('.media-col-checkbox:checked')).map(cb => cb.value);
     await supabaseClient.from('media_collection_items').delete().eq('media_id', savedId);
@@ -2034,7 +2126,7 @@ window.deleteCurrentModalMedia = async function () {
 };
 
 // ==========================================
-// 12. EXTERNAL API METADATA AUTO-FILL (PUBLIC ENDPOINTS)
+// 10. EXTERNAL API METADATA AUTO-FILL
 // ==========================================
 window.searchExternalAPI = async function () {
   const query = document.getElementById('api-search-input').value.trim();
@@ -2133,7 +2225,7 @@ window.searchExternalAPI = async function () {
 
   lastApiResults = items;
   if (!items.length) {
-    resultsBox.innerHTML = `<p style="padding:10px; font-size:12px; color:var(--mono-muted);">No matches found. You can enter details manually below.</p>`;
+    resultsBox.innerHTML = `<p style="padding:10px; font-size:12px; color:var(--mono-muted);">No matches found.</p>`;
     return;
   }
 
@@ -2177,16 +2269,32 @@ window.applyApiResult = function (idx) {
 };
 
 // ==========================================
-// 13. NOTES & MARKDOWN RENDERING (PRESERVING BLOG_POSTS)
+// 11. NOTES, MARKDOWN & [[INTERNAL NOTE LINKS]]
 // ==========================================
 function renderSafeMarkdown(rawText) {
   let html = escapeHtml(rawText || '');
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  // Internal Wiki-Links: [[Note Title]]
+  html = html.replace(/\[\[([^\]]+)\]\]/g, (_, targetTitle) => {
+    const cleanTarget = targetTitle.trim();
+    return `<span class="internal-note-link" onclick="jumpToLinkedNote('${escapeHtml(cleanTarget)}')">[[${escapeHtml(cleanTarget)}]]</span>`;
+  });
+
   html = html.replace(/(https?:\/\/[^\s<>"']+)/gi, '<a href="$1" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">$1</a>');
   return html;
 }
+
+window.jumpToLinkedNote = function (targetTitle) {
+  const searchEl = document.getElementById('search-notes');
+  if (searchEl) {
+    searchEl.value = targetTitle;
+    renderBlogPosts();
+    showToast(`Filtered by "${targetTitle}"`, 'info', 2000);
+  }
+};
 
 async function fetchBlogPosts() {
   const { data, error } = await supabaseClient
@@ -2217,6 +2325,16 @@ function updateFolderFilterDropdown() {
   if ([...folders, 'all'].includes(currentVal)) select.value = currentVal;
 }
 
+function populateProjectDropdowns() {
+  const optionsHtml = `<option value="">None</option>` +
+    allProjects.filter(p => !p.is_archived).map(p => `<option value="${escapeHtml(String(p.id))}">${escapeHtml(p.title)}</option>`).join('');
+
+  const postProj = document.getElementById('post-project-id');
+  const taskProj = document.getElementById('task-project-id');
+  if (postProj) postProj.innerHTML = optionsHtml;
+  if (taskProj) taskProj.innerHTML = optionsHtml;
+}
+
 function renderBlogPosts() {
   const listEl = document.getElementById('blog-feed-list');
   if (!listEl) return;
@@ -2235,7 +2353,6 @@ function renderBlogPosts() {
     return true;
   });
 
-  // Pinned first
   visible.sort((a, b) => (b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0));
 
   if (!visible.length) {
@@ -2252,6 +2369,12 @@ function renderBlogPosts() {
     if (Array.isArray(post.image_urls)) post.image_urls.forEach(u => { if (u) imgs.push(u); });
     if (post.image_url && !imgs.includes(post.image_url)) imgs.unshift(post.image_url);
     const tags = Array.isArray(post.tags) ? post.tags : [];
+    const linkedProj = post.project_id ? allProjects.find(pr => String(pr.id) === String(post.project_id)) : null;
+
+    // Backlinks detection: find notes that mention [[this note's title]]
+    const backlinks = post.title
+      ? allBlogPosts.filter(other => other.id !== post.id && (other.content || '').toLowerCase().includes(`[[${post.title.toLowerCase()}]]`))
+      : [];
 
     return `
       <article class="blog-post-card ${post.is_pinned ? 'is-pinned' : ''}">
@@ -2260,7 +2383,7 @@ function renderBlogPosts() {
             <img class="blog-post-avatar" src="${avatarSrc}" alt="" onerror="this.src='${TRANSPARENT_PIXEL}'">
             <div>
               <span class="blog-post-name">${authorName} ${post.is_pinned ? '· Pinned' : ''}</span>
-              <span class="blog-post-time">${escapeHtml(post.folder || 'General')} · ${formatStatusDate(post.created_at)}</span>
+              <span class="blog-post-time">${escapeHtml(post.folder || 'General')}${linkedProj ? ` · Project: ${escapeHtml(linkedProj.title)}` : ''} · ${formatStatusDate(post.created_at)}</span>
             </div>
           </div>
           ${isAdminLoggedIn ? `
@@ -2273,6 +2396,7 @@ function renderBlogPosts() {
         ${post.title ? `<h3 class="note-card-title">${escapeHtml(post.title)}</h3>` : ''}
         <div class="blog-post-text">${renderSafeMarkdown(post.content)}</div>
         ${tags.length ? `<div class="note-tags-row">${tags.map(t => `<span class="tag-pill">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+        ${backlinks.length ? `<div class="note-tags-row"><span style="font-size:11px; color:var(--mono-dim);">Referenced by:</span>${backlinks.map(b => `<span class="internal-note-link" style="font-size:11px;" onclick="jumpToLinkedNote('${escapeHtml(b.title || '')}')">${escapeHtml(b.title || 'Untitled')}</span>`).join('')}</div>` : ''}
         ${imgs.length ? buildImageCarouselHtml(imgs, 'blog-post-carousel') : ''}
       </article>
     `;
@@ -2314,7 +2438,6 @@ window.handleSinglePostRowUpload = async function (event, fileInput) {
   }
 };
 
-// Local Autosave for Note Drafts
 document.getElementById('post-content')?.addEventListener('input', (e) => {
   if (!document.getElementById('post-id').value) {
     localStorage.setItem('archive_note_draft', e.target.value);
@@ -2324,6 +2447,7 @@ document.getElementById('post-content')?.addEventListener('input', (e) => {
 
 window.openPostModal = function () {
   pendingUploadedUrls = [];
+  populateProjectDropdowns();
   setElText('post-modal-title', 'New Note');
   document.getElementById('post-form').reset();
   document.getElementById('post-id').value = '';
@@ -2345,10 +2469,12 @@ window.openEditPostModal = function (id) {
   if (!post) return;
 
   pendingUploadedUrls = [];
+  populateProjectDropdowns();
   setElText('post-modal-title', 'Edit Note');
   document.getElementById('post-id').value = post.id;
   document.getElementById('post-title').value = post.title || '';
   document.getElementById('post-folder').value = post.folder || 'General';
+  document.getElementById('post-project-id').value = post.project_id || '';
   document.getElementById('post-content').value = post.content || '';
   document.getElementById('post-tags').value = Array.isArray(post.tags) ? post.tags.join(', ') : '';
   document.getElementById('post-is-pinned').checked = Boolean(post.is_pinned);
@@ -2382,11 +2508,13 @@ document.getElementById('post-form')?.addEventListener('submit', async (e) => {
 
   const tags = document.getElementById('post-tags').value.split(',').map(s => s.trim()).filter(Boolean);
   const titleVal = document.getElementById('post-title').value.trim() || null;
+  const projVal = document.getElementById('post-project-id').value || null;
   const nowIso = new Date().toISOString();
 
   const payload = {
     title: titleVal,
     folder: document.getElementById('post-folder').value.trim() || 'General',
+    project_id: projVal,
     content: contentVal,
     tags,
     image_url: imageUrls[0] || null,
@@ -2441,7 +2569,7 @@ window.deleteBlogPost = async function (id) {
 };
 
 // ==========================================
-// 14. CUSTOM MEDIA COLLECTIONS
+// 12. CUSTOM MEDIA COLLECTIONS
 // ==========================================
 async function fetchCollections() {
   const [colRes, itemsRes] = await Promise.all([
@@ -2562,7 +2690,707 @@ window.deleteCurrentCollection = async function () {
 };
 
 // ==========================================
-// 15. GLOBAL SEARCH / COMMAND PALETTE & QUICK CAPTURE
+// 13. PHASE 2: PERSONAL WORKSPACE (TASKS, JOURNAL, GOALS, PROJECTS, BOOKMARKS)
+// ==========================================
+async function fetchWorkspaceData() {
+  if (!isAdminLoggedIn) return;
+  const [projRes, taskRes, goalRes, jourRes, bookRes] = await Promise.all([
+    supabaseClient.from('projects').select('*').order('created_at', { ascending: false }),
+    supabaseClient.from('tasks').select('*').order('created_at', { ascending: false }),
+    supabaseClient.from('goals').select('*').order('created_at', { ascending: false }),
+    supabaseClient.from('journal_entries').select('*').order('entry_date', { ascending: false }),
+    supabaseClient.from('bookmarks').select('*').order('created_at', { ascending: false })
+  ]);
+
+  if (!projRes.error) allProjects = projRes.data || [];
+  if (!taskRes.error) allTasks = taskRes.data || [];
+  if (!goalRes.error) allGoals = goalRes.data || [];
+  if (!jourRes.error) allJournalEntries = jourRes.data || [];
+  if (!bookRes.error) allBookmarks = bookRes.data || [];
+}
+
+function renderAllWorkspaceViews() {
+  renderWorkspaceTasks();
+  renderJournalCalendar();
+  renderJournalEntries();
+  renderGoals();
+  renderProjects();
+  renderBookmarks();
+  renderOverviewDashboard();
+}
+
+// --- A. TASKS ---
+function renderWorkspaceTasks() {
+  const container = document.getElementById('workspace-tasks-list');
+  if (!container) return;
+
+  const q = (document.getElementById('search-tasks')?.value || '').toLowerCase().trim();
+  const statusFilter = document.getElementById('filter-task-status')?.value || 'open';
+  const prioFilter = document.getElementById('filter-task-priority')?.value || 'all';
+
+  let filtered = allTasks.filter(t => {
+    if (t.is_archived) return false;
+    if (statusFilter === 'open' && t.status === 'done') return false;
+    if (!['all', 'open'].includes(statusFilter) && t.status !== statusFilter) return false;
+    if (prioFilter !== 'all' && t.priority !== prioFilter) return false;
+    if (q) {
+      const hay = [t.title, t.description, ...(Array.isArray(t.tags) ? t.tags : [])].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  if (!filtered.length) {
+    container.innerHTML = `<p class="empty-state">No tasks match your filter.</p>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(t => {
+    const safeId = escapeHtml(String(t.id));
+    const isDone = t.status === 'done';
+    const proj = t.project_id ? allProjects.find(p => String(p.id) === String(t.project_id)) : null;
+    const tags = Array.isArray(t.tags) ? t.tags : [];
+    return `
+      <div class="task-row-card ${isDone ? 'is-done' : ''}">
+        <div class="task-row-left">
+          <button type="button" class="task-check-btn" onclick="toggleTaskDone('${safeId}')" title="Toggle Completed">
+            ${isDone ? '<ion-icon name="checkmark-outline"></ion-icon>' : ''}
+          </button>
+          <div>
+            <div class="task-title-text">${escapeHtml(t.title)}</div>
+            <div class="task-meta-line">
+              <span class="priority-badge ${t.priority}">${escapeHtml(t.priority)}</span>
+              ${t.due_date ? `<span>Due: ${t.due_date}</span>` : ''}
+              ${proj ? `<span>Project: ${escapeHtml(proj.title)}</span>` : ''}
+              ${tags.map(tg => `<span>#${escapeHtml(tg)}</span>`).join('')}
+            </div>
+          </div>
+        </div>
+        <button type="button" class="blog-icon-btn" onclick="openEditTaskModal('${safeId}')">
+          <ion-icon name="create-outline"></ion-icon>
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+window.toggleTaskDone = async function (id) {
+  const task = allTasks.find(t => String(t.id) === String(id));
+  if (!task || !isAdminLoggedIn) return;
+  const nextStatus = task.status === 'done' ? 'todo' : 'done';
+  const { error } = await supabaseClient.from('tasks').update({
+    status: nextStatus,
+    completed_at: nextStatus === 'done' ? new Date().toISOString() : null,
+    updated_at: new Date().toISOString()
+  }).eq('id', id);
+
+  if (!error) {
+    if (nextStatus === 'done') {
+      await logPersonalActivity('task_completed', 'task', id, task.title, 'Completed task');
+    }
+    await fetchWorkspaceData();
+    renderAllWorkspaceViews();
+    showToast(nextStatus === 'done' ? 'Task completed' : 'Task reopened', 'success');
+  }
+};
+
+window.openTaskModal = function () {
+  populateProjectDropdowns();
+  setElText('task-modal-title', 'New Task');
+  document.getElementById('task-form').reset();
+  document.getElementById('task-id').value = '';
+  document.getElementById('btn-delete-task').style.display = 'none';
+  document.getElementById('task-modal').classList.add('active');
+};
+
+window.openEditTaskModal = function (id) {
+  const t = allTasks.find(x => String(x.id) === String(id));
+  if (!t) return;
+  populateProjectDropdowns();
+  setElText('task-modal-title', 'Edit Task');
+  document.getElementById('task-id').value = t.id;
+  document.getElementById('task-title').value = t.title;
+  document.getElementById('task-priority').value = t.priority || 'medium';
+  document.getElementById('task-status').value = t.status || 'todo';
+  document.getElementById('task-due-date').value = t.due_date || '';
+  document.getElementById('task-project-id').value = t.project_id || '';
+  document.getElementById('task-tags').value = Array.isArray(t.tags) ? t.tags.join(', ') : '';
+  document.getElementById('task-desc').value = t.description || '';
+  document.getElementById('btn-delete-task').style.display = 'inline-flex';
+  document.getElementById('task-modal').classList.add('active');
+};
+
+window.closeTaskModal = function () {
+  document.getElementById('task-modal').classList.remove('active');
+};
+
+document.getElementById('task-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('task-id').value;
+  const statusVal = document.getElementById('task-status').value;
+  const titleVal = document.getElementById('task-title').value.trim();
+
+  const payload = {
+    title: titleVal,
+    priority: document.getElementById('task-priority').value,
+    status: statusVal,
+    due_date: document.getElementById('task-due-date').value || null,
+    project_id: document.getElementById('task-project-id').value || null,
+    tags: document.getElementById('task-tags').value.split(',').map(s => s.trim()).filter(Boolean),
+    description: document.getElementById('task-desc').value.trim() || null,
+    completed_at: statusVal === 'done' ? new Date().toISOString() : null,
+    updated_at: new Date().toISOString()
+  };
+
+  const res = id
+    ? await supabaseClient.from('tasks').update(payload).eq('id', id)
+    : await supabaseClient.from('tasks').insert([payload]);
+
+  if (res.error) showToast(res.error.message, 'error');
+  else {
+    closeTaskModal();
+    await logPersonalActivity(id ? 'task_updated' : 'task_created', 'task', id || null, titleVal, id ? 'Updated task' : 'Added task');
+    await fetchWorkspaceData();
+    renderAllWorkspaceViews();
+    showToast(id ? 'Task updated' : 'Task created', 'success');
+  }
+});
+
+window.deleteCurrentTask = async function () {
+  const id = document.getElementById('task-id').value;
+  if (!id) return;
+  const { error } = await supabaseClient.from('tasks').delete().eq('id', id);
+  if (!error) {
+    closeTaskModal();
+    await fetchWorkspaceData();
+    renderAllWorkspaceViews();
+    showToast('Task deleted', 'info');
+  }
+};
+
+// --- B. JOURNAL & CALENDAR ---
+function renderJournalCalendar() {
+  const grid = document.getElementById('journal-calendar-grid');
+  if (!grid) return;
+
+  const monthDate = new Date(journalCalYear, journalCalMonth, 1);
+  setElText('journal-cal-month-label', monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
+
+  const firstDay = monthDate.getDay();
+  const daysInMonth = new Date(journalCalYear, journalCalMonth + 1, 0).getDate();
+  const entryDates = new Set(allJournalEntries.map(j => j.entry_date));
+
+  let cells = '';
+  for (let i = 0; i < firstDay; i++) {
+    cells += `<div class="cal-day-cell is-empty"></div>`;
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const iso = `${journalCalYear}-${String(journalCalMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const hasEntry = entryDates.has(iso);
+    const isSelected = selectedJournalDate === iso;
+    cells += `
+      <button type="button" class="cal-day-cell ${hasEntry ? 'has-entry' : ''} ${isSelected ? 'is-selected' : ''}" onclick="selectJournalCalendarDate('${iso}')">
+        <span>${day}</span>
+        ${hasEntry ? '<span class="cal-entry-dot"></span>' : ''}
+      </button>
+    `;
+  }
+  grid.innerHTML = cells;
+}
+
+window.stepJournalCalendarMonth = function (delta) {
+  journalCalMonth += delta;
+  if (journalCalMonth < 0) { journalCalMonth = 11; journalCalYear -= 1; }
+  if (journalCalMonth > 11) { journalCalMonth = 0; journalCalYear += 1; }
+  renderJournalCalendar();
+};
+
+window.selectJournalCalendarDate = function (isoDate) {
+  selectedJournalDate = selectedJournalDate === isoDate ? null : isoDate;
+  renderJournalCalendar();
+  renderJournalEntries();
+};
+
+window.clearJournalDateFilter = function () {
+  selectedJournalDate = null;
+  renderJournalCalendar();
+  renderJournalEntries();
+};
+
+function renderJournalEntries() {
+  const list = document.getElementById('journal-entries-list');
+  if (!list) return;
+
+  const q = (document.getElementById('search-journal')?.value || '').toLowerCase().trim();
+  const period = document.getElementById('filter-journal-period')?.value || 'all';
+
+  const filtered = allJournalEntries.filter(j => {
+    if (j.is_archived) return false;
+    if (selectedJournalDate && j.entry_date !== selectedJournalDate) return false;
+    if (period !== 'all' && j.period_type !== period) return false;
+    if (q) {
+      const hay = [j.title, j.content, j.mood, ...(Array.isArray(j.tags) ? j.tags : [])].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  if (!filtered.length) {
+    list.innerHTML = `<p class="empty-state">${selectedJournalDate ? `No journal entries on ${selectedJournalDate}.` : 'No journal entries yet.'}</p>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(j => {
+    const safeId = escapeHtml(String(j.id));
+    const tags = Array.isArray(j.tags) ? j.tags : [];
+    return `
+      <article class="blog-post-card">
+        <div class="blog-post-header">
+          <div>
+            <span class="blog-post-name">${escapeHtml(j.entry_date)} · ${escapeHtml((j.period_type || 'daily').toUpperCase())}</span>
+            ${j.mood ? `<span class="blog-post-time">Mood: ${escapeHtml(j.mood)}</span>` : ''}
+          </div>
+          <button type="button" class="blog-icon-btn" onclick="openEditJournalModal('${safeId}')">
+            <ion-icon name="create-outline"></ion-icon>
+          </button>
+        </div>
+        ${j.title ? `<h3 class="note-card-title">${escapeHtml(j.title)}</h3>` : ''}
+        <div class="blog-post-text">${renderSafeMarkdown(j.content)}</div>
+        ${tags.length ? `<div class="note-tags-row">${tags.map(t => `<span class="tag-pill">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+      </article>
+    `;
+  }).join('');
+}
+
+window.openJournalModal = function () {
+  setElText('journal-modal-title', 'New Journal Entry');
+  document.getElementById('journal-form').reset();
+  document.getElementById('journal-id').value = '';
+  document.getElementById('journal-date').value = selectedJournalDate || new Date().toISOString().slice(0, 10);
+  document.getElementById('btn-delete-journal').style.display = 'none';
+  document.getElementById('journal-modal').classList.add('active');
+};
+
+window.openEditJournalModal = function (id) {
+  const j = allJournalEntries.find(x => String(x.id) === String(id));
+  if (!j) return;
+  setElText('journal-modal-title', 'Edit Journal Entry');
+  document.getElementById('journal-id').value = j.id;
+  document.getElementById('journal-date').value = j.entry_date;
+  document.getElementById('journal-period').value = j.period_type || 'daily';
+  document.getElementById('journal-mood').value = j.mood || '';
+  document.getElementById('journal-title').value = j.title || '';
+  document.getElementById('journal-content').value = j.content || '';
+  document.getElementById('journal-tags').value = Array.isArray(j.tags) ? j.tags.join(', ') : '';
+  document.getElementById('btn-delete-journal').style.display = 'inline-flex';
+  document.getElementById('journal-modal').classList.add('active');
+};
+
+window.closeJournalModal = function () {
+  document.getElementById('journal-modal').classList.remove('active');
+};
+
+document.getElementById('journal-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('journal-id').value;
+  const dateVal = document.getElementById('journal-date').value;
+  const titleVal = document.getElementById('journal-title').value.trim() || null;
+
+  const payload = {
+    entry_date: dateVal,
+    period_type: document.getElementById('journal-period').value,
+    mood: document.getElementById('journal-mood').value.trim() || null,
+    title: titleVal,
+    content: document.getElementById('journal-content').value.trim(),
+    tags: document.getElementById('journal-tags').value.split(',').map(s => s.trim()).filter(Boolean),
+    updated_at: new Date().toISOString()
+  };
+
+  const res = id
+    ? await supabaseClient.from('journal_entries').update(payload).eq('id', id)
+    : await supabaseClient.from('journal_entries').insert([payload]);
+
+  if (res.error) showToast(res.error.message, 'error');
+  else {
+    closeJournalModal();
+    await logPersonalActivity('journal_saved', 'journal', id || null, titleVal || `Journal (${dateVal})`, 'Saved journal entry');
+    await fetchWorkspaceData();
+    renderAllWorkspaceViews();
+    showToast('Journal saved', 'success');
+  }
+});
+
+window.deleteCurrentJournal = async function () {
+  const id = document.getElementById('journal-id').value;
+  if (!id) return;
+  const { error } = await supabaseClient.from('journal_entries').delete().eq('id', id);
+  if (!error) {
+    closeJournalModal();
+    await fetchWorkspaceData();
+    renderAllWorkspaceViews();
+    showToast('Journal deleted', 'info');
+  }
+};
+
+// --- C. GOALS ---
+function renderGoals() {
+  const grid = document.getElementById('workspace-goals-grid');
+  if (!grid) return;
+
+  const active = allGoals.filter(g => !g.is_archived);
+  if (!active.length) {
+    grid.innerHTML = `<p class="empty-state">No goals defined yet.</p>`;
+    return;
+  }
+
+  grid.innerHTML = active.map(g => {
+    const safeId = escapeHtml(String(g.id));
+    const cur = Number(g.current_value) || 0;
+    const tgt = Math.max(1, Number(g.target_value) || 100);
+    const pct = Math.min(100, Math.round((cur / tgt) * 100));
+
+    return `
+      <div class="collection-card" style="cursor:default;">
+        <div class="collection-card-top">
+          <div>
+            <h3>${escapeHtml(g.title)}</h3>
+            <span style="font-size:11px; color:var(--mono-dim);">${escapeHtml(g.category || 'Personal')}${g.target_date ? ` · Target ${g.target_date}` : ''}</span>
+          </div>
+          <button type="button" class="blog-icon-btn" onclick="openEditGoalModal('${safeId}')">
+            <ion-icon name="create-outline"></ion-icon>
+          </button>
+        </div>
+        ${g.description ? `<p>${escapeHtml(g.description)}</p>` : ''}
+        <div class="goal-progress-wrap">
+          <div class="goal-numbers-row">
+            <span>${cur} / ${tgt} ${escapeHtml(g.unit || '')}</span>
+            <strong>${pct}%</strong>
+          </div>
+          <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${pct}%"></div></div>
+          <div class="goal-step-actions">
+            <button type="button" class="mini-step-btn" onclick="incrementGoalProgress('${safeId}', 1)">+1</button>
+            <button type="button" class="mini-step-btn" onclick="incrementGoalProgress('${safeId}', 5)">+5</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+window.incrementGoalProgress = async function (id, delta) {
+  const goal = allGoals.find(g => String(g.id) === String(id));
+  if (!goal || !isAdminLoggedIn) return;
+  const nextVal = Number(goal.current_value || 0) + delta;
+  const nextStatus = nextVal >= Number(goal.target_value) ? 'completed' : 'active';
+
+  const { error } = await supabaseClient.from('goals').update({
+    current_value: nextVal,
+    status: nextStatus,
+    updated_at: new Date().toISOString()
+  }).eq('id', id);
+
+  if (!error) {
+    await fetchWorkspaceData();
+    renderAllWorkspaceViews();
+    showToast(`Progress updated (${nextVal}/${goal.target_value})`, 'success');
+  }
+};
+
+window.openGoalModal = function () {
+  setElText('goal-modal-title', 'New Goal');
+  document.getElementById('goal-form').reset();
+  document.getElementById('goal-id').value = '';
+  document.getElementById('btn-delete-goal').style.display = 'none';
+  document.getElementById('goal-modal').classList.add('active');
+};
+
+window.openEditGoalModal = function (id) {
+  const g = allGoals.find(x => String(x.id) === String(id));
+  if (!g) return;
+  setElText('goal-modal-title', 'Edit Goal');
+  document.getElementById('goal-id').value = g.id;
+  document.getElementById('goal-title').value = g.title;
+  document.getElementById('goal-current').value = g.current_value;
+  document.getElementById('goal-target').value = g.target_value;
+  document.getElementById('goal-unit').value = g.unit || '%';
+  document.getElementById('goal-category').value = g.category || 'Personal';
+  document.getElementById('goal-target-date').value = g.target_date || '';
+  document.getElementById('goal-desc').value = g.description || '';
+  document.getElementById('btn-delete-goal').style.display = 'inline-flex';
+  document.getElementById('goal-modal').classList.add('active');
+};
+
+window.closeGoalModal = function () {
+  document.getElementById('goal-modal').classList.remove('active');
+};
+
+document.getElementById('goal-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('goal-id').value;
+  const cur = parseFloat(document.getElementById('goal-current').value) || 0;
+  const tgt = parseFloat(document.getElementById('goal-target').value) || 100;
+  const titleVal = document.getElementById('goal-title').value.trim();
+
+  const payload = {
+    title: titleVal,
+    current_value: cur,
+    target_value: tgt,
+    unit: document.getElementById('goal-unit').value.trim() || '%',
+    category: document.getElementById('goal-category').value.trim() || 'Personal',
+    target_date: document.getElementById('goal-target-date').value || null,
+    description: document.getElementById('goal-desc').value.trim() || null,
+    status: cur >= tgt ? 'completed' : 'active',
+    updated_at: new Date().toISOString()
+  };
+
+  const res = id
+    ? await supabaseClient.from('goals').update(payload).eq('id', id)
+    : await supabaseClient.from('goals').insert([payload]);
+
+  if (res.error) showToast(res.error.message, 'error');
+  else {
+    closeGoalModal();
+    await fetchWorkspaceData();
+    renderAllWorkspaceViews();
+    showToast(id ? 'Goal updated' : 'Goal created', 'success');
+  }
+});
+
+window.deleteCurrentGoal = async function () {
+  const id = document.getElementById('goal-id').value;
+  if (!id) return;
+  const { error } = await supabaseClient.from('goals').delete().eq('id', id);
+  if (!error) {
+    closeGoalModal();
+    await fetchWorkspaceData();
+    renderAllWorkspaceViews();
+    showToast('Goal deleted', 'info');
+  }
+};
+
+// --- D. PROJECTS ---
+function renderProjects() {
+  const grid = document.getElementById('workspace-projects-grid');
+  if (!grid) return;
+
+  const active = allProjects.filter(p => !p.is_archived);
+  if (!active.length) {
+    grid.innerHTML = `<p class="empty-state">No projects created yet.</p>`;
+    return;
+  }
+
+  grid.innerHTML = active.map(p => {
+    const safeId = escapeHtml(String(p.id));
+    const projTasks = allTasks.filter(t => String(t.project_id) === String(p.id));
+    const doneTasks = projTasks.filter(t => t.status === 'done').length;
+    const projNotes = allBlogPosts.filter(n => String(n.project_id) === String(p.id)).length;
+
+    return `
+      <div class="collection-card" style="cursor:default;">
+        <div class="collection-card-top">
+          <div>
+            <h3>${escapeHtml(p.title)}</h3>
+            <span style="font-size:11px; color:var(--mono-dim); text-transform:uppercase;">${escapeHtml(p.status || 'active')}${p.deadline ? ` · Due ${p.deadline}` : ''}</span>
+          </div>
+          <button type="button" class="blog-icon-btn" onclick="openEditProjectModal('${safeId}')">
+            <ion-icon name="create-outline"></ion-icon>
+          </button>
+        </div>
+        ${p.description ? `<p>${escapeHtml(p.description)}</p>` : ''}
+        <div class="note-tags-row" style="margin-top:auto;">
+          <span class="tag-pill">${doneTasks}/${projTasks.length} Tasks</span>
+          <span class="tag-pill">${projNotes} Linked Notes</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+window.openProjectModal = function () {
+  setElText('project-modal-title', 'New Project');
+  document.getElementById('project-form').reset();
+  document.getElementById('project-id').value = '';
+  document.getElementById('btn-delete-project').style.display = 'none';
+  document.getElementById('project-modal').classList.add('active');
+};
+
+window.openEditProjectModal = function (id) {
+  const p = allProjects.find(x => String(x.id) === String(id));
+  if (!p) return;
+  setElText('project-modal-title', 'Edit Project');
+  document.getElementById('project-id').value = p.id;
+  document.getElementById('project-title').value = p.title;
+  document.getElementById('project-status').value = p.status || 'active';
+  document.getElementById('project-deadline').value = p.deadline || '';
+  document.getElementById('project-desc').value = p.description || '';
+  document.getElementById('btn-delete-project').style.display = 'inline-flex';
+  document.getElementById('project-modal').classList.add('active');
+};
+
+window.closeProjectModal = function () {
+  document.getElementById('project-modal').classList.remove('active');
+};
+
+document.getElementById('project-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('project-id').value;
+  const payload = {
+    title: document.getElementById('project-title').value.trim(),
+    status: document.getElementById('project-status').value,
+    deadline: document.getElementById('project-deadline').value || null,
+    description: document.getElementById('project-desc').value.trim() || null,
+    updated_at: new Date().toISOString()
+  };
+
+  const res = id
+    ? await supabaseClient.from('projects').update(payload).eq('id', id)
+    : await supabaseClient.from('projects').insert([payload]);
+
+  if (res.error) showToast(res.error.message, 'error');
+  else {
+    closeProjectModal();
+    await fetchWorkspaceData();
+    renderAllWorkspaceViews();
+    showToast(id ? 'Project updated' : 'Project created', 'success');
+  }
+});
+
+window.deleteCurrentProject = async function () {
+  const id = document.getElementById('project-id').value;
+  if (!id) return;
+  const { error } = await supabaseClient.from('projects').delete().eq('id', id);
+  if (!error) {
+    closeProjectModal();
+    await fetchWorkspaceData();
+    renderAllWorkspaceViews();
+    showToast('Project deleted', 'info');
+  }
+};
+
+// --- E. BOOKMARKS ---
+function renderBookmarks() {
+  const grid = document.getElementById('workspace-bookmarks-grid');
+  const catSelect = document.getElementById('filter-bookmark-cat');
+  if (!grid) return;
+
+  if (catSelect) {
+    const cats = new Set(['General']);
+    allBookmarks.forEach(b => { if (b.category) cats.add(b.category); });
+    const prev = catSelect.value;
+    catSelect.innerHTML = `<option value="all">All Categories</option>` +
+      Array.from(cats).map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    if ([...cats, 'all'].includes(prev)) catSelect.value = prev;
+  }
+
+  const q = (document.getElementById('search-bookmarks')?.value || '').toLowerCase().trim();
+  const catFilter = catSelect?.value || 'all';
+
+  const filtered = allBookmarks.filter(b => {
+    if (b.is_archived) return false;
+    if (catFilter !== 'all' && (b.category || 'General') !== catFilter) return false;
+    if (q) {
+      const hay = [b.title, b.url, b.description, b.category, ...(Array.isArray(b.tags) ? b.tags : [])].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  if (!filtered.length) {
+    grid.innerHTML = `<p class="empty-state">No bookmarks saved yet.</p>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(b => {
+    const safeId = escapeHtml(String(b.id));
+    let domain = b.url;
+    try { domain = new URL(b.url).hostname.replace(/^www\./, ''); } catch (_) {}
+    const tags = Array.isArray(b.tags) ? b.tags : [];
+
+    return `
+      <div class="collection-card" style="cursor:default;">
+        <div class="collection-card-top">
+          <div style="min-width:0;">
+            <a href="${escapeHtml(b.url)}" target="_blank" rel="noopener noreferrer" style="font-size:14px; font-weight:600; color:var(--white-1); display:block;">${escapeHtml(b.title)} ↗</a>
+            <span style="font-size:11px; color:var(--mono-dim);">${escapeHtml(domain)} · ${escapeHtml(b.category || 'General')}</span>
+          </div>
+          <button type="button" class="blog-icon-btn" onclick="openEditBookmarkModal('${safeId}')">
+            <ion-icon name="create-outline"></ion-icon>
+          </button>
+        </div>
+        ${b.description ? `<p>${escapeHtml(b.description)}</p>` : ''}
+        ${tags.length ? `<div class="note-tags-row" style="margin-top:auto;">${tags.map(t => `<span class="tag-pill">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+window.openBookmarkModal = function () {
+  setElText('bookmark-modal-title', 'Save Bookmark');
+  document.getElementById('bookmark-form').reset();
+  document.getElementById('bookmark-id').value = '';
+  document.getElementById('bookmark-category').value = 'General';
+  document.getElementById('btn-delete-bookmark').style.display = 'none';
+  document.getElementById('bookmark-modal').classList.add('active');
+};
+
+window.openEditBookmarkModal = function (id) {
+  const b = allBookmarks.find(x => String(x.id) === String(id));
+  if (!b) return;
+  setElText('bookmark-modal-title', 'Edit Bookmark');
+  document.getElementById('bookmark-id').value = b.id;
+  document.getElementById('bookmark-title').value = b.title;
+  document.getElementById('bookmark-url').value = b.url;
+  document.getElementById('bookmark-category').value = b.category || 'General';
+  document.getElementById('bookmark-tags').value = Array.isArray(b.tags) ? b.tags.join(', ') : '';
+  document.getElementById('bookmark-desc').value = b.description || '';
+  document.getElementById('btn-delete-bookmark').style.display = 'inline-flex';
+  document.getElementById('bookmark-modal').classList.add('active');
+};
+
+window.closeBookmarkModal = function () {
+  document.getElementById('bookmark-modal').classList.remove('active');
+};
+
+document.getElementById('bookmark-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('bookmark-id').value;
+  const payload = {
+    title: document.getElementById('bookmark-title').value.trim(),
+    url: document.getElementById('bookmark-url').value.trim(),
+    category: document.getElementById('bookmark-category').value.trim() || 'General',
+    tags: document.getElementById('bookmark-tags').value.split(',').map(s => s.trim()).filter(Boolean),
+    description: document.getElementById('bookmark-desc').value.trim() || null,
+    updated_at: new Date().toISOString()
+  };
+
+  const res = id
+    ? await supabaseClient.from('bookmarks').update(payload).eq('id', id)
+    : await supabaseClient.from('bookmarks').insert([payload]);
+
+  if (res.error) showToast(res.error.message, 'error');
+  else {
+    closeBookmarkModal();
+    await fetchWorkspaceData();
+    renderAllWorkspaceViews();
+    showToast(id ? 'Bookmark updated' : 'Bookmark saved', 'success');
+  }
+});
+
+window.deleteCurrentBookmark = async function () {
+  const id = document.getElementById('bookmark-id').value;
+  if (!id) return;
+  const { error } = await supabaseClient.from('bookmarks').delete().eq('id', id);
+  if (!error) {
+    closeBookmarkModal();
+    await fetchWorkspaceData();
+    renderAllWorkspaceViews();
+    showToast('Bookmark deleted', 'info');
+  }
+};
+
+// ==========================================
+// 14. GLOBAL SEARCH / COMMAND PALETTE & QUICK CAPTURE
 // ==========================================
 window.openGlobalSearchModal = function () {
   const modal = document.getElementById('global-search-modal');
@@ -2586,22 +3414,31 @@ window.handleGlobalSearchInput = function () {
     { label: 'Go to Overview Dashboard', meta: 'View', action: "closeGlobalSearchModal(); switchMainView('overview');" },
     { label: 'Go to Media Library', meta: 'View', action: "closeGlobalSearchModal(); switchMainView('library');" },
     { label: 'Go to Notes & Feed', meta: 'View', action: "closeGlobalSearchModal(); switchMainView('notes');" },
-    { label: 'Go to Collections', meta: 'View', action: "closeGlobalSearchModal(); switchMainView('collections');" }
+    { label: 'Go to Collections', meta: 'View', action: "closeGlobalSearchModal(); switchMainView('collections');" },
+    { label: 'Go to Personal Workspace', meta: 'View', action: "closeGlobalSearchModal(); switchMainView('workspace');" }
   ];
 
   if (isAdminLoggedIn) {
     navItems.unshift(
       { label: 'Add New Media Entry', meta: 'Action', action: 'closeGlobalSearchModal(); openMediaModal();' },
-      { label: 'Create New Note', meta: 'Action', action: 'closeGlobalSearchModal(); openPostModal();' }
+      { label: 'Create New Note', meta: 'Action', action: 'closeGlobalSearchModal(); openPostModal();' },
+      { label: 'Add New Task', meta: 'Action', action: 'closeGlobalSearchModal(); openTaskModal();' },
+      { label: 'Write Journal Entry', meta: 'Action', action: 'closeGlobalSearchModal(); openJournalModal();' }
     );
   }
 
   const matchedNav = navItems.filter(n => !q || n.label.toLowerCase().includes(q));
   const matchedMedia = q
-    ? allMediaLogs.filter(m => !m.is_archived && !m.deleted_at && [m.title, m.original_title, m.creator].filter(Boolean).join(' ').toLowerCase().includes(q)).slice(0, 6)
+    ? allMediaLogs.filter(m => !m.is_archived && !m.deleted_at && [m.title, m.original_title, m.creator].filter(Boolean).join(' ').toLowerCase().includes(q)).slice(0, 5)
     : [];
   const matchedNotes = q
     ? allBlogPosts.filter(p => !p.is_archived && (!p.is_private || isAdminLoggedIn) && [p.title, p.content, p.folder].filter(Boolean).join(' ').toLowerCase().includes(q)).slice(0, 4)
+    : [];
+  const matchedTasks = (q && isAdminLoggedIn)
+    ? allTasks.filter(t => !t.is_archived && [t.title, t.description].filter(Boolean).join(' ').toLowerCase().includes(q)).slice(0, 4)
+    : [];
+  const matchedBookmarks = (q && isAdminLoggedIn)
+    ? allBookmarks.filter(b => !b.is_archived && [b.title, b.url, b.description].filter(Boolean).join(' ').toLowerCase().includes(q)).slice(0, 4)
     : [];
 
   let html = '';
@@ -2629,6 +3466,24 @@ window.handleGlobalSearchInput = function () {
         <span class="cmd-item-left"><ion-icon name="document-text-outline"></ion-icon><span>${escapeHtml(p.title || (p.content || '').slice(0, 45))}</span></span>
         <span class="cmd-item-meta">${escapeHtml(p.folder || 'General')}</span>
       </button>
+    `).join('');
+  }
+
+  if (matchedTasks.length) {
+    html += `<div class="cmd-group-label">Tasks</div>` + matchedTasks.map(t => `
+      <button type="button" class="cmd-item" onclick="closeGlobalSearchModal(); switchMainView('workspace'); switchWorkspaceTab('tasks');">
+        <span class="cmd-item-left"><ion-icon name="checkbox-outline"></ion-icon><span>${escapeHtml(t.title)}</span></span>
+        <span class="cmd-item-meta">${escapeHtml(t.status)}</span>
+      </button>
+    `).join('');
+  }
+
+  if (matchedBookmarks.length) {
+    html += `<div class="cmd-group-label">Bookmarks</div>` + matchedBookmarks.map(b => `
+      <a href="${escapeHtml(b.url)}" target="_blank" rel="noopener noreferrer" class="cmd-item" onclick="closeGlobalSearchModal();">
+        <span class="cmd-item-left"><ion-icon name="bookmark-outline"></ion-icon><span>${escapeHtml(b.title)}</span></span>
+        <span class="cmd-item-meta">Open ↗</span>
+      </a>
     `).join('');
   }
 
