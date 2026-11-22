@@ -2973,3 +2973,116 @@ textarea.note-textarea-large {
     grid-template-columns: 1fr;
   }
 }
+
+/*-----------------------------------*\
+  #PHASE 3 - 5: KNOWLEDGE BASE, ANALYTICS & AI
+\*-----------------------------------*/
+
+.quote-card {
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-left: 3px solid var(--white-1);
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.quote-text-body {
+  font-size: 14px;
+  font-style: italic;
+  line-height: 1.65;
+  color: var(--white-1);
+}
+
+.quote-attribution {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--mono-muted);
+}
+
+.vocab-blurred {
+  filter: blur(5px);
+  user-select: none;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.vocab-blurred:hover {
+  filter: blur(0);
+}
+
+.chart-canvas-wrap {
+  position: relative;
+  height: 250px;
+  width: 100%;
+}
+
+.ai-assistant-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ai-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ai-prompts-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-chat-feed {
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 14px;
+  padding: 16px;
+  min-height: 340px;
+  max-height: 520px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ai-msg-bubble {
+  max-width: 84%;
+  padding: 11px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ai-msg-bubble.user {
+  align-self: flex-end;
+  background: var(--white-1);
+  color: var(--smoky-black);
+  font-weight: 500;
+}
+
+.ai-msg-bubble.assistant {
+  align-self: flex-start;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  color: var(--light-gray);
+}
+
+.ai-input-bar {
+  display: flex;
+  gap: 10px;
+}
+
+.ai-input-bar .form-input {
+  flex: 1;
+}
