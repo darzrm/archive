@@ -1,12 +1,10 @@
 'use strict';
 
 // ==========================================
-// 1. SUPABASE & EXTERNAL API CONFIGURATION
+// 1. SUPABASE & CONFIGURATION
 // ==========================================
 const SUPABASE_URL = 'https://uendrdxiixmikkeanlod.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_IdPLjwQhVQwXGGxUnBVblg_oIQ5Zz89';
-const TMDB_API_KEY = '727a00da59cd2b9873f7636a5bde9561';
-const RAWG_API_KEY = '';
 const STORAGE_BUCKET = 'media-assets';
 const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
@@ -15,23 +13,26 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // Application State
 let allMediaLogs = [];
 let allBlogPosts = [];
+let allCollections = [];
+let allCollectionItems = [];
+let allActivityLogs = [];
 let lastApiResults = [];
 let pendingUploadedUrls = [];
+
 let currentCategory = 'all';
-let currentMainView = 'blog';
-let libraryViewMode = 'grid';
-let itemsPerPage = 16;
-let visibleMediaLimit = 16;
+let currentMainView = 'overview';
+let libraryViewMode = 'grid'; // 'grid' | 'list' | 'compact'
+let itemsPerPage = 20;
+let visibleMediaLimit = 20;
 let isStatsExpanded = false;
 let isAdminLoggedIn = false;
 let isProfileLoaded = false;
 
-// Sort State (Default: Rating Best)
 let currentSortField = 'rating';
 let currentSortDir = 'desc';
 
 let currentProfile = {
-  name: '',
+  name: 'Archive',
   bio: '',
   avatar_url: '',
   banner_url: '',
@@ -39,14 +40,143 @@ let currentProfile = {
   is_library_private: false
 };
 
+let dashboardWidgets = {
+  stats: true,
+  currently_consuming: true,
+  recently_completed: true,
+  recently_added: true,
+  recent_notes: true,
+  category_overview: true,
+  activity_timeline: true
+};
+
+// ==========================================
+// 2. 12 MEDIA CATEGORIES DEFINITIONS
+// ==========================================
+const CATEGORY_LABELS = {
+  movie: 'Movies',
+  tv_show: 'TV Shows',
+  anime: 'Anime',
+  manga: 'Manga',
+  comic: 'Comics',
+  manhwa: 'Manhwa',
+  manhua: 'Manhua',
+  book: 'Books',
+  game: 'Video Games',
+  visual_novel: 'Visual Novels',
+  music: 'Music',
+  other: 'Other Media'
+};
+
+const DEFAULT_UNITS_BY_CAT = {
+  movie: 'movie',
+  tv_show: 'eps',
+  anime: 'eps',
+  manga: 'ch',
+  comic: 'ch',
+  manhwa: 'ch',
+  manhua: 'ch',
+  book: 'pages',
+  game: 'item',
+  visual_novel: 'item',
+  music: 'track',
+  other: 'item'
+};
+
+const UNIT_SHORT_LABELS = {
+  eps: 'EPS',
+  ch: 'CH',
+  movie: 'MOVIE',
+  vol: 'VOL',
+  pages: 'PAGES',
+  track: 'TRACK',
+  item: 'ITEM'
+};
+
+const STATUS_LABELS = {
+  planned: 'Planning',
+  ongoing: 'In Progress',
+  completed: 'Completed',
+  on_hold: 'On Hold',
+  dropped: 'Dropped'
+};
+
+const SEASON_PART_OPTIONS = [
+  'Main', 'Season 1', 'Season 2', 'Season 3', 'Season 4', 'Season 5',
+  'Season 6', 'Season 7', 'Season 8', 'Part 1', 'Part 2', 'Part 3',
+  'OVA', 'ONA', 'Movie', 'Special', 'Arc'
+];
+
+// Category-Specific Metadata Schema
+const CATEGORY_SPECIFIC_SCHEMA = {
+  movie: [
+    { key: 'runtime', label: 'Runtime (mins)', type: 'number', placeholder: '142' },
+    { key: 'watch_date', label: 'Watch Date', type: 'date' },
+    { key: 'studio', label: 'Production Studio', type: 'text', placeholder: 'A24, Warner Bros...' }
+  ],
+  tv_show: [
+    { key: 'total_seasons', label: 'Total Seasons', type: 'number', placeholder: '4' },
+    { key: 'network', label: 'Network / Platform', type: 'text', placeholder: 'HBO, Netflix...' }
+  ],
+  anime: [
+    { key: 'anime_type', label: 'Anime Type', type: 'select', options: ['TV', 'Movie', 'OVA', 'ONA', 'Special'] },
+    { key: 'airing_status', label: 'Airing Status', type: 'select', options: ['Finished Airing', 'Currently Airing', 'Not Yet Aired'] },
+    { key: 'season_premiered', label: 'Season / Year', type: 'text', placeholder: 'Spring 2024' }
+  ],
+  manga: [
+    { key: 'pub_status', label: 'Publication Status', type: 'select', options: ['Finished', 'Publishing', 'Hiatus', 'Cancelled'] },
+    { key: 'serialization', label: 'Magazine / Publisher', type: 'text', placeholder: 'Weekly Shonen Jump' }
+  ],
+  comic: [
+    { key: 'pub_status', label: 'Publication Status', type: 'select', options: ['Finished', 'Ongoing', 'Limited Series'] },
+    { key: 'publisher', label: 'Publisher', type: 'text', placeholder: 'Image, DC, Marvel...' }
+  ],
+  manhwa: [
+    { key: 'pub_status', label: 'Publication Status', type: 'select', options: ['Finished', 'Publishing', 'Hiatus'] },
+    { key: 'platform', label: 'Platform', type: 'text', placeholder: 'Naver Webtoon, Kakao...' }
+  ],
+  manhua: [
+    { key: 'pub_status', label: 'Publication Status', type: 'select', options: ['Finished', 'Publishing', 'Hiatus'] },
+    { key: 'platform', label: 'Platform', type: 'text', placeholder: 'Bilibili Comics...' }
+  ],
+  book: [
+    { key: 'publisher', label: 'Publisher', type: 'text', placeholder: 'Penguin Classics' },
+    { key: 'isbn', label: 'ISBN', type: 'text', placeholder: '978-...' },
+    { key: 'format', label: 'Format', type: 'select', options: ['Paperback', 'Hardcover', 'E-Book', 'Audiobook'] }
+  ],
+  game: [
+    { key: 'platform', label: 'Platform', type: 'text', placeholder: 'PC, PS5, Switch...' },
+    { key: 'publisher', label: 'Publisher', type: 'text', placeholder: 'FromSoftware, Sony...' },
+    { key: 'playtime_hours', label: 'Playtime (Hours)', type: 'number', placeholder: '65' },
+    { key: 'achievements', label: 'Achievements / Trophies', type: 'text', placeholder: '42 / 50' }
+  ],
+  visual_novel: [
+    { key: 'platform', label: 'Platform', type: 'text', placeholder: 'PC, Switch...' },
+    { key: 'routes', label: 'Total / Completed Routes', type: 'text', placeholder: '5 / 5 Routes' },
+    { key: 'endings', label: 'Endings Unlocked', type: 'text', placeholder: 'True End, Good End' },
+    { key: 'playtime_hours', label: 'Playtime (Hours)', type: 'number', placeholder: '48' }
+  ],
+  music: [
+    { key: 'release_type', label: 'Release Type', type: 'select', options: ['Album', 'EP', 'Single', 'Live Album', 'Compilation'] },
+    { key: 'record_label', label: 'Record Label', type: 'text', placeholder: '4AD, Sub Pop...' },
+    { key: 'tracklist', label: 'Favorite Tracks / Tracklist', type: 'text', placeholder: '1. Only Shallow, 2. Loomer...' }
+  ],
+  other: [
+    { key: 'medium_type', label: 'Medium Type', type: 'text', placeholder: 'Podcast, Stage Play, Documentary...' }
+  ]
+};
+
 function setElText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
 }
 
-// ==========================================
-// MINIMALIST TOAST NOTIFICATION
-// ==========================================
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text == null ? '' : String(text);
+  return div.innerHTML;
+}
+
 function showToast(message, type = 'success', duration = 2600) {
   const container = document.getElementById('toast-container');
   if (!container) return;
@@ -63,275 +193,167 @@ function showToast(message, type = 'success', duration = 2600) {
     <ion-icon name="${iconMap[type] || iconMap.info}"></ion-icon>
     <span>${escapeHtml(message)}</span>
   `;
-
   container.appendChild(toast);
 
   setTimeout(() => {
     toast.classList.add('hide');
-    setTimeout(() => toast.remove(), 240);
+    setTimeout(() => toast.remove(), 220);
   }, duration);
 }
 
+window.showPhaseNotice = function (moduleName, phaseNum) {
+  showToast(`${moduleName} is scheduled for Phase ${phaseNum}.`, 'info', 3000);
+};
+
 // ==========================================
-// 2. INITIALIZATION, SCROLL LISTENERS & VIEW TABS
+// 3. INITIALIZATION & NAVIGATION
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
   try {
+    updateHeaderDateDisplay();
     setupScrollListeners();
     setupOutsidePopoverCloser();
     setupFilterListeners();
+    setupKeyboardShortcuts();
     updateSortUIControls();
-    syncDisplayModalUI();
 
     await checkAdminSession();
-    await fetchProfileSettings();
-    await Promise.all([fetchBlogPosts(), fetchMediaLogs()]);
+    await Promise.all([
+      fetchProfileSettings(),
+      fetchUserPreferences()
+    ]);
+
+    await Promise.all([
+      fetchBlogPosts(),
+      fetchMediaLogs(),
+      fetchCollections(),
+      fetchActivityLogs()
+    ]);
+
+    renderOverviewDashboard();
+    renderCollectionsView();
   } catch (err) {
     console.error('Initialization error:', err);
     showToast('Init error: ' + err.message, 'error', 5000);
   }
 });
 
-function setupScrollListeners() {
-  const stickyHeader = document.getElementById('sticky-mini-header');
-  const backToTopBtn = document.getElementById('btn-back-to-top');
-  const profileCard = document.getElementById('profile-header-card');
+function updateHeaderDateDisplay() {
+  const now = new Date();
+  const formatted = now.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+  setElText('topbar-date-label', formatted);
+  setElText('dashboard-welcome-date', formatted);
+}
 
+function setupScrollListeners() {
+  const backToTopBtn = document.getElementById('btn-back-to-top');
   window.addEventListener('scroll', () => {
     const scrollY = window.scrollY || document.documentElement.scrollTop;
-    const triggerHeight = profileCard ? (profileCard.offsetTop + profileCard.offsetHeight - 20) : 180;
-
-    if (stickyHeader) {
-      stickyHeader.classList.toggle('visible', scrollY > triggerHeight);
-    }
-
     if (backToTopBtn) {
-      backToTopBtn.classList.toggle('visible', scrollY > 360);
+      backToTopBtn.classList.toggle('visible', scrollY > 320);
     }
   }, { passive: true });
 }
-
-function closeAllToolbarPopovers() {
-  const pairs = [
-    ['filter-popover-menu', 'btn-filter-toggle'],
-    ['sort-popover-menu', 'btn-sort-toggle']
-  ];
-  pairs.forEach(([menuId, btnId]) => {
-    const m = document.getElementById(menuId);
-    const b = document.getElementById(btnId);
-    if (m) m.classList.remove('open');
-    if (b) b.classList.remove('active');
-  });
-}
-
-function setupOutsidePopoverCloser() {
-  document.addEventListener('click', (e) => {
-    const filterWrap = document.getElementById('filter-popover-wrap');
-    const sortWrap = document.getElementById('sort-popover-wrap');
-
-    const insideFilter = filterWrap && filterWrap.contains(e.target);
-    const insideSort = sortWrap && sortWrap.contains(e.target);
-
-    if (!insideFilter && !insideSort) {
-      closeAllToolbarPopovers();
-    }
-  });
-}
-
-window.toggleToolbarPopover = function (type) {
-  const map = {
-    filter: ['filter-popover-menu', 'btn-filter-toggle'],
-    sort: ['sort-popover-menu', 'btn-sort-toggle']
-  };
-  const target = map[type];
-  if (!target) return;
-
-  const menuEl = document.getElementById(target[0]);
-  const btnEl = document.getElementById(target[1]);
-  const willOpen = menuEl ? !menuEl.classList.contains('open') : false;
-
-  closeAllToolbarPopovers();
-
-  if (willOpen && menuEl && btnEl) {
-    menuEl.style.left = '';
-    menuEl.style.right = '';
-    menuEl.classList.add('open');
-    btnEl.classList.add('active');
-
-    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-    const isMobileLayout = viewportWidth <= 680;
-    const rect = menuEl.getBoundingClientRect();
-    const btnRect = btnEl.getBoundingClientRect();
-
-    if (isMobileLayout) {
-      if (rect.right > viewportWidth - 14) {
-        const overflowRight = rect.right - (viewportWidth - 14);
-        const safeShift = Math.min(overflowRight, Math.max(0, btnRect.left - 14));
-        menuEl.style.left = `-${safeShift}px`;
-      }
-    } else {
-      if (rect.left < 14) {
-        const overflowLeft = 14 - rect.left;
-        menuEl.style.right = `-${overflowLeft}px`;
-      }
-    }
-  }
-};
-
-function syncDisplayModalUI() {
-  const modalGridBtn = document.getElementById('modal-btn-view-grid');
-  const modalListBtn = document.getElementById('modal-btn-view-list');
-  const toolbarIcon = document.getElementById('display-options-icon');
-
-  if (modalGridBtn) modalGridBtn.classList.toggle('active', libraryViewMode === 'grid');
-  if (modalListBtn) modalListBtn.classList.toggle('active', libraryViewMode === 'list');
-  if (toolbarIcon) {
-    toolbarIcon.setAttribute('name', libraryViewMode === 'list' ? 'list-outline' : 'grid-outline');
-  }
-}
-
-window.openDisplayOptionsModal = function () {
-  closeAllToolbarPopovers();
-  syncDisplayModalUI();
-  const modal = document.getElementById('display-options-modal');
-  if (modal) modal.classList.add('active');
-};
-
-window.closeDisplayOptionsModal = function () {
-  const modal = document.getElementById('display-options-modal');
-  if (modal) modal.classList.remove('active');
-};
 
 window.scrollToTopSmooth = function () {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
+window.toggleSidebarCollapse = function () {
+  const shell = document.getElementById('app-shell');
+  const icon = document.getElementById('sidebar-collapse-icon');
+  if (!shell) return;
+  const collapsed = shell.classList.toggle('sidebar-collapsed');
+  if (icon) {
+    icon.setAttribute('name', collapsed ? 'chevron-forward-outline' : 'chevron-back-outline');
+  }
+};
+
+window.toggleMobileSidebar = function (open) {
+  const sidebar = document.getElementById('app-sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  if (sidebar) sidebar.classList.toggle('mobile-open', open);
+  if (backdrop) backdrop.classList.toggle('active', open);
+};
+
 window.switchMainView = function (viewName) {
-  if (viewName === 'library' && currentProfile.is_library_private && !isAdminLoggedIn) {
-    viewName = 'blog';
+  if ((viewName === 'library' || viewName === 'collections') && currentProfile.is_library_private && !isAdminLoggedIn) {
+    viewName = 'overview';
   }
 
   currentMainView = viewName;
+  toggleMobileSidebar(false);
 
-  document.querySelectorAll('.nav-clean-tab-btn, .mini-nav-btn').forEach(btn => {
+  document.querySelectorAll('.sidebar-nav-item[data-view]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === viewName);
   });
 
-  const libView = document.getElementById('view-library');
-  const blogView = document.getElementById('view-blog');
+  const viewMap = {
+    overview: { el: 'view-overview', title: 'Overview' },
+    library: { el: 'view-library', title: 'Media Library' },
+    notes: { el: 'view-notes', title: 'Notes & Feed' },
+    collections: { el: 'view-collections', title: 'Collections' }
+  };
 
-  if (libView && blogView) {
-    libView.classList.remove('active-view');
-    blogView.classList.remove('active-view');
-
-    if (viewName === 'library') {
-      blogView.style.display = 'none';
-      libView.style.display = 'block';
-      void libView.offsetWidth;
-      libView.classList.add('active-view');
+  Object.entries(viewMap).forEach(([key, cfg]) => {
+    const section = document.getElementById(cfg.el);
+    if (!section) return;
+    section.classList.remove('active-view');
+    if (key === viewName) {
+      section.style.display = 'block';
+      void section.offsetWidth;
+      section.classList.add('active-view');
+      setElText('topbar-view-title', cfg.title);
     } else {
-      libView.style.display = 'none';
-      blogView.style.display = 'block';
-      void blogView.offsetWidth;
-      blogView.classList.add('active-view');
+      section.style.display = 'none';
     }
-  }
+  });
 
   updateAdminActionButtons();
 };
 
-function updateLibraryTabVisibility() {
-  const isPrivate = Boolean(currentProfile.is_library_private);
-  const canViewLibrary = !isPrivate || isAdminLoggedIn;
-
-  const bottomLibBtn = document.getElementById('bottom-tab-library');
-  const lockBadge = document.getElementById('library-private-lock');
-
-  if (bottomLibBtn) bottomLibBtn.style.display = canViewLibrary ? 'inline-flex' : 'none';
-  if (lockBadge) lockBadge.style.display = (isPrivate && isAdminLoggedIn) ? 'inline-flex' : 'none';
-
-  if (!canViewLibrary && currentMainView === 'library') {
-    switchMainView('blog');
-  }
-}
-
-window.handleCenterActionClick = function () {
-  if (!isAdminLoggedIn) return;
-  if (currentMainView === 'library') {
-    openMediaModal();
-  } else {
-    openPostModal();
+window.openLibraryWithStatus = function (statusKey) {
+  switchMainView('library');
+  const statusEl = document.getElementById('filter-status');
+  if (statusEl) {
+    statusEl.value = statusKey;
+    resetPaginationAndRender();
   }
 };
 
-window.setLibraryViewMode = function (mode) {
-  libraryViewMode = mode;
-  syncDisplayModalUI();
-  renderMediaGrid();
-};
+function setupKeyboardShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
 
-window.selectItemsPerPage = function (val) {
-  if (val === 'all') {
-    itemsPerPage = Infinity;
-    visibleMediaLimit = Infinity;
-  } else {
-    itemsPerPage = parseInt(val, 10) || 16;
-    visibleMediaLimit = itemsPerPage;
-  }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      openGlobalSearchModal();
+      return;
+    }
 
-  document.querySelectorAll('#display-options-modal .page-option-item').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.limit === String(val));
+    if (e.key === 'Escape') {
+      closeGlobalSearchModal();
+      closeQuickCaptureModal();
+      closeWidgetCustomizerModal();
+      closeMediaDetailModal();
+      return;
+    }
+
+    if (!isInput && isAdminLoggedIn && e.key.toLowerCase() === 'c') {
+      e.preventDefault();
+      openQuickCaptureModal();
+    }
   });
-
-  renderMediaGrid();
-};
-
-window.loadMoreMedia = function () {
-  if (itemsPerPage === Infinity) {
-    visibleMediaLimit = Infinity;
-  } else {
-    visibleMediaLimit += itemsPerPage;
-  }
-  renderMediaGrid();
-};
-
-window.toggleLibraryStats = function () {
-  isStatsExpanded = !isStatsExpanded;
-  const panel = document.getElementById('collapsible-stats-panel');
-  const toggleBtn = document.getElementById('btn-toggle-stats');
-  const textEl = document.getElementById('stats-toggle-text');
-  const iconEl = document.getElementById('stats-chevron-icon');
-
-  if (panel) panel.style.display = isStatsExpanded ? 'flex' : 'none';
-  if (toggleBtn) toggleBtn.classList.toggle('active', isStatsExpanded);
-  if (textEl) textEl.textContent = isStatsExpanded ? 'Hide Stats' : 'Show Stats';
-  if (iconEl) iconEl.setAttribute('name', isStatsExpanded ? 'chevron-up-outline' : 'chevron-down-outline');
-};
-
-function updateAdminActionButtons() {
-  const centerActionBtn = document.getElementById('btn-center-action');
-  const centerActionIcon = document.getElementById('center-action-icon');
-  const centerActionLabel = document.getElementById('center-action-label');
-
-  if (!centerActionBtn) return;
-
-  if (!isAdminLoggedIn) {
-    centerActionBtn.style.display = 'none';
-    return;
-  }
-
-  centerActionBtn.style.display = 'inline-flex';
-  const inLibrary = currentMainView === 'library';
-
-  if (centerActionIcon) {
-    centerActionIcon.setAttribute('name', inLibrary ? 'add-outline' : 'create-outline');
-  }
-  if (centerActionLabel) {
-    centerActionLabel.textContent = inLibrary ? 'Add Media' : 'New Post';
-  }
-  centerActionBtn.title = inLibrary ? 'Add Media' : 'New Post';
 }
 
+// ==========================================
+// 4. AUTHENTICATION & ADMIN UI
+// ==========================================
 async function checkAdminSession() {
   const { data: { session } } = await supabaseClient.auth.getSession();
   isAdminLoggedIn = !!session;
@@ -342,13 +364,25 @@ function updateAdminUI() {
   const editProfileBtn = document.getElementById('btn-edit-profile');
   const lockIcon = document.getElementById('admin-lock-icon');
   const btnText = document.getElementById('admin-btn-text');
+  const quickWrap = document.getElementById('sidebar-quick-wrap');
+  const dashQuick = document.getElementById('dashboard-quick-actions');
+  const dashWidgetsBtn = document.getElementById('btn-customize-dashboard');
+  const newColBtn = document.getElementById('btn-new-collection');
 
   if (isAdminLoggedIn) {
-    if (editProfileBtn) editProfileBtn.style.display = 'inline-flex';
+    if (editProfileBtn) editProfileBtn.style.display = 'flex';
+    if (quickWrap) quickWrap.style.display = 'block';
+    if (dashQuick) dashQuick.style.display = 'flex';
+    if (dashWidgetsBtn) dashWidgetsBtn.style.display = 'inline-flex';
+    if (newColBtn) newColBtn.style.display = 'inline-flex';
     if (lockIcon) lockIcon.setAttribute('name', 'log-out-outline');
     if (btnText) btnText.textContent = 'Logout';
   } else {
     if (editProfileBtn) editProfileBtn.style.display = 'none';
+    if (quickWrap) quickWrap.style.display = 'none';
+    if (dashQuick) dashQuick.style.display = 'none';
+    if (dashWidgetsBtn) dashWidgetsBtn.style.display = 'none';
+    if (newColBtn) newColBtn.style.display = 'none';
     if (lockIcon) lockIcon.setAttribute('name', 'lock-closed-outline');
     if (btnText) btnText.textContent = 'Admin';
   }
@@ -356,8 +390,55 @@ function updateAdminUI() {
   updateLibraryTabVisibility();
   updateAdminActionButtons();
   renderMediaGrid();
+  renderCollectionsView();
   if (isProfileLoaded) renderBlogPosts();
 }
+
+function updateLibraryTabVisibility() {
+  const isPrivate = Boolean(currentProfile.is_library_private);
+  const canView = !isPrivate || isAdminLoggedIn;
+
+  const navLib = document.getElementById('nav-item-library');
+  const lockBadge = document.getElementById('library-private-lock');
+
+  if (navLib) navLib.style.display = canView ? 'flex' : 'none';
+  if (lockBadge) lockBadge.style.display = (isPrivate && isAdminLoggedIn) ? 'inline-flex' : 'none';
+
+  if (!canView && (currentMainView === 'library' || currentMainView === 'collections')) {
+    switchMainView('overview');
+  }
+}
+
+function updateAdminActionButtons() {
+  const btn = document.getElementById('btn-primary-context-action');
+  const icon = document.getElementById('primary-action-icon');
+  const label = document.getElementById('primary-action-label');
+
+  if (!btn) return;
+  if (!isAdminLoggedIn) {
+    btn.style.display = 'none';
+    return;
+  }
+
+  btn.style.display = 'inline-flex';
+  if (currentMainView === 'notes') {
+    if (icon) icon.setAttribute('name', 'create-outline');
+    if (label) label.textContent = 'New Note';
+  } else if (currentMainView === 'collections') {
+    if (icon) icon.setAttribute('name', 'add-outline');
+    if (label) label.textContent = 'New Collection';
+  } else {
+    if (icon) icon.setAttribute('name', 'add-outline');
+    if (label) label.textContent = 'Add Media';
+  }
+}
+
+window.handlePrimaryContextAction = function () {
+  if (!isAdminLoggedIn) return;
+  if (currentMainView === 'notes') openPostModal();
+  else if (currentMainView === 'collections') openCollectionModal();
+  else openMediaModal();
+};
 
 window.handleAdminAuthClick = async function () {
   if (isAdminLoggedIn) {
@@ -367,14 +448,14 @@ window.handleAdminAuthClick = async function () {
       showCancelButton: true,
       confirmButtonText: 'Logout',
       cancelButtonText: 'Cancel',
-      background: '#1e1e1f',
+      background: '#1a1a1c',
       color: '#fff'
     });
     if (confirm.isConfirmed) {
       await supabaseClient.auth.signOut();
       isAdminLoggedIn = false;
       updateAdminUI();
-      showToast('Logged out from Admin mode', 'info');
+      showToast('Logged out', 'info');
     }
   } else {
     document.getElementById('login-modal').classList.add('active');
@@ -385,28 +466,258 @@ window.closeLoginModal = function () {
   document.getElementById('login-modal').classList.remove('active');
 };
 
-const loginForm = document.getElementById('admin-login-form');
-if (loginForm) {
-  loginForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const email = document.getElementById('login-email').value;
-    const password = document.getElementById('login-password').value;
+document.getElementById('admin-login-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
 
-    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-    if (error) {
-      showToast(error.message, 'error');
-    } else {
-      isAdminLoggedIn = true;
-      closeLoginModal();
-      updateAdminUI();
-      showToast('Admin login successful', 'success');
-    }
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    showToast(error.message, 'error');
+  } else {
+    isAdminLoggedIn = true;
+    closeLoginModal();
+    updateAdminUI();
+    showToast('Admin session active', 'success');
+  }
+});
+
+// ==========================================
+// 5. ACTIVITY LOGGING & DASHBOARD WIDGETS
+// ==========================================
+async function logPersonalActivity(actionType, entityType, entityId, entityTitle, details = '') {
+  if (!isAdminLoggedIn) return;
+  try {
+    await supabaseClient.from('activity_logs').insert([{
+      action_type: actionType,
+      entity_type: entityType,
+      entity_id: entityId ? String(entityId) : null,
+      entity_title: entityTitle,
+      details
+    }]);
+    await fetchActivityLogs();
+  } catch (err) {
+    console.warn('Activity log skipped:', err.message);
+  }
+}
+
+async function fetchActivityLogs() {
+  const { data, error } = await supabaseClient
+    .from('activity_logs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(12);
+
+  if (!error && data) {
+    allActivityLogs = data;
+  }
+}
+
+async function fetchUserPreferences() {
+  const { data, error } = await supabaseClient
+    .from('user_preferences')
+    .select('*')
+    .eq('id', 1)
+    .single();
+
+  if (!error && data && data.dashboard_widgets) {
+    dashboardWidgets = { ...dashboardWidgets, ...data.dashboard_widgets };
+  }
+  applyDashboardWidgetVisibility();
+}
+
+function applyDashboardWidgetVisibility() {
+  Object.entries(dashboardWidgets).forEach(([key, isVisible]) => {
+    const el = document.getElementById(`widget-${key}`);
+    if (el) el.style.display = isVisible ? '' : 'none';
   });
 }
 
+window.openWidgetCustomizerModal = function () {
+  const labels = {
+    stats: 'KPI Summary Strip',
+    currently_consuming: 'Currently Consuming Media',
+    recently_completed: 'Recently Completed Media',
+    recently_added: 'Recently Added Media',
+    recent_notes: 'Recent Notes',
+    category_overview: 'Media Consumption by Category',
+    activity_timeline: 'Recent Activity Timeline'
+  };
+
+  const container = document.getElementById('widget-toggles-list');
+  if (container) {
+    container.innerHTML = Object.entries(labels).map(([key, label]) => `
+      <div class="settings-card-row">
+        <span class="settings-card-title">${escapeHtml(label)}</span>
+        <label class="toggle-switch">
+          <input type="checkbox" ${dashboardWidgets[key] ? 'checked' : ''} onchange="toggleDashboardWidget('${key}', this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    `).join('');
+  }
+  document.getElementById('widget-modal').classList.add('active');
+};
+
+window.closeWidgetCustomizerModal = function () {
+  document.getElementById('widget-modal').classList.remove('active');
+};
+
+window.toggleDashboardWidget = async function (key, checked) {
+  dashboardWidgets[key] = checked;
+  applyDashboardWidgetVisibility();
+  if (isAdminLoggedIn) {
+    await supabaseClient.from('user_preferences').upsert([{
+      id: 1,
+      dashboard_widgets: dashboardWidgets,
+      updated_at: new Date().toISOString()
+    }]);
+  }
+};
+
+function renderOverviewDashboard() {
+  const activeMedia = allMediaLogs.filter(m => !m.is_archived && !m.deleted_at);
+  const activeNotes = allBlogPosts.filter(p => !p.is_archived && !p.deleted_at && (!p.is_private || isAdminLoggedIn));
+
+  setElText('nav-media-count', String(activeMedia.length));
+  setElText('nav-notes-count', String(activeNotes.length));
+
+  // KPIs
+  const consuming = activeMedia.filter(m => computeSyncedStatus(getItemTracks(m)).key === 'ongoing');
+  const completed = activeMedia.filter(m => computeSyncedStatus(getItemTracks(m)).key === 'completed');
+  const rated = activeMedia.filter(m => m.rating !== null && m.rating !== undefined && m.rating !== '');
+  const meanRating = rated.length
+    ? (rated.reduce((acc, m) => acc + Number(m.rating), 0) / rated.length).toFixed(2)
+    : '—';
+
+  const usedCats = new Set();
+  activeMedia.forEach(m => getItemCategories(m).forEach(c => usedCats.add(c)));
+
+  const compRate = activeMedia.length ? Math.round((completed.length / activeMedia.length) * 100) : 0;
+
+  setElText('dash-total-media', activeMedia.length.toLocaleString('en-US'));
+  setElText('dash-categories-used', `${usedCats.size} of 12 categories`);
+  setElText('dash-consuming-count', consuming.length.toLocaleString('en-US'));
+  setElText('dash-completed-count', completed.length.toLocaleString('en-US'));
+  setElText('dash-completion-rate', `${compRate}% completion rate`);
+  setElText('dash-mean-rating', meanRating);
+  setElText('dash-rated-count', `${rated.length} rated entries`);
+  setElText('dash-total-notes', activeNotes.length.toLocaleString('en-US'));
+  setElText('dash-pinned-notes', `${activeNotes.filter(n => n.is_pinned).length} pinned`);
+
+  // Helper for compact media rows
+  const buildMiniMediaRows = (list, emptyMsg) => {
+    if (!list.length) return `<p class="empty-state-compact">${emptyMsg}</p>`;
+    return list.slice(0, 5).map(item => {
+      const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/80x120/1e1e1f/888?text=?';
+      const tracks = getItemTracks(item);
+      const t0 = tracks[0];
+      const catLbl = CATEGORY_LABELS[t0.category] || t0.category;
+      const progLbl = t0.total_units ? `${t0.progress}/${t0.total_units}` : `${t0.progress}`;
+      const badge = item.rating !== null && item.rating !== undefined
+        ? `★ ${Number(item.rating).toFixed(1)}`
+        : progLbl;
+
+      return `
+        <div class="dash-media-row" onclick="openMediaDetailModal('${escapeHtml(String(item.id))}')">
+          <img src="${cover}" alt="" loading="lazy" onerror="this.src='https://placehold.co/80x120/1e1e1f/888?text=?'">
+          <div class="dash-media-info">
+            <div class="dash-media-title">${escapeHtml(item.title)}</div>
+            <div class="dash-media-meta">${escapeHtml(catLbl)} · ${escapeHtml(STATUS_LABELS[t0.status] || t0.status)}</div>
+          </div>
+          <span class="dash-media-badge">${escapeHtml(badge)}</span>
+        </div>
+      `;
+    }).join('');
+  };
+
+  const consumingEl = document.getElementById('dash-list-consuming');
+  if (consumingEl) consumingEl.innerHTML = buildMiniMediaRows(consuming, 'No media currently in progress.');
+
+  const completedSorted = [...completed].sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+  const completedEl = document.getElementById('dash-list-completed');
+  if (completedEl) completedEl.innerHTML = buildMiniMediaRows(completedSorted, 'No completed media yet.');
+
+  const recentAdded = [...activeMedia].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  const recentAddedEl = document.getElementById('dash-list-recent-media');
+  if (recentAddedEl) recentAddedEl.innerHTML = buildMiniMediaRows(recentAdded, 'No media added yet.');
+
+  // Recent Notes
+  const recentNotesEl = document.getElementById('dash-list-recent-notes');
+  if (recentNotesEl) {
+    if (!activeNotes.length) {
+      recentNotesEl.innerHTML = `<p class="empty-state-compact">No personal notes yet.</p>`;
+    } else {
+      recentNotesEl.innerHTML = activeNotes.slice(0, 5).map(n => {
+        const title = n.title || (n.content || '').slice(0, 48) + ((n.content || '').length > 48 ? '...' : '');
+        return `
+          <div class="dash-media-row" onclick="switchMainView('notes')">
+            <div class="dash-media-info">
+              <div class="dash-media-title">${escapeHtml(title)}</div>
+              <div class="dash-media-meta">${escapeHtml(n.folder || 'General')} · ${formatStatusDate(n.created_at)}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  // Category Breakdown
+  const catBreakdownEl = document.getElementById('dash-category-breakdown');
+  if (catBreakdownEl) {
+    const counts = {};
+    Object.keys(CATEGORY_LABELS).forEach(k => counts[k] = 0);
+    activeMedia.forEach(m => {
+      const primary = getLegacyCategory(m);
+      if (counts[primary] !== undefined) counts[primary] += 1;
+      else counts.other += 1;
+    });
+    const maxCount = Math.max(1, ...Object.values(counts));
+
+    catBreakdownEl.innerHTML = Object.entries(CATEGORY_LABELS).map(([key, label]) => {
+      const cnt = counts[key] || 0;
+      const pct = Math.round((cnt / maxCount) * 100);
+      return `
+        <div class="cat-bar-item" onclick="switchMainView('library'); selectCategoryTab('${key}');">
+          <div class="cat-bar-top">
+            <span>${escapeHtml(label)}</span>
+            <strong>${cnt}</strong>
+          </div>
+          <div class="cat-bar-track">
+            <div class="cat-bar-fill" style="width: ${pct}%;"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Activity Timeline
+  const actEl = document.getElementById('dash-activity-list');
+  if (actEl) {
+    if (!allActivityLogs.length) {
+      actEl.innerHTML = `<p class="empty-state-compact">Activity will appear here as you add and update records.</p>`;
+    } else {
+      actEl.innerHTML = allActivityLogs.slice(0, 8).map(act => `
+        <div class="activity-row-item">
+          <div class="activity-row-left">
+            <span class="activity-dot"></span>
+            <span><strong>${escapeHtml(act.entity_title)}</strong> — ${escapeHtml(act.details || act.action_type)}</span>
+          </div>
+          <span class="activity-time">${formatStatusDate(act.created_at)}</span>
+        </div>
+      `).join('');
+    }
+  }
+}
+
 // ==========================================
-// 2B. IMAGE COMPRESSION, STORAGE UPLOAD & CAROUSEL HELPER
+// 6. IMAGE COMPRESSION, STORAGE & CAROUSEL
 // ==========================================
+function normalizeImageUrl(url) {
+  if (!url) return '';
+  return url.trim().replace(/^http:\/\//i, 'https://');
+}
+
 function compressImageFile(file, maxWidth = 800, quality = 0.82) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -416,22 +727,15 @@ function compressImageFile(file, maxWidth = 800, quality = 0.82) {
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-
         if (width > maxWidth) {
           height = Math.round((height * maxWidth) / width);
           width = maxWidth;
         }
-
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
         canvas.toBlob(
-          (blob) => {
-            if (blob) resolve(blob);
-            else reject(new Error('Image compression failed'));
-          },
+          blob => blob ? resolve(blob) : reject(new Error('Image compression failed')),
           'image/webp',
           quality
         );
@@ -445,23 +749,17 @@ function compressImageFile(file, maxWidth = 800, quality = 0.82) {
 }
 
 async function uploadImageToSupabase(file, folder = 'covers') {
-  const maxWidth = folder === 'avatars' ? 400 : (folder === 'banners' ? 1200 : (folder === 'posts' ? 900 : 600));
+  const maxWidth = folder === 'avatars' ? 400 : (folder === 'banners' ? 1200 : 800);
   const compressedBlob = await compressImageFile(file, maxWidth, 0.82);
   const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.webp`;
 
   const { error } = await supabaseClient.storage
     .from(STORAGE_BUCKET)
-    .upload(fileName, compressedBlob, {
-      contentType: 'image/webp',
-      upsert: false
-    });
+    .upload(fileName, compressedBlob, { contentType: 'image/webp', upsert: false });
 
   if (error) throw error;
 
-  const { data: publicData } = supabaseClient.storage
-    .from(STORAGE_BUCKET)
-    .getPublicUrl(fileName);
-
+  const { data: publicData } = supabaseClient.storage.from(STORAGE_BUCKET).getPublicUrl(fileName);
   pendingUploadedUrls.push(publicData.publicUrl);
   return publicData.publicUrl;
 }
@@ -471,60 +769,42 @@ async function deleteOldStorageFile(fileUrl) {
   const marker = `/storage/v1/object/public/${STORAGE_BUCKET}/`;
   const idx = fileUrl.indexOf(marker);
   if (idx === -1) return;
-
   const filePath = decodeURIComponent(fileUrl.substring(idx + marker.length).split('?')[0]);
-  if (!filePath) return;
-
-  await supabaseClient.storage.from(STORAGE_BUCKET).remove([filePath]);
+  if (filePath) await supabaseClient.storage.from(STORAGE_BUCKET).remove([filePath]);
 }
 
 async function cleanupPendingUploads(keepUrls = []) {
   const keepSet = new Set((Array.isArray(keepUrls) ? keepUrls : [keepUrls]).filter(Boolean));
   for (const tempUrl of pendingUploadedUrls) {
-    if (!keepSet.has(tempUrl)) {
-      await deleteOldStorageFile(tempUrl);
-    }
+    if (!keepSet.has(tempUrl)) await deleteOldStorageFile(tempUrl);
   }
   pendingUploadedUrls = [];
 }
 
 function buildImageCarouselHtml(urls, extraClass = '') {
-  const cleanUrls = (Array.isArray(urls) ? urls : [])
-    .map(u => normalizeImageUrl(u))
-    .filter(Boolean);
-
-  if (cleanUrls.length === 0) return '';
-
+  const cleanUrls = (Array.isArray(urls) ? urls : []).map(normalizeImageUrl).filter(Boolean);
+  if (!cleanUrls.length) return '';
   const total = cleanUrls.length;
   const slidesHtml = cleanUrls.map((src, i) => `
     <div class="carousel-slide">
-      <img src="${src}" alt="Slide ${i + 1}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=Image'">
+      <img src="${src}" alt="Slide ${i + 1}" loading="lazy" onerror="this.src='https://placehold.co/300x450/1e1e1f/888?text=Image'">
     </div>
   `).join('');
 
   if (total === 1) {
-    return `
-      <div class="image-carousel ${extraClass}" data-index="0" data-total="1">
-        <div class="carousel-track">${slidesHtml}</div>
-      </div>
-    `;
+    return `<div class="image-carousel ${extraClass}" data-index="0" data-total="1"><div class="carousel-track">${slidesHtml}</div></div>`;
   }
-
-  const dotsHtml = cleanUrls.map((_, i) => `
-    <button type="button" class="carousel-dot ${i === 0 ? 'active' : ''}" onclick="event.stopPropagation(); goCarouselSlide(this, ${i})" aria-label="Slide ${i + 1}"></button>
-  `).join('');
 
   return `
     <div class="image-carousel ${extraClass}" data-index="0" data-total="${total}">
       <div class="carousel-track">${slidesHtml}</div>
       <span class="carousel-counter">1 / ${total}</span>
-      <button type="button" class="carousel-btn prev" onclick="event.stopPropagation(); stepCarouselSlide(this, -1)" aria-label="Previous image">
+      <button type="button" class="carousel-btn prev" onclick="event.stopPropagation(); stepCarouselSlide(this, -1)">
         <ion-icon name="chevron-back-outline"></ion-icon>
       </button>
-      <button type="button" class="carousel-btn next" onclick="event.stopPropagation(); stepCarouselSlide(this, 1)" aria-label="Next image">
+      <button type="button" class="carousel-btn next" onclick="event.stopPropagation(); stepCarouselSlide(this, 1)">
         <ion-icon name="chevron-forward-outline"></ion-icon>
       </button>
-      <div class="carousel-dots">${dotsHtml}</div>
     </div>
   `;
 }
@@ -535,53 +815,24 @@ window.stepCarouselSlide = function (btnEl, delta) {
   const total = parseInt(carousel.dataset.total || '1', 10);
   const current = parseInt(carousel.dataset.index || '0', 10);
   const next = (current + delta + total) % total;
-  updateCarouselUI(carousel, next);
-};
-
-window.goCarouselSlide = function (dotEl, targetIndex) {
-  const carousel = dotEl.closest('.image-carousel');
-  if (!carousel) return;
-  updateCarouselUI(carousel, targetIndex);
-};
-
-function updateCarouselUI(carousel, index) {
-  const total = parseInt(carousel.dataset.total || '1', 10);
-  carousel.dataset.index = String(index);
-
+  carousel.dataset.index = String(next);
   const track = carousel.querySelector('.carousel-track');
-  if (track) {
-    track.style.transform = `translateX(-${index * 100}%)`;
-  }
-
+  if (track) track.style.transform = `translateX(-${next * 100}%)`;
   const counter = carousel.querySelector('.carousel-counter');
-  if (counter) {
-    counter.textContent = `${index + 1} / ${total}`;
-  }
-
-  carousel.querySelectorAll('.carousel-dot').forEach((d, idx) => {
-    d.classList.toggle('active', idx === index);
-  });
-}
+  if (counter) counter.textContent = `${next + 1} / ${total}`;
+};
 
 // ==========================================
-// 2C. PROFILE SETTINGS, BANNER & SOCIAL LINKS
+// 7. PROFILE SETTINGS
 // ==========================================
 function detectSocialIcon(url) {
   const lower = (url || '').toLowerCase();
-  if (lower.includes('instagram.com')) return 'logo-instagram';
-  if (lower.includes('twitter.com') || lower.includes('x.com')) return 'logo-twitter';
   if (lower.includes('github.com')) return 'logo-github';
-  if (lower.includes('youtube.com') || lower.includes('youtu.be')) return 'logo-youtube';
-  if (lower.includes('tiktok.com')) return 'logo-tiktok';
-  if (lower.includes('discord.gg') || lower.includes('discord.com')) return 'logo-discord';
-  if (lower.includes('twitch.tv')) return 'logo-twitch';
-  if (lower.includes('linkedin.com')) return 'logo-linkedin';
-  if (lower.includes('reddit.com')) return 'logo-reddit';
-  if (lower.includes('facebook.com')) return 'logo-facebook';
-  if (lower.includes('spotify.com')) return 'musical-notes-outline';
-  if (lower.includes('steamcommunity.com') || lower.includes('store.steampowered.com')) return 'logo-steam';
+  if (lower.includes('youtube.com')) return 'logo-youtube';
+  if (lower.includes('twitter.com') || lower.includes('x.com')) return 'logo-twitter';
+  if (lower.includes('instagram.com')) return 'logo-instagram';
   if (lower.includes('letterboxd.com')) return 'film-outline';
-  if (lower.includes('myanimelist.net') || lower.includes('anilist.co')) return 'tv-outline';
+  if (lower.includes('anilist.co') || lower.includes('myanimelist.net')) return 'tv-outline';
   return 'link-outline';
 }
 
@@ -592,13 +843,9 @@ async function fetchProfileSettings() {
     .eq('id', 1)
     .single();
 
-  if (error) {
-    console.warn('Profile fetch warning:', error.message);
-  }
-
   if (!error && data) {
     currentProfile = {
-      name: data.name || '',
+      name: data.name || 'Archive',
       bio: data.bio || '',
       avatar_url: data.avatar_url || '',
       banner_url: data.banner_url || '',
@@ -613,7 +860,7 @@ async function fetchProfileSettings() {
 function applyProfileToUI() {
   setElText('profile-name-text', currentProfile.name);
   setElText('profile-bio-text', currentProfile.bio);
-  setElText('sticky-name-text', currentProfile.name);
+  setElText('sidebar-name-text', currentProfile.name);
 
   if (currentProfile.name) {
     document.title = `${currentProfile.name} — Archive`;
@@ -626,39 +873,23 @@ function applyProfileToUI() {
 
   if (headerCard && bannerWrap && bannerImg) {
     if (currentProfile.banner_url) {
-      const cleanBanner = normalizeImageUrl(currentProfile.banner_url);
-      bannerImg.onerror = () => {
-        bannerWrap.style.display = 'none';
-        headerCard.classList.remove('has-banner');
-      };
-      bannerImg.src = cleanBanner;
+      bannerImg.src = normalizeImageUrl(currentProfile.banner_url);
       bannerWrap.style.display = 'block';
       headerCard.classList.add('has-banner');
     } else {
-      bannerImg.src = '';
       bannerWrap.style.display = 'none';
       headerCard.classList.remove('has-banner');
     }
   }
 
   const avatarEl = document.getElementById('profile-avatar-img');
-  const stickyAvatarEl = document.getElementById('sticky-avatar-img');
+  const sideAvatarEl = document.getElementById('sidebar-avatar-img');
   const faviconEl = document.getElementById('favicon-link');
+  const cleanAvatar = normalizeImageUrl(currentProfile.avatar_url) || TRANSPARENT_PIXEL;
 
-  if (avatarEl) {
-    if (currentProfile.avatar_url) {
-      const cleanUrl = normalizeImageUrl(currentProfile.avatar_url);
-      avatarEl.onerror = () => {
-        avatarEl.src = 'https://placehold.co/200x200/1e1e1f/ffffff?text=?';
-      };
-      avatarEl.src = cleanUrl;
-      if (stickyAvatarEl) stickyAvatarEl.src = cleanUrl;
-      if (faviconEl) faviconEl.href = cleanUrl;
-    } else {
-      avatarEl.src = TRANSPARENT_PIXEL;
-      if (stickyAvatarEl) stickyAvatarEl.src = TRANSPARENT_PIXEL;
-    }
-  }
+  if (avatarEl) avatarEl.src = cleanAvatar;
+  if (sideAvatarEl) sideAvatarEl.src = cleanAvatar;
+  if (faviconEl && currentProfile.avatar_url) faviconEl.href = cleanAvatar;
 
   const socialsBar = document.getElementById('profile-socials-bar');
   if (socialsBar) {
@@ -668,63 +899,55 @@ function applyProfileToUI() {
       socialsBar.innerHTML = validLinks.map(s => {
         const href = s.url.startsWith('http') ? s.url : `https://${s.url}`;
         const label = escapeHtml(s.label || s.url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]);
-        const iconName = detectSocialIcon(href);
         return `
           <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="social-chip">
-            <ion-icon name="${iconName}"></ion-icon>
+            <ion-icon name="${detectSocialIcon(href)}"></ion-icon>
             <span>${label}</span>
           </a>
         `;
       }).join('');
     } else {
       socialsBar.style.display = 'none';
-      socialsBar.innerHTML = '';
     }
   }
 
   updateLibraryTabVisibility();
-  updateAdminActionButtons();
-  renderBlogPosts();
 }
 
-window.addSocialLinkRow = function (label = '', url = '') {
-  const container = document.getElementById('social-links-editor');
-  if (!container) return;
+window.navigateSettingsStep = function (step) {
+  const rootPanel = document.getElementById('settings-step-root');
+  const profilePanel = document.getElementById('settings-step-profile');
+  const backBtn = document.getElementById('btn-settings-back');
+  const headerIcon = document.getElementById('settings-header-icon');
+  const titleEl = document.getElementById('settings-modal-title');
 
-  const row = document.createElement('div');
-  row.className = 'social-edit-row';
-  row.innerHTML = `
-    <input type="text" class="form-input social-label-input" placeholder="Label" value="${escapeHtml(label)}">
-    <input type="url" class="form-input social-url-input" placeholder="https://..." value="${escapeHtml(url)}">
-    <button type="button" class="social-remove-btn" onclick="this.parentElement.remove()" title="Remove">
-      <ion-icon name="trash-outline"></ion-icon>
-    </button>
-  `;
-  container.appendChild(row);
+  if (step === 'profile') {
+    rootPanel.style.display = 'none';
+    profilePanel.style.display = 'flex';
+    backBtn.style.display = 'inline-flex';
+    headerIcon.style.display = 'none';
+    titleEl.textContent = 'Profile';
+  } else {
+    profilePanel.style.display = 'none';
+    rootPanel.style.display = 'flex';
+    backBtn.style.display = 'none';
+    headerIcon.style.display = 'inline-flex';
+    titleEl.textContent = 'Settings';
+  }
 };
 
-window.openProfileModal = function () {
+window.openSettingsRoot = function () {
+  navigateSettingsStep('root');
   pendingUploadedUrls = [];
   document.getElementById('edit-profile-name').value = currentProfile.name;
   document.getElementById('edit-profile-bio').value = currentProfile.bio;
   document.getElementById('edit-profile-avatar').value = currentProfile.avatar_url;
   document.getElementById('edit-profile-banner').value = currentProfile.banner_url;
-
-  const privateCheckbox = document.getElementById('edit-library-private');
-  if (privateCheckbox) {
-    privateCheckbox.checked = Boolean(currentProfile.is_library_private);
-  }
-
-  setElText('profile-upload-status', '');
-  setElText('banner-upload-status', '');
+  document.getElementById('edit-library-private').checked = Boolean(currentProfile.is_library_private);
 
   const editor = document.getElementById('social-links-editor');
-  if (editor) {
-    editor.innerHTML = '';
-    (currentProfile.social_links || []).forEach(link => {
-      addSocialLinkRow(link.label || '', link.url || '');
-    });
-  }
+  editor.innerHTML = '';
+  (currentProfile.social_links || []).forEach(l => addSocialLinkRow(l.label || '', l.url || ''));
 
   document.getElementById('profile-modal').classList.add('active');
 };
@@ -734,225 +957,136 @@ window.closeProfileModal = async function () {
   await cleanupPendingUploads([]);
 };
 
+window.addSocialLinkRow = function (label = '', url = '') {
+  const container = document.getElementById('social-links-editor');
+  const row = document.createElement('div');
+  row.className = 'split-equal-row';
+  row.innerHTML = `
+    <input type="text" class="form-input social-label-input" placeholder="Label" value="${escapeHtml(label)}">
+    <div class="row-right-controls">
+      <input type="url" class="form-input social-url-input" placeholder="https://..." value="${escapeHtml(url)}">
+      <button type="button" class="social-remove-btn" onclick="this.closest('.split-equal-row').remove()">
+        <ion-icon name="trash-outline"></ion-icon>
+      </button>
+    </div>
+  `;
+  container.appendChild(row);
+};
+
 window.clearBannerInput = function () {
   document.getElementById('edit-profile-banner').value = '';
-  setElText('banner-upload-status', 'Banner removed.');
 };
 
 window.handleBannerImageUpload = async function (event) {
-  const file = event.target.files ? event.target.files[0] : null;
+  const file = event.target.files?.[0];
   event.target.value = '';
   if (!file) return;
-
-  setElText('banner-upload-status', 'Uploading...');
   try {
-    const publicUrl = await uploadImageToSupabase(file, 'banners');
-    document.getElementById('edit-profile-banner').value = publicUrl;
-    setElText('banner-upload-status', 'Uploaded!');
+    const url = await uploadImageToSupabase(file, 'banners');
+    document.getElementById('edit-profile-banner').value = url;
     showToast('Banner uploaded', 'success');
   } catch (err) {
-    setElText('banner-upload-status', `Failed: ${err.message}`);
     showToast(err.message, 'error');
   }
 };
 
 window.handleProfileImageUpload = async function (event) {
-  const file = event.target.files ? event.target.files[0] : null;
+  const file = event.target.files?.[0];
   event.target.value = '';
   if (!file) return;
-
-  setElText('profile-upload-status', 'Uploading...');
   try {
-    const publicUrl = await uploadImageToSupabase(file, 'avatars');
-    document.getElementById('edit-profile-avatar').value = publicUrl;
-    setElText('profile-upload-status', 'Uploaded!');
+    const url = await uploadImageToSupabase(file, 'avatars');
+    document.getElementById('edit-profile-avatar').value = url;
     showToast('Avatar uploaded', 'success');
   } catch (err) {
-    setElText('profile-upload-status', `Failed: ${err.message}`);
     showToast(err.message, 'error');
   }
 };
 
-const profileForm = document.getElementById('profile-form');
-if (profileForm) {
-  profileForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
+document.getElementById('profile-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const newAvatar = document.getElementById('edit-profile-avatar').value.trim();
+  const newBanner = document.getElementById('edit-profile-banner').value.trim();
+  const collectedLinks = [];
 
-    const oldAvatar = currentProfile.avatar_url;
-    const oldBanner = currentProfile.banner_url;
-    const newAvatar = document.getElementById('edit-profile-avatar').value.trim();
-    const newBanner = document.getElementById('edit-profile-banner').value.trim();
-    const isPrivate = Boolean(document.getElementById('edit-library-private')?.checked);
-
-    const socialRows = document.querySelectorAll('#social-links-editor .social-edit-row');
-    const collectedLinks = [];
-    socialRows.forEach(row => {
-      const labelEl = row.querySelector('.social-label-input');
-      const urlEl = row.querySelector('.social-url-input');
-      const label = labelEl ? labelEl.value.trim() : '';
-      const url = urlEl ? urlEl.value.trim() : '';
-      if (url) {
-        collectedLinks.push({ label, url });
-      }
-    });
-
-    const updatedProfile = {
-      id: 1,
-      name: document.getElementById('edit-profile-name').value.trim(),
-      bio: document.getElementById('edit-profile-bio').value.trim(),
-      avatar_url: newAvatar,
-      banner_url: newBanner,
-      social_links: collectedLinks,
-      is_library_private: isPrivate,
-      updated_at: new Date().toISOString()
-    };
-
-    const { error } = await supabaseClient
-      .from('profile_settings')
-      .upsert([updatedProfile]);
-
-    if (error) {
-      showToast(error.message, 'error');
-    } else {
-      await cleanupPendingUploads([newAvatar, newBanner]);
-      if (oldAvatar && oldAvatar !== newAvatar) {
-        await deleteOldStorageFile(oldAvatar);
-      }
-      if (oldBanner && oldBanner !== newBanner) {
-        await deleteOldStorageFile(oldBanner);
-      }
-      currentProfile = updatedProfile;
-      applyProfileToUI();
-      document.getElementById('profile-modal').classList.remove('active');
-      showToast('Settings saved', 'success');
-    }
+  document.querySelectorAll('#social-links-editor .split-equal-row').forEach(row => {
+    const label = row.querySelector('.social-label-input')?.value.trim() || '';
+    const url = row.querySelector('.social-url-input')?.value.trim() || '';
+    if (url) collectedLinks.push({ label, url });
   });
-}
+
+  const updatedProfile = {
+    id: 1,
+    name: document.getElementById('edit-profile-name').value.trim(),
+    bio: document.getElementById('edit-profile-bio').value.trim(),
+    avatar_url: newAvatar,
+    banner_url: newBanner,
+    social_links: collectedLinks,
+    is_library_private: Boolean(document.getElementById('edit-library-private')?.checked),
+    updated_at: new Date().toISOString()
+  };
+
+  const { error } = await supabaseClient.from('profile_settings').upsert([updatedProfile]);
+  if (error) {
+    showToast(error.message, 'error');
+  } else {
+    await cleanupPendingUploads([newAvatar, newBanner]);
+    currentProfile = updatedProfile;
+    applyProfileToUI();
+    document.getElementById('profile-modal').classList.remove('active');
+    showToast('Settings saved', 'success');
+  }
+});
 
 // ==========================================
-// 3. MULTI-CATEGORY, SEASON/OVA OPTIONS, SORTING & GALLERY HELPERS
+// 8. MEDIA DATA HELPERS (BACKWARD COMPATIBLE)
 // ==========================================
-const CATEGORY_LABELS = {
-  tv_show: 'TV Show',
-  movie: 'Movie',
-  comic: 'Comic',
-  novel: 'Novel',
-  game: 'Game',
-  music: 'Music'
-};
-
-const DEFAULT_UNITS_BY_CAT = {
-  tv_show: 'eps',
-  movie: 'movie',
-  comic: 'ch',
-  novel: 'vol',
-  game: 'item',
-  music: 'track'
-};
-
-const UNIT_SHORT_LABELS = {
-  eps: 'EPS',
-  ch: 'CH',
-  movie: 'MOVIE',
-  vol: 'VOL',
-  pages: 'PAGES',
-  track: 'TRACK',
-  item: 'ITEM'
-};
-
-// Mandatory Season / OVA / Part Options in Exact Display Order
-const SEASON_PART_OPTIONS = [
-  'Main',
-  'Season 1',
-  'Season 2',
-  'Season 3',
-  'Season 4',
-  'Season 5',
-  'Season 6',
-  'Season 7',
-  'Season 8',
-  'Season 9',
-  'Season 10',
-  'Part 1',
-  'Part 2',
-  'Part 3',
-  'Part 4',
-  'OVA',
-  'ONA',
-  'Movie',
-  'Special',
-  'Arc'
-];
-
-function normalizeSeasonOption(val) {
-  const clean = (val || '').toString().trim();
-  if (!clean) return 'Main';
-  const matched = SEASON_PART_OPTIONS.find(opt => opt.toLowerCase() === clean.toLowerCase());
-  return matched || clean;
-}
-
-function getSeasonSortRank(label) {
-  const clean = normalizeSeasonOption(label);
-  const idx = SEASON_PART_OPTIONS.findIndex(opt => opt.toLowerCase() === clean.toLowerCase());
-  if (idx !== -1) return idx;
-  const numMatch = clean.match(/(\d+)/);
-  if (numMatch) return 100 + parseInt(numMatch[1], 10);
-  return 999;
-}
-
-function sortTracksChronologically(tracks) {
-  return [...tracks].sort((a, b) => {
-    const rankA = getSeasonSortRank(a.season_label);
-    const rankB = getSeasonSortRank(b.season_label);
-    if (rankA !== rankB) return rankA - rankB;
-    return (a.season_label || '').localeCompare(b.season_label || '');
-  });
-}
-
 function getLegacyCategory(item) {
-  const rawCat = (item.category || '').toLowerCase().trim();
-  if (rawCat === 'series' || rawCat === 'tv_show') return 'tv_show';
-  if (rawCat === 'other') {
-    if (item.sub_category === 'light_novel') return 'novel';
+  const raw = (item.category || '').toLowerCase().trim();
+  if (raw === 'series' || raw === 'tv_show') return 'tv_show';
+  if (raw === 'other') {
+    if (item.sub_category === 'light_novel') return 'book';
     if (item.sub_category === 'game') return 'game';
   }
-  return rawCat || 'tv_show';
+  if (raw === 'novel') return 'book';
+  return CATEGORY_LABELS[raw] ? raw : 'other';
+}
+
+function normalizeStatusKey(rawStatus) {
+  const s = (rawStatus || 'planned').toLowerCase().trim();
+  if (s === 'planning') return 'planned';
+  if (s === 'in_progress') return 'ongoing';
+  return STATUS_LABELS[s] ? s : 'planned';
 }
 
 function getItemTracks(item) {
   if (Array.isArray(item.tracks) && item.tracks.length > 0) {
-    const mapped = item.tracks.map(t => ({
-      category: t.category || getLegacyCategory(item),
-      status: (t.status || item.status || 'planned').toLowerCase().trim(),
+    return item.tracks.map(t => ({
+      category: getLegacyCategory({ category: t.category || item.category, sub_category: item.sub_category }),
+      status: normalizeStatusKey(t.status || item.status),
       progress: Number(t.progress) || 0,
       total_units: (t.total_units !== null && t.total_units !== undefined && t.total_units !== '') ? Number(t.total_units) : null,
       unit_label: t.unit_label || DEFAULT_UNITS_BY_CAT[t.category] || 'eps',
-      season_label: normalizeSeasonOption(t.season_label)
+      season_label: t.season_label || 'Main'
     }));
-    return sortTracksChronologically(mapped);
   }
 
   const cat = getLegacyCategory(item);
   return [{
     category: cat,
-    status: (item.status || 'planned').toLowerCase().trim(),
+    status: normalizeStatusKey(item.status),
     progress: Number(item.progress) || 0,
     total_units: (item.total_units !== null && item.total_units !== undefined && item.total_units !== '') ? Number(item.total_units) : null,
-    unit_label: item.unit_label || DEFAULT_UNITS_BY_CAT[cat] || 'eps',
+    unit_label: item.unit_label || DEFAULT_UNITS_BY_CAT[cat] || 'item',
     season_label: 'Main'
   }];
 }
 
-function getItemEpisodeReviews(item) {
-  if (!Array.isArray(item.episode_reviews)) return [];
-  return item.episode_reviews
-    .map(r => ({
-      number: (r.number || '').toString().trim(),
-      title: (r.title || '').toString().trim(),
-      rating: (r.rating !== null && r.rating !== undefined && r.rating !== '') ? Number(r.rating) : null,
-      note: (r.note || '').toString().trim()
-    }))
-    .filter(r => r.number || r.title || r.rating !== null || r.note);
+function getItemCategories(item) {
+  const tracks = getItemTracks(item);
+  const cats = new Set(tracks.map(t => t.category));
+  cats.add(getLegacyCategory(item));
+  return Array.from(cats);
 }
 
 function getItemGalleryUrls(item) {
@@ -963,50 +1097,39 @@ function getItemGalleryUrls(item) {
       if (clean && !urls.includes(clean)) urls.push(clean);
     });
   }
-  const primaryCover = normalizeImageUrl(item.cover_url);
-  if (primaryCover && !urls.includes(primaryCover)) {
-    urls.unshift(primaryCover);
-  }
+  const cover = normalizeImageUrl(item.cover_url);
+  if (cover && !urls.includes(cover)) urls.unshift(cover);
   return urls;
 }
 
-function getAllItemUnits(item) {
-  return getItemTracks(item);
+function getItemEpisodeReviews(item) {
+  if (!Array.isArray(item.episode_reviews)) return [];
+  return item.episode_reviews.filter(r => r && (r.number || r.rating !== null || r.note || r.title));
 }
 
-function getItemCategories(item) {
-  const allUnits = getAllItemUnits(item);
-  const cats = new Set(allUnits.map(t => t.category));
-  if (Array.isArray(item.categories)) {
-    item.categories.forEach(c => { if (c) cats.add(c); });
-  }
-  return Array.from(cats);
+function computeSyncedStatus(tracks) {
+  const statuses = tracks.map(t => normalizeStatusKey(t.status));
+  if (statuses.includes('ongoing')) return { key: 'ongoing', label: 'In Progress' };
+  if (statuses.length > 0 && statuses.every(s => s === 'completed')) return { key: 'completed', label: 'Completed' };
+  if (statuses.includes('on_hold')) return { key: 'on_hold', label: 'On Hold' };
+  if (statuses.includes('dropped')) return { key: 'dropped', label: 'Dropped' };
+  return { key: 'planned', label: 'Planning' };
 }
 
 function getItemTotalUnitsValue(item) {
-  const allUnits = getAllItemUnits(item);
-  const sumTotal = allUnits.reduce((sum, t) => sum + (Number(t.total_units) || 0), 0);
-  if (sumTotal > 0) return sumTotal;
-  return allUnits.reduce((sum, t) => sum + (Number(t.progress) || 0), 0);
+  const tracks = getItemTracks(item);
+  const sumTot = tracks.reduce((s, t) => s + (Number(t.total_units) || 0), 0);
+  return sumTot > 0 ? sumTot : tracks.reduce((s, t) => s + (Number(t.progress) || 0), 0);
 }
 
-function computeSyncedStatus(unitsList) {
-  const statuses = unitsList.map(t => (t.status || 'planned').toLowerCase().trim());
-
-  if (statuses.includes('ongoing')) {
-    return { key: 'ongoing', label: 'Ongoing' };
-  }
-  if (statuses.length > 0 && statuses.every(s => s === 'completed')) {
-    return { key: 'completed', label: 'Completed' };
-  }
-  if (statuses.includes('dropped')) {
-    return { key: 'dropped', label: 'Dropped' };
-  }
-  return { key: 'planned', label: 'Planned' };
+function formatStatusDate(isoString) {
+  if (!isoString) return '—';
+  const d = new Date(isoString);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 // ==========================================
-// 3B. LOAD MEDIA DATA & AUTO-CALCULATE STATS
+// 9. FETCH & RENDER MEDIA LIBRARY
 // ==========================================
 async function fetchMediaLogs() {
   const { data, error } = await supabaseClient
@@ -1016,178 +1139,133 @@ async function fetchMediaLogs() {
 
   if (error) {
     const grid = document.getElementById('media-grid');
-    if (grid) grid.innerHTML = `<p class="empty-state">Failed to load data: ${escapeHtml(error.message)}</p>`;
+    if (grid) grid.innerHTML = `<p class="empty-state">Failed to load library: ${escapeHtml(error.message)}</p>`;
     return;
   }
 
   allMediaLogs = data || [];
-  updateStatsUI();
+  updateLibraryStatsUI();
   renderMediaGrid();
+  renderOverviewDashboard();
 }
 
-function updateStatsUI() {
-  const catStats = {
-    tv_show: { total: 0, done: 0 },
-    movie: { total: 0, done: 0 },
-    comic: { total: 0, done: 0 },
-    novel: { total: 0, done: 0 },
-    game: { total: 0, done: 0 },
-    music: { total: 0, done: 0 }
-  };
+function updateLibraryStatsUI() {
+  const active = allMediaLogs.filter(m => !m.is_archived && !m.deleted_at);
+  setElText('total-entries-label', `${active.length} Entries`);
 
-  const unitCounts = {
-    eps: 0,
-    ch: 0,
-    pages: 0,
-    vol: 0,
-    movie: 0,
-    track: 0,
-    item: 0
-  };
+  const completed = active.filter(m => computeSyncedStatus(getItemTracks(m)).key === 'completed');
+  const rate = active.length ? Math.round((completed.length / active.length) * 100) : 0;
+  setElText('stat-completed-total', String(completed.length));
+  setElText('stat-completion-rate', `${rate}% Rate`);
 
-  let totalCompleted = 0;
+  const rated = active.filter(m => m.rating !== null && m.rating !== undefined && m.rating !== '');
+  const avg = rated.length ? (rated.reduce((s, m) => s + Number(m.rating), 0) / rated.length).toFixed(2) : '0.0';
+  setElText('stat-avg-rating', avg);
+  setElText('stat-rated-count', `${rated.length} Rated`);
 
-  allMediaLogs.forEach(item => {
-    const allUnits = getAllItemUnits(item);
-    const synced = computeSyncedStatus(allUnits);
-    if (synced.key === 'completed') totalCompleted += 1;
-
-    allUnits.forEach(u => {
-      if (catStats[u.category]) {
-        catStats[u.category].total += 1;
-        if (u.status === 'completed') catStats[u.category].done += 1;
-      }
-
-      const unitKey = u.unit_label || DEFAULT_UNITS_BY_CAT[u.category] || 'item';
-      const progNum = Number(u.progress) || 0;
-      if (unitCounts[unitKey] !== undefined) {
-        unitCounts[unitKey] += progNum;
-      } else {
-        unitCounts.item += progNum;
-      }
-    });
-  });
-
-  const totalEntries = allMediaLogs.length;
-  const completionRate = totalEntries > 0 ? Math.round((totalCompleted / totalEntries) * 100) : 0;
-
-  const ratedItems = allMediaLogs.filter(i => i.rating !== null && i.rating !== undefined && i.rating !== '');
-  const avgRating = ratedItems.length
-    ? (ratedItems.reduce((sum, i) => sum + Number(i.rating), 0) / ratedItems.length).toFixed(2)
-    : '0.0';
-
-  setElText('total-entries-label', `${totalEntries} Entries`);
-
-  setElText('stat-cat-tv', catStats.tv_show.total.toLocaleString('en-US'));
-  setElText('stat-cat-tv-sub', `${catStats.tv_show.done} Completed`);
-
-  setElText('stat-cat-movie', catStats.movie.total.toLocaleString('en-US'));
-  setElText('stat-cat-movie-sub', `${catStats.movie.done} Completed`);
-
-  setElText('stat-cat-comic', catStats.comic.total.toLocaleString('en-US'));
-  setElText('stat-cat-comic-sub', `${catStats.comic.done} Completed`);
-
-  setElText('stat-cat-novel', catStats.novel.total.toLocaleString('en-US'));
-  setElText('stat-cat-novel-sub', `${catStats.novel.done} Completed`);
-
-  setElText('stat-cat-game', catStats.game.total.toLocaleString('en-US'));
-  setElText('stat-cat-game-sub', `${catStats.game.done} Completed`);
-
-  setElText('stat-cat-music', catStats.music.total.toLocaleString('en-US'));
-  setElText('stat-cat-music-sub', `${catStats.music.done} Completed`);
-
-  setElText('stat-unit-eps', unitCounts.eps.toLocaleString('en-US'));
-  setElText('stat-unit-ch', unitCounts.ch.toLocaleString('en-US'));
-  setElText('stat-unit-pages', unitCounts.pages.toLocaleString('en-US'));
-  setElText('stat-unit-vol', unitCounts.vol.toLocaleString('en-US'));
-  setElText('stat-unit-movie', unitCounts.movie.toLocaleString('en-US'));
-  setElText('stat-unit-track', unitCounts.track.toLocaleString('en-US'));
-  setElText('stat-unit-item', unitCounts.item.toLocaleString('en-US'));
-
-  setElText('stat-completed-total', totalCompleted.toLocaleString('en-US'));
-  setElText('stat-completion-rate', `${completionRate}% Rate`);
-
-  setElText('stat-avg-rating', avgRating);
-  setElText('stat-rated-count', `${ratedItems.length} Rated`);
-}
-
-// ==========================================
-// 4. FILTER, SORT, PAGINATION & RENDER MEDIA
-// ==========================================
-function resetPaginationAndRender() {
-  visibleMediaLimit = itemsPerPage;
-  updateFilterActiveIndicator();
-  renderMediaGrid();
-}
-
-function updateFilterActiveIndicator() {
-  const statusVal = document.getElementById('filter-status')?.value || 'all';
-  const rMin = document.getElementById('filter-rating-min')?.value || '';
-  const rMax = document.getElementById('filter-rating-max')?.value || '';
-  const unratedOnly = document.getElementById('filter-unrated-only')?.checked || false;
-  const uMin = document.getElementById('filter-units-min')?.value || '';
-  const uMax = document.getElementById('filter-units-max')?.value || '';
-
-  const isFiltered = statusVal !== 'all' || rMin !== '' || rMax !== '' || unratedOnly || uMin !== '' || uMax !== '';
-  const dot = document.getElementById('filter-active-dot');
-  if (dot) {
-    dot.style.display = isFiltered ? 'inline-block' : 'none';
+  const statsGrid = document.getElementById('library-category-stats-grid');
+  if (statsGrid) {
+    statsGrid.innerHTML = Object.entries(CATEGORY_LABELS).map(([key, label]) => {
+      const catItems = active.filter(m => getItemCategories(m).includes(key));
+      const catDone = catItems.filter(m => computeSyncedStatus(getItemTracks(m)).key === 'completed');
+      return `
+        <div class="stat-bento-card">
+          <span class="stat-label">${escapeHtml(label)}</span>
+          <span class="stat-value">${catItems.length}</span>
+          <span class="stat-sub">${catDone.length} Completed</span>
+        </div>
+      `;
+    }).join('');
   }
 }
 
+window.toggleLibraryStats = function () {
+  isStatsExpanded = !isStatsExpanded;
+  const panel = document.getElementById('collapsible-stats-panel');
+  const textEl = document.getElementById('stats-toggle-text');
+  const iconEl = document.getElementById('stats-chevron-icon');
+  if (panel) panel.style.display = isStatsExpanded ? 'flex' : 'none';
+  if (textEl) textEl.textContent = isStatsExpanded ? 'Hide Stats' : 'Show Stats';
+  if (iconEl) iconEl.setAttribute('name', isStatsExpanded ? 'chevron-up-outline' : 'chevron-down-outline');
+};
+
+window.selectCategoryTab = function (catKey) {
+  currentCategory = catKey;
+  document.querySelectorAll('.cat-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.category === catKey);
+  });
+  resetPaginationAndRender();
+};
+
+function setupFilterListeners() {
+  document.querySelectorAll('.cat-tab').forEach(btn => {
+    btn.addEventListener('click', () => selectCategoryTab(btn.dataset.category));
+  });
+
+  ['search-library', 'filter-genre', 'filter-year', 'filter-rating-min', 'filter-rating-max'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', resetPaginationAndRender);
+  });
+
+  ['filter-status', 'filter-collection', 'filter-favorites-only', 'filter-unrated-only'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', resetPaginationAndRender);
+  });
+}
+
+function closeAllToolbarPopovers() {
+  ['filter-popover-menu', 'sort-popover-menu'].forEach(id => document.getElementById(id)?.classList.remove('open'));
+  ['btn-filter-toggle', 'btn-sort-toggle'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+}
+
+function setupOutsidePopoverCloser() {
+  document.addEventListener('click', (e) => {
+    const inFilter = document.getElementById('filter-popover-wrap')?.contains(e.target);
+    const inSort = document.getElementById('sort-popover-wrap')?.contains(e.target);
+    if (!inFilter && !inSort) closeAllToolbarPopovers();
+  });
+}
+
+window.toggleToolbarPopover = function (type) {
+  const menuId = type === 'filter' ? 'filter-popover-menu' : 'sort-popover-menu';
+  const btnId = type === 'filter' ? 'btn-filter-toggle' : 'btn-sort-toggle';
+  const menu = document.getElementById(menuId);
+  const btn = document.getElementById(btnId);
+  const willOpen = menu && !menu.classList.contains('open');
+  closeAllToolbarPopovers();
+  if (willOpen) {
+    menu.classList.add('open');
+    btn?.classList.add('active');
+  }
+};
+
 window.resetLibraryFilters = function () {
-  const statusEl = document.getElementById('filter-status');
-  const rMinEl = document.getElementById('filter-rating-min');
-  const rMaxEl = document.getElementById('filter-rating-max');
-  const unratedEl = document.getElementById('filter-unrated-only');
-  const uMinEl = document.getElementById('filter-units-min');
-  const uMaxEl = document.getElementById('filter-units-max');
-
-  if (statusEl) statusEl.value = 'all';
-  if (rMinEl) { rMinEl.value = ''; rMinEl.disabled = false; }
-  if (rMaxEl) { rMaxEl.value = ''; rMaxEl.disabled = false; }
-  if (unratedEl) unratedEl.checked = false;
-  if (uMinEl) uMinEl.value = '';
-  if (uMaxEl) uMaxEl.value = '';
-
+  document.getElementById('filter-status').value = 'all';
+  document.getElementById('filter-collection').value = 'all';
+  document.getElementById('filter-genre').value = '';
+  document.getElementById('filter-year').value = '';
+  document.getElementById('filter-rating-min').value = '';
+  document.getElementById('filter-rating-max').value = '';
+  document.getElementById('filter-favorites-only').checked = false;
+  document.getElementById('filter-unrated-only').checked = false;
   resetPaginationAndRender();
 };
 
 function updateSortUIControls() {
-  const fieldEl = document.getElementById('sort-library-field');
-  if (fieldEl) fieldEl.value = currentSortField;
-
-  const descBtn = document.getElementById('btn-sort-desc');
-  const ascBtn = document.getElementById('btn-sort-asc');
-  const labelEl = document.getElementById('sort-btn-label');
-
-  if (descBtn) descBtn.classList.toggle('active', currentSortDir === 'desc');
-  if (ascBtn) ascBtn.classList.toggle('active', currentSortDir === 'asc');
-
-  if (currentSortField === 'rating') {
-    if (descBtn) descBtn.textContent = 'Best';
-    if (ascBtn) ascBtn.textContent = 'Worst';
-    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Rating (Best)' : 'Rating (Worst)';
-  } else if (currentSortField === 'units') {
-    if (descBtn) descBtn.textContent = 'Longest';
-    if (ascBtn) ascBtn.textContent = 'Shortest';
-    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Count (Longest)' : 'Count (Shortest)';
-  } else if (currentSortField === 'title') {
-    if (descBtn) descBtn.textContent = 'Z → A';
-    if (ascBtn) ascBtn.textContent = 'A → Z';
-    if (labelEl) labelEl.textContent = currentSortDir === 'asc' ? 'Title (A→Z)' : 'Title (Z→A)';
-  } else {
-    if (descBtn) descBtn.textContent = 'Newest';
-    if (ascBtn) ascBtn.textContent = 'Oldest';
-    if (labelEl) labelEl.textContent = currentSortDir === 'desc' ? 'Updated (New)' : 'Updated (Old)';
-  }
+  const labelMap = {
+    rating: currentSortDir === 'desc' ? 'Rating (Best)' : 'Rating (Worst)',
+    updated: currentSortDir === 'desc' ? 'Recently Updated' : 'Oldest Updated',
+    created: currentSortDir === 'desc' ? 'Recently Added' : 'Oldest Added',
+    year: currentSortDir === 'desc' ? 'Year (Newest)' : 'Year (Oldest)',
+    units: currentSortDir === 'desc' ? 'Count (High)' : 'Count (Low)',
+    title: currentSortDir === 'asc' ? 'Title (A–Z)' : 'Title (Z–A)'
+  };
+  setElText('sort-btn-label', labelMap[currentSortField] || 'Sort');
+  document.getElementById('btn-sort-desc')?.classList.toggle('active', currentSortDir === 'desc');
+  document.getElementById('btn-sort-asc')?.classList.toggle('active', currentSortDir === 'asc');
 }
 
 window.onSortOptionChange = function () {
-  const fieldEl = document.getElementById('sort-library-field');
-  const fieldVal = fieldEl ? fieldEl.value : 'rating';
-  currentSortField = fieldVal;
-  currentSortDir = fieldVal === 'title' ? 'asc' : 'desc';
+  currentSortField = document.getElementById('sort-library-field').value;
+  currentSortDir = currentSortField === 'title' ? 'asc' : 'desc';
   updateSortUIControls();
   resetPaginationAndRender();
 };
@@ -1198,120 +1276,89 @@ window.setSortDirection = function (dir) {
   resetPaginationAndRender();
 };
 
-function setupFilterListeners() {
-  document.querySelectorAll('.cat-tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentCategory = btn.dataset.category;
-      resetPaginationAndRender();
-    });
+window.setLibraryViewMode = function (mode) {
+  libraryViewMode = mode;
+  document.querySelectorAll('.view-seg-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
   });
+  renderMediaGrid();
+};
 
-  const searchInput = document.getElementById('search-library');
-  const statusSelect = document.getElementById('filter-status');
-  const rMinInput = document.getElementById('filter-rating-min');
-  const rMaxInput = document.getElementById('filter-rating-max');
-  const unratedCheck = document.getElementById('filter-unrated-only');
-  const uMinInput = document.getElementById('filter-units-min');
-  const uMaxInput = document.getElementById('filter-units-max');
+window.loadMoreMedia = function () {
+  visibleMediaLimit += itemsPerPage;
+  renderMediaGrid();
+};
 
-  if (searchInput) searchInput.addEventListener('input', resetPaginationAndRender);
-  if (statusSelect) statusSelect.addEventListener('change', resetPaginationAndRender);
-  if (rMinInput) rMinInput.addEventListener('input', resetPaginationAndRender);
-  if (rMaxInput) rMaxInput.addEventListener('input', resetPaginationAndRender);
-  if (uMinInput) uMinInput.addEventListener('input', resetPaginationAndRender);
-  if (uMaxInput) uMaxInput.addEventListener('input', resetPaginationAndRender);
-
-  if (unratedCheck) {
-    unratedCheck.addEventListener('change', () => {
-      const isChecked = unratedCheck.checked;
-      if (rMinInput) rMinInput.disabled = isChecked;
-      if (rMaxInput) rMaxInput.disabled = isChecked;
-      resetPaginationAndRender();
-    });
-  }
-}
-
-function normalizeImageUrl(url) {
-  if (!url) return '';
-  return url.trim().replace(/^http:\/\//i, 'https://');
-}
-
-function formatStatusDate(isoString) {
-  if (!isoString) return '—';
-  const date = new Date(isoString);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  });
-}
-
-function matchesCustomFilters(item) {
-  const rMinRaw = document.getElementById('filter-rating-min')?.value ?? '';
-  const rMaxRaw = document.getElementById('filter-rating-max')?.value ?? '';
-  const unratedOnly = document.getElementById('filter-unrated-only')?.checked ?? false;
-  const uMinRaw = document.getElementById('filter-units-min')?.value ?? '';
-  const uMaxRaw = document.getElementById('filter-units-max')?.value ?? '';
-
-  const hasRating = item.rating !== null && item.rating !== undefined && item.rating !== '';
-  const rVal = hasRating ? Number(item.rating) : null;
-
-  if (unratedOnly) {
-    if (hasRating) return false;
-  } else if (rMinRaw !== '' || rMaxRaw !== '') {
-    if (!hasRating || Number.isNaN(rVal)) return false;
-    if (rMinRaw !== '' && rVal < parseFloat(rMinRaw)) return false;
-    if (rMaxRaw !== '' && rVal > parseFloat(rMaxRaw)) return false;
-  }
-
-  if (uMinRaw !== '' || uMaxRaw !== '') {
-    const totalUnits = getItemTotalUnitsValue(item);
-    if (uMinRaw !== '' && totalUnits < parseInt(uMinRaw, 10)) return false;
-    if (uMaxRaw !== '' && totalUnits > parseInt(uMaxRaw, 10)) return false;
-  }
-
-  return true;
+function resetPaginationAndRender() {
+  visibleMediaLimit = itemsPerPage;
+  renderMediaGrid();
 }
 
 function renderMediaGrid() {
   const grid = document.getElementById('media-grid');
   if (!grid) return;
 
-  const loadMoreWrap = document.getElementById('load-more-wrap');
-  const loadMoreText = document.getElementById('load-more-text');
+  const query = (document.getElementById('search-library')?.value || '').toLowerCase().trim();
+  const statusFilter = document.getElementById('filter-status')?.value || 'all';
+  const colFilter = document.getElementById('filter-collection')?.value || 'all';
+  const genreFilter = (document.getElementById('filter-genre')?.value || '').toLowerCase().trim();
+  const yearFilter = document.getElementById('filter-year')?.value || '';
+  const rMin = document.getElementById('filter-rating-min')?.value || '';
+  const rMax = document.getElementById('filter-rating-max')?.value || '';
+  const favOnly = document.getElementById('filter-favorites-only')?.checked || false;
+  const unratedOnly = document.getElementById('filter-unrated-only')?.checked || false;
 
-  const searchEl = document.getElementById('search-library');
-  const statusEl = document.getElementById('filter-status');
+  const isFiltered = statusFilter !== 'all' || colFilter !== 'all' || genreFilter || yearFilter || rMin || rMax || favOnly || unratedOnly;
+  const dot = document.getElementById('filter-active-dot');
+  if (dot) dot.style.display = isFiltered ? 'inline-block' : 'none';
 
-  const query = searchEl ? searchEl.value.toLowerCase().trim() : '';
-  const statusFilter = statusEl ? statusEl.value : 'all';
-
-  grid.classList.toggle('list-view', libraryViewMode === 'list');
+  const colMediaIds = colFilter !== 'all'
+    ? new Set(allCollectionItems.filter(ci => String(ci.collection_id) === colFilter).map(ci => String(ci.media_id)))
+    : null;
 
   let filtered = allMediaLogs.filter(item => {
+    if (item.is_archived || item.deleted_at) return false;
     const cats = getItemCategories(item);
-    const allUnits = getAllItemUnits(item);
-    const epReviews = getItemEpisodeReviews(item);
-    const synced = computeSyncedStatus(allUnits);
+    const tracks = getItemTracks(item);
+    const synced = computeSyncedStatus(tracks);
 
-    const matchCat = currentCategory === 'all' || cats.includes(currentCategory);
-    const matchStatus = statusFilter === 'all' || synced.key === statusFilter || allUnits.some(t => t.status === statusFilter);
-    const matchRange = matchesCustomFilters(item);
-    const matchTitle = (item.title || '').toLowerCase().includes(query);
-    const matchSeason = allUnits.some(t => (t.season_label || '').toLowerCase().includes(query));
-    const matchEpReview = epReviews.some(ep =>
-      (ep.title || '').toLowerCase().includes(query) ||
-      (ep.number || '').toLowerCase().includes(query) ||
-      (ep.note || '').toLowerCase().includes(query)
-    );
-    const matchQuery = !query || matchTitle || matchSeason || matchEpReview;
+    if (currentCategory !== 'all' && !cats.includes(currentCategory)) return false;
+    if (statusFilter !== 'all' && synced.key !== statusFilter && !tracks.some(t => t.status === statusFilter)) return false;
+    if (colMediaIds && !colMediaIds.has(String(item.id))) return false;
+    if (favOnly && !item.is_favorite) return false;
+    if (yearFilter && String(item.release_year || '') !== String(yearFilter)) return false;
 
-    return matchCat && matchStatus && matchRange && matchQuery;
+    const genresArr = Array.isArray(item.genres) ? item.genres : [];
+    const tagsArr = Array.isArray(item.tags) ? item.tags : [];
+    if (genreFilter) {
+      const combined = [...genresArr, ...tagsArr].join(' ').toLowerCase();
+      if (!combined.includes(genreFilter)) return false;
+    }
+
+    const hasRating = item.rating !== null && item.rating !== undefined && item.rating !== '';
+    if (unratedOnly && hasRating) return false;
+    if (!unratedOnly && (rMin !== '' || rMax !== '')) {
+      if (!hasRating) return false;
+      const rv = Number(item.rating);
+      if (rMin !== '' && rv < parseFloat(rMin)) return false;
+      if (rMax !== '' && rv > parseFloat(rMax)) return false;
+    }
+
+    if (query) {
+      const hay = [
+        item.title,
+        item.original_title,
+        item.creator,
+        ...genresArr,
+        ...tagsArr
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(query)) return false;
+    }
+
+    return true;
   });
 
+  // Sort
   filtered.sort((a, b) => {
     if (currentSortField === 'rating') {
       const aHas = a.rating !== null && a.rating !== undefined && a.rating !== '';
@@ -1319,82 +1366,112 @@ function renderMediaGrid() {
       if (!aHas && !bHas) return 0;
       if (!aHas) return 1;
       if (!bHas) return -1;
-
       const diff = Number(a.rating) - Number(b.rating);
       return currentSortDir === 'desc' ? -diff : diff;
     }
-
-    if (currentSortField === 'units') {
-      const uA = getItemTotalUnitsValue(a);
-      const uB = getItemTotalUnitsValue(b);
-      return currentSortDir === 'desc' ? (uB - uA) : (uA - uB);
+    if (currentSortField === 'year') {
+      const diff = (Number(a.release_year) || 0) - (Number(b.release_year) || 0);
+      return currentSortDir === 'desc' ? -diff : diff;
     }
-
+    if (currentSortField === 'units') {
+      const diff = getItemTotalUnitsValue(a) - getItemTotalUnitsValue(b);
+      return currentSortDir === 'desc' ? -diff : diff;
+    }
     if (currentSortField === 'title') {
       const cmp = (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' });
       return currentSortDir === 'asc' ? cmp : -cmp;
     }
-
-    const timeA = new Date(a.updated_at || a.created_at || 0).getTime();
-    const timeB = new Date(b.updated_at || b.created_at || 0).getTime();
-    return currentSortDir === 'desc' ? (timeB - timeA) : (timeA - timeB);
+    const field = currentSortField === 'created' ? 'created_at' : 'updated_at';
+    const diff = new Date(a[field] || 0).getTime() - new Date(b[field] || 0).getTime();
+    return currentSortDir === 'desc' ? -diff : diff;
   });
 
-  if (filtered.length === 0) {
-    grid.innerHTML = `<p class="empty-state">No media found matching these filters.</p>`;
+  grid.classList.remove('list-view', 'compact-view');
+  if (libraryViewMode === 'list') grid.classList.add('list-view');
+  if (libraryViewMode === 'compact') grid.classList.add('compact-view');
+
+  const loadMoreWrap = document.getElementById('load-more-wrap');
+  if (!filtered.length) {
+    grid.innerHTML = `<p class="empty-state">No media entries match your current filters.</p>`;
     if (loadMoreWrap) loadMoreWrap.style.display = 'none';
     return;
   }
 
-  const displayedItems = visibleMediaLimit === Infinity ? filtered : filtered.slice(0, visibleMediaLimit);
-  const remainingCount = filtered.length - displayedItems.length;
-
+  const displayed = filtered.slice(0, visibleMediaLimit);
+  const remaining = filtered.length - displayed.length;
   if (loadMoreWrap) {
-    if (remainingCount > 0) {
-      loadMoreWrap.style.display = 'flex';
-      if (loadMoreText) loadMoreText.textContent = `Load More (${remainingCount} remaining)`;
-    } else {
-      loadMoreWrap.style.display = 'none';
-    }
+    loadMoreWrap.style.display = remaining > 0 ? 'flex' : 'none';
+    setElText('load-more-text', `Load More (${remaining} remaining)`);
   }
 
-  // COMPACT LIST VIEW RENDER
+  // 1. COMPACT TABLE VIEW
+  if (libraryViewMode === 'compact') {
+    grid.innerHTML = `
+      <div class="compact-table-wrap">
+        <table class="compact-media-table">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Category</th>
+              <th>Status</th>
+              <th>Progress</th>
+              <th>Year</th>
+              <th>Rating</th>
+              ${isAdminLoggedIn ? '<th></th>' : ''}
+            </tr>
+          </thead>
+          <tbody>
+            ${displayed.map(item => {
+              const tracks = getItemTracks(item);
+              const t0 = tracks[0];
+              const synced = computeSyncedStatus(tracks);
+              const catLbl = CATEGORY_LABELS[getLegacyCategory(item)] || item.category;
+              const progStr = t0.total_units ? `${t0.progress} / ${t0.total_units}` : `${t0.progress}`;
+              const ratingStr = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
+              return `
+                <tr onclick="openMediaDetailModal('${escapeHtml(String(item.id))}')">
+                  <td><strong>${escapeHtml(item.title)}</strong> ${item.is_favorite ? '♥' : ''}</td>
+                  <td>${escapeHtml(catLbl)}</td>
+                  <td>${escapeHtml(synced.label)}</td>
+                  <td>${escapeHtml(progStr)}</td>
+                  <td>${item.release_year || '—'}</td>
+                  <td>${ratingStr}</td>
+                  ${isAdminLoggedIn ? `<td><button type="button" class="list-edit-btn" onclick="event.stopPropagation(); openEditModal('${escapeHtml(String(item.id))}')"><ion-icon name="create-outline"></ion-icon></button></td>` : ''}
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+    return;
+  }
+
+  // 2. LIST VIEW
   if (libraryViewMode === 'list') {
-    grid.innerHTML = displayedItems.map(item => {
+    grid.innerHTML = displayed.map(item => {
       const safeId = escapeHtml(String(item.id));
-      const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/120x180/1e1e1f/888888?text=?';
+      const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/120x180/1e1e1f/888?text=?';
+      const tracks = getItemTracks(item);
+      const t0 = tracks[0];
+      const synced = computeSyncedStatus(tracks);
+      const catLbl = CATEGORY_LABELS[getLegacyCategory(item)] || item.category;
+      const progStr = t0.total_units ? `${t0.progress}/${t0.total_units}` : `${t0.progress}`;
       const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)}` : '—';
-      const cats = getItemCategories(item);
-      const allUnits = getAllItemUnits(item);
-      const synced = computeSyncedStatus(allUnits);
-      const epReviews = getItemEpisodeReviews(item);
-      const repeatCount = Number(item.repeat_count) || 0;
-
-      const catLabels = cats.map(c => (CATEGORY_LABELS[c] || c).toUpperCase()).join(' / ');
-      const metaParts = [catLabels, synced.label.toUpperCase()];
-      if (epReviews.length > 0) metaParts.push('REVIEWED');
-      if (repeatCount > 0) metaParts.push(`↻ ${repeatCount}X`);
-
-      const subMetaHtml = metaParts
-        .map(part => `<span class="list-sub-meta-item">${escapeHtml(part)}</span>`)
-        .join('<span class="list-meta-sep">·</span>');
-
-      const editBtnHtml = isAdminLoggedIn ? `
-        <button type="button" class="list-edit-btn" onclick="event.stopPropagation(); openEditModal('${safeId}')" title="Edit">
-          <ion-icon name="create-outline"></ion-icon>
-        </button>
-      ` : '';
 
       return `
         <div class="media-list-row" onclick="openMediaDetailModal('${safeId}')">
-          <img class="list-thumb" src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/120x180/1e1e1f/888888?text=?'">
+          <img class="list-thumb" src="${cover}" alt="" loading="lazy" onerror="this.src='https://placehold.co/120x180/1e1e1f/888?text=?'">
           <div class="list-main-info">
-            <div class="list-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
-            <div class="list-sub-meta">${subMetaHtml}</div>
+            <div class="list-title">${escapeHtml(item.title)} ${item.is_favorite ? '♥' : ''}</div>
+            <div class="list-sub-meta">
+              <span>${escapeHtml(catLbl)}</span> · <span>${escapeHtml(synced.label)}</span> · <span>${escapeHtml(progStr)}</span>
+              ${item.release_year ? ` · <span>${item.release_year}</span>` : ''}
+            </div>
           </div>
           <div class="list-right-meta">
             <span class="list-rating-pill">${ratingText}</span>
-            ${editBtnHtml}
+            ${isAdminLoggedIn ? `<button type="button" class="list-edit-btn" onclick="event.stopPropagation(); openEditModal('${safeId}')"><ion-icon name="create-outline"></ion-icon></button>` : ''}
           </div>
         </div>
       `;
@@ -1402,17 +1479,24 @@ function renderMediaGrid() {
     return;
   }
 
-  // POSTER GRID VIEW RENDER (DEFAULT)
-  grid.innerHTML = displayedItems.map(item => {
+  // 3. GRID VIEW (DEFAULT)
+  grid.innerHTML = displayed.map(item => {
     const safeId = escapeHtml(String(item.id));
-    const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
+    const cover = normalizeImageUrl(item.cover_url) || 'https://placehold.co/300x450/1e1e1f/888?text=No+Cover';
+    const catLbl = CATEGORY_LABELS[getLegacyCategory(item)] || item.category;
+    const ratingChip = (item.rating !== null && item.rating !== undefined)
+      ? `<span class="poster-chip">★ ${Number(item.rating).toFixed(1)}</span>`
+      : '<span></span>';
+    const favChip = item.is_favorite ? `<span class="poster-chip">♥</span>` : '';
 
     return `
       <div class="media-card" onclick="openMediaDetailModal('${safeId}')">
         <div class="media-cover-wrap">
-          <img src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/300x450/1e1e1f/888888?text=No+Cover'">
+          <div class="poster-top-badges">${ratingChip}${favChip}</div>
+          <img src="${cover}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.src='https://placehold.co/300x450/1e1e1f/888?text=No+Cover'">
           <div class="poster-bottom-overlay">
-            <h3 class="poster-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h3>
+            <h3 class="poster-title">${escapeHtml(item.title)}</h3>
+            <div class="poster-sub-cat">${escapeHtml(catLbl)}${item.release_year ? ` · ${item.release_year}` : ''}</div>
           </div>
         </div>
       </div>
@@ -1421,240 +1505,117 @@ function renderMediaGrid() {
 }
 
 // ==========================================
-// 4B. MEDIA DETAIL MODAL (AGGREGATED SUMMARY + LOAD MORE)
+// 10. MEDIA DETAIL MODAL
 // ==========================================
-let detailProgressExpanded = false;
-
-function buildSingleProgressCardHtml(t) {
-  const hasTotal = t.total_units !== null && t.total_units > 0;
-  const unitShort = UNIT_SHORT_LABELS[t.unit_label] || (t.unit_label || '').toUpperCase();
-  const progStr = hasTotal ? `${t.progress} / ${t.total_units} ${unitShort}` : `${t.progress} ${unitShort}`;
-
-  let pct = 0;
-  if (hasTotal) {
-    pct = Math.min(100, Math.max(0, Math.round((t.progress / t.total_units) * 100)));
-  } else if (t.status === 'completed') {
-    pct = 100;
-  } else if (t.progress > 0) {
-    pct = 45;
-  }
-
-  const catName = escapeHtml(CATEGORY_LABELS[t.category] || t.category);
-  const seasonLabel = normalizeSeasonOption(t.season_label);
-  const seasonSuffix = (seasonLabel && seasonLabel !== 'Main')
-    ? ` <span class="detail-progress-season">· ${escapeHtml(seasonLabel)}</span>`
-    : '';
-
-  return `
-    <div class="detail-progress-card">
-      <div class="detail-progress-top">
-        <span class="detail-progress-cat">${catName}${seasonSuffix}</span>
-        <span class="detail-pill-badge">${escapeHtml(t.status)}</span>
-      </div>
-      <div class="detail-progress-bar-track">
-        <div class="detail-progress-bar-fill" style="width: ${pct}%;"></div>
-      </div>
-      <div class="detail-progress-bottom">
-        <span>${progStr}</span>
-        <span class="detail-progress-percent">${hasTotal || t.status === 'completed' ? `${pct}%` : ''}</span>
-      </div>
-    </div>
-  `;
-}
-
-function buildAggregatedSummaryCardHtml(tracks) {
-  const cats = Array.from(new Set(tracks.map(t => CATEGORY_LABELS[t.category] || t.category)));
-  const combinedCatLabel = cats.join(' / ');
-  const synced = computeSyncedStatus(tracks);
-
-  const unitMap = new Map();
-  let sumProg = 0;
-  let sumTotal = 0;
-  let allHaveTotal = true;
-
-  tracks.forEach(t => {
-    const unitKey = t.unit_label || DEFAULT_UNITS_BY_CAT[t.category] || 'item';
-    const shortLbl = UNIT_SHORT_LABELS[unitKey] || unitKey.toUpperCase();
-    const entry = unitMap.get(shortLbl) || { prog: 0, total: 0, hasTotal: true };
-
-    const p = Number(t.progress) || 0;
-    const tot = (t.total_units !== null && t.total_units > 0) ? Number(t.total_units) : null;
-
-    entry.prog += p;
-    sumProg += p;
-
-    if (tot !== null) {
-      entry.total += tot;
-      sumTotal += tot;
-    } else {
-      entry.hasTotal = false;
-      allHaveTotal = false;
-    }
-
-    unitMap.set(shortLbl, entry);
-  });
-
-  const unitSummaryParts = [];
-  unitMap.forEach((val, shortLbl) => {
-    if (val.hasTotal && val.total > 0) {
-      unitSummaryParts.push(`${val.prog} / ${val.total} ${shortLbl}`);
-    } else {
-      unitSummaryParts.push(`${val.prog} ${shortLbl}`);
-    }
-  });
-
-  let pct = 0;
-  if (allHaveTotal && sumTotal > 0) {
-    pct = Math.min(100, Math.max(0, Math.round((sumProg / sumTotal) * 100)));
-  } else if (synced.key === 'completed') {
-    pct = 100;
-  } else if (sumTotal > 0) {
-    pct = Math.min(100, Math.max(0, Math.round((sumProg / sumTotal) * 100)));
-  } else if (sumProg > 0) {
-    pct = 50;
-  }
-
-  return `
-    <div class="detail-progress-card">
-      <div class="detail-progress-top">
-        <span class="detail-progress-cat">${escapeHtml(combinedCatLabel)} <span class="detail-progress-season">· Total (${tracks.length})</span></span>
-        <span class="detail-pill-badge">${escapeHtml(synced.label)}</span>
-      </div>
-      <div class="detail-progress-bar-track">
-        <div class="detail-progress-bar-fill" style="width: ${pct}%;"></div>
-      </div>
-      <div class="detail-progress-bottom">
-        <span>${escapeHtml(unitSummaryParts.join(' · '))}</span>
-        <span class="detail-progress-percent">${pct}%</span>
-      </div>
-    </div>
-  `;
-}
-
-window.toggleDetailProgressList = function (id) {
-  const item = allMediaLogs.find(m => String(m.id) === String(id));
-  if (!item) return;
-
-  detailProgressExpanded = !detailProgressExpanded;
-  const tracks = getItemTracks(item);
-  const listEl = document.getElementById('detail-progress-list-container');
-  const btnEl = document.getElementById('btn-detail-progress-toggle');
-
-  if (listEl) {
-    listEl.innerHTML = detailProgressExpanded
-      ? tracks.map(buildSingleProgressCardHtml).join('')
-      : buildAggregatedSummaryCardHtml(tracks);
-  }
-
-  if (btnEl) {
-    btnEl.innerHTML = detailProgressExpanded
-      ? `<span>Show Less</span><ion-icon name="chevron-up-outline"></ion-icon>`
-      : `<span>Load More</span><ion-icon name="chevron-down-outline"></ion-icon>`;
-  }
-};
-
 window.openMediaDetailModal = function (id) {
   const item = allMediaLogs.find(m => String(m.id) === String(id));
   if (!item) return;
 
-  detailProgressExpanded = false;
-
   const safeId = escapeHtml(String(item.id));
-  const galleryUrls = getItemGalleryUrls(item);
-  const fallbackPoster = 'https://placehold.co/300x450/1e1e1f/888888?text=No+Cover';
-  const posterSlides = galleryUrls.length > 0 ? galleryUrls : [fallbackPoster];
+  const gallery = getItemGalleryUrls(item);
+  const fallback = 'https://placehold.co/300x450/1e1e1f/888?text=No+Cover';
+  const slides = gallery.length ? gallery : [fallback];
 
   const tracks = getItemTracks(item);
-  const epReviews = getItemEpisodeReviews(item);
-  const cats = getItemCategories(item);
   const synced = computeSyncedStatus(tracks);
-  const hasRating = item.rating !== null && item.rating !== undefined && item.rating !== '';
-  const ratingText = hasRating ? `★ ${Number(item.rating).toFixed(1)}` : 'UNRATED';
-  const repeatCount = Number(item.repeat_count) || 0;
+  const catLbl = CATEGORY_LABELS[getLegacyCategory(item)] || item.category;
+  const ratingText = (item.rating !== null && item.rating !== undefined) ? `★ ${Number(item.rating).toFixed(1)} / 10` : 'Unrated';
+  const genres = Array.isArray(item.genres) ? item.genres : [];
+  const tags = Array.isArray(item.tags) ? item.tags : [];
+  const catMeta = item.category_meta && typeof item.category_meta === 'object' ? item.category_meta : {};
+  const epReviews = getItemEpisodeReviews(item);
 
   setElText('detail-modal-title', item.title);
 
-  const heroVisualHtml = posterSlides.length > 1
-    ? buildImageCarouselHtml(posterSlides, 'detail-gallery-carousel')
-    : `<img class="detail-poster" src="${posterSlides[0]}" alt="${escapeHtml(item.title)}" onerror="this.src='${fallbackPoster}'">`;
+  const heroVisual = slides.length > 1
+    ? buildImageCarouselHtml(slides, 'detail-gallery-carousel')
+    : `<img class="detail-poster" src="${slides[0]}" alt="" onerror="this.src='${fallback}'">`;
 
-  const hasMultipleTracks = tracks.length > 1;
-  const initialTracksHtml = hasMultipleTracks
-    ? buildAggregatedSummaryCardHtml(tracks)
-    : buildSingleProgressCardHtml(tracks[0]);
+  const metaEntries = [];
+  if (item.original_title) metaEntries.push({ k: 'Original Title', v: item.original_title });
+  if (item.creator) metaEntries.push({ k: 'Creator / Studio', v: item.creator });
+  if (item.release_year) metaEntries.push({ k: 'Release Year', v: item.release_year });
+  if (item.start_date) metaEntries.push({ k: 'Started', v: item.start_date });
+  if (item.completion_date) metaEntries.push({ k: 'Completed', v: item.completion_date });
 
-  const progressToggleBtnHtml = hasMultipleTracks ? `
-    <button type="button" id="btn-detail-progress-toggle" class="detail-load-more-btn" onclick="toggleDetailProgressList('${safeId}')">
-      <span>Load More</span>
-      <ion-icon name="chevron-down-outline"></ion-icon>
-    </button>
-  ` : '';
+  Object.entries(catMeta).forEach(([k, v]) => {
+    if (v !== null && v !== undefined && v !== '') {
+      metaEntries.push({ k: k.replace(/_/g, ' '), v: String(v) });
+    }
+  });
 
-  let epReviewsHtml = '';
-  if (epReviews.length > 0) {
-    epReviewsHtml = `
-      <div>
-        <div class="ep-graph-header">
-          <div class="detail-section-title" style="margin-bottom: 0;">Review (${epReviews.length})</div>
+  const tracksHtml = tracks.map(t => {
+    const hasTot = t.total_units !== null && t.total_units > 0;
+    const pct = hasTot ? Math.min(100, Math.round((t.progress / t.total_units) * 100)) : (t.status === 'completed' ? 100 : 35);
+    const progStr = hasTot ? `${t.progress} / ${t.total_units} ${UNIT_SHORT_LABELS[t.unit_label] || ''}` : `${t.progress} ${UNIT_SHORT_LABELS[t.unit_label] || ''}`;
+    return `
+      <div class="detail-progress-card">
+        <div class="detail-progress-top">
+          <strong>${escapeHtml(CATEGORY_LABELS[t.category] || t.category)} · ${escapeHtml(t.season_label || 'Main')}</strong>
+          <span class="detail-pill-badge">${escapeHtml(STATUS_LABELS[t.status] || t.status)}</span>
         </div>
-        <div class="ep-review-cards-list">
-          ${epReviews.map((ep, idx) => {
-            const partLabel = ep.number || `Part ${idx + 1}`;
-            const hasScore = ep.rating !== null && !Number.isNaN(ep.rating);
-            const scoreStr = hasScore ? `★ ${Number(ep.rating).toFixed(1)}` : '';
-
-            return `
-              <div class="ep-review-card">
-                <div class="ep-review-main">
-                  <span class="ep-review-title-label">${escapeHtml(partLabel)}</span>
-                  ${hasScore ? `<span class="review-rating-pill">${scoreStr}</span>` : ''}
-                </div>
-                ${ep.note ? `<div class="ep-review-note">${escapeHtml(ep.note)}</div>` : ''}
-              </div>
-            `;
-          }).join('')}
-        </div>
+        <div class="detail-progress-bar-track"><div class="detail-progress-bar-fill" style="width:${pct}%"></div></div>
+        <div class="detail-progress-bottom"><span>${escapeHtml(progStr)}</span><span>${pct}%</span></div>
       </div>
     `;
-  }
-
-  const editActionHtml = isAdminLoggedIn ? `
-    <div class="modal-submit-row">
-      <button type="button" class="form-btn primary-submit" onclick="closeMediaDetailModal(); openEditModal('${safeId}');">
-        <ion-icon name="create-outline"></ion-icon>
-        <span>Edit</span>
-      </button>
-    </div>
-  ` : '';
+  }).join('');
 
   document.getElementById('media-detail-body').innerHTML = `
     <div class="detail-hero">
-      ${heroVisualHtml}
+      ${heroVisual}
       <div class="detail-meta-col">
-        <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-          ${cats.map(c => `<span class="detail-pill-badge">${escapeHtml(CATEGORY_LABELS[c] || c)}</span>`).join('')}
-        </div>
-        <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <span class="detail-pill-badge">${escapeHtml(catLbl)}</span>
           <span class="detail-pill-badge">${escapeHtml(synced.label)}</span>
           <span class="detail-pill-badge">${escapeHtml(ratingText)}</span>
-          ${repeatCount > 0 ? `<span class="detail-pill-badge">↻ ${repeatCount}X</span>` : ''}
+          ${item.is_favorite ? `<span class="detail-pill-badge">♥ Favorite</span>` : ''}
         </div>
-        <div style="font-size: 11px; color: var(--light-gray-70);">
-          Updated ${formatStatusDate(item.updated_at || item.created_at)}
-        </div>
+        ${genres.length ? `<div class="note-tags-row">${genres.map(g => `<span class="tag-pill">${escapeHtml(g)}</span>`).join('')}</div>` : ''}
+        ${tags.length ? `<div class="note-tags-row">${tags.map(t => `<span class="tag-pill">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+        ${item.external_url ? `<a href="${escapeHtml(item.external_url)}" target="_blank" rel="noopener noreferrer" class="dash-link-btn">Open External Reference ↗</a>` : ''}
       </div>
     </div>
+
+    ${metaEntries.length ? `
+      <div class="detail-meta-grid">
+        ${metaEntries.map(m => `<div class="detail-meta-item"><span>${escapeHtml(m.k)}</span>${escapeHtml(m.v)}</div>`).join('')}
+      </div>
+    ` : ''}
+
+    ${item.description ? `<div><div class="detail-section-title">Synopsis</div><p style="font-size:12.5px; color:var(--light-gray); line-height:1.55;">${escapeHtml(item.description)}</p></div>` : ''}
 
     <div>
-      <div class="detail-section-header">
-        <div class="detail-section-title">Progress</div>
-        ${progressToggleBtnHtml}
-      </div>
-      <div id="detail-progress-list-container" class="detail-progress-list">${initialTracksHtml}</div>
+      <div class="detail-section-title">Progress & Tracking</div>
+      <div class="detail-progress-list">${tracksHtml}</div>
     </div>
 
-    ${epReviewsHtml}
-    ${editActionHtml}
+    ${item.review ? `<div><div class="detail-section-title">Personal Review</div><div class="ep-review-card" style="font-size:12.5px; line-height:1.6; white-space:pre-wrap;">${escapeHtml(item.review)}</div></div>` : ''}
+
+    ${epReviews.length ? `
+      <div>
+        <div class="detail-section-title">Episode / Chapter / Route Logs (${epReviews.length})</div>
+        <div class="ep-review-cards-list">
+          ${epReviews.map((ep, i) => `
+            <div class="ep-review-card">
+              <div class="ep-review-main">
+                <strong>${escapeHtml(ep.number || `Entry ${i + 1}`)}</strong>
+                ${ep.rating !== null && ep.rating !== undefined ? `<span class="detail-pill-badge">★ ${Number(ep.rating).toFixed(1)}</span>` : ''}
+              </div>
+              ${ep.note ? `<div class="ep-review-note">${escapeHtml(ep.note)}</div>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : ''}
+
+    ${isAdminLoggedIn ? `
+      <div class="modal-submit-row">
+        <button type="button" class="form-btn primary-submit" onclick="closeMediaDetailModal(); openEditModal('${safeId}');">
+          <ion-icon name="create-outline"></ion-icon>
+          <span>Edit Media</span>
+        </button>
+      </div>
+    ` : ''}
   `;
 
   document.getElementById('media-detail-modal').classList.add('active');
@@ -1665,23 +1626,79 @@ window.closeMediaDetailModal = function () {
 };
 
 // ==========================================
-// 5. ADD / EDIT MEDIA MODAL (MANDATORY SEASON/OVA SELECT)
+// 11. ADD / EDIT MEDIA MODAL & DYNAMIC FIELDS
 // ==========================================
+window.onPrimaryCategoryModalChange = function (existingMeta = {}) {
+  const cat = document.getElementById('media-primary-cat').value;
+  renderCategorySpecificFields(cat, existingMeta);
+};
+
+function renderCategorySpecificFields(catKey, existingMeta = {}) {
+  const box = document.getElementById('category-specific-fields-box');
+  if (!box) return;
+  const schema = CATEGORY_SPECIFIC_SCHEMA[catKey] || [];
+  if (!schema.length) {
+    box.innerHTML = '';
+    return;
+  }
+
+  box.innerHTML = `<div class="form-row">${schema.map(field => {
+    const val = existingMeta[field.key] ?? '';
+    if (field.type === 'select') {
+      return `
+        <div class="form-group">
+          <label>${escapeHtml(field.label)}</label>
+          <select class="form-input cat-meta-input" data-meta-key="${field.key}">
+            ${field.options.map(opt => `<option value="${escapeHtml(opt)}" ${val === opt ? 'selected' : ''}>${escapeHtml(opt)}</option>`).join('')}
+          </select>
+        </div>
+      `;
+    }
+    return `
+      <div class="form-group">
+        <label>${escapeHtml(field.label)}</label>
+        <input type="${field.type}" class="form-input cat-meta-input" data-meta-key="${field.key}" value="${escapeHtml(String(val))}" placeholder="${escapeHtml(field.placeholder || '')}">
+      </div>
+    `;
+  }).join('')}</div>`;
+}
+
+function renderCollectionCheckboxes(mediaId = null) {
+  const group = document.getElementById('media-collections-assign-group');
+  const grid = document.getElementById('media-collections-checkboxes');
+  if (!group || !grid) return;
+
+  if (!allCollections.length) {
+    group.style.display = 'none';
+    return;
+  }
+
+  group.style.display = 'flex';
+  const assignedIds = mediaId
+    ? new Set(allCollectionItems.filter(ci => String(ci.media_id) === String(mediaId)).map(ci => String(ci.collection_id)))
+    : new Set();
+
+  grid.innerHTML = allCollections.map(col => `
+    <label class="collection-check-pill">
+      <input type="checkbox" class="media-col-checkbox" value="${escapeHtml(String(col.id))}" ${assignedIds.has(String(col.id)) ? 'checked' : ''}>
+      <span>${escapeHtml(col.name)}</span>
+    </label>
+  `).join('');
+}
+
 window.addMediaImageRow = function (url = '') {
   const container = document.getElementById('media-gallery-editor');
-  if (!container) return;
-
   const row = document.createElement('div');
   row.className = 'cover-split-row';
   row.innerHTML = `
     <input type="url" class="form-input media-gallery-url-input" placeholder="Cover URL" value="${escapeHtml(url)}">
     <div class="row-right-controls">
-      <label class="equal-upload-btn" title="Upload">
+      <label class="equal-upload-btn">
         <ion-icon name="cloud-upload-outline"></ion-icon>
         <span>Upload</span>
         <input type="file" accept="image/*" hidden onchange="handleSingleCoverRowUpload(event, this)">
       </label>
-      <button type="button" class="social-remove-btn" onclick="removeMediaImageRow(this)" title="Remove">
+      <button type="button" class="social-remove-btn" onclick="this.closest('.cover-split-row').remove()">
         <ion-icon name="trash-outline"></ion-icon>
       </button>
     </div>
@@ -1689,160 +1706,83 @@ window.addMediaImageRow = function (url = '') {
   container.appendChild(row);
 };
 
-window.removeMediaImageRow = function (btn) {
-  const container = document.getElementById('media-gallery-editor');
-  const row = btn.closest('.cover-split-row');
-  if (!row || !container) return;
-  if (container.children.length <= 1) {
-    const inp = row.querySelector('.media-gallery-url-input');
-    if (inp) inp.value = '';
-    return;
-  }
-  row.remove();
-};
-
 window.handleSingleCoverRowUpload = async function (event, fileInput) {
-  const file = event.target.files ? event.target.files[0] : null;
+  const file = event.target.files?.[0];
   event.target.value = '';
   if (!file) return;
-
   const row = fileInput.closest('.cover-split-row');
-  const urlInput = row ? row.querySelector('.media-gallery-url-input') : null;
-
-  setElText('cover-upload-status', 'Uploading...');
+  const urlInput = row?.querySelector('.media-gallery-url-input');
   try {
     const publicUrl = await uploadImageToSupabase(file, 'covers');
     if (urlInput) urlInput.value = publicUrl;
-    setElText('cover-upload-status', 'Uploaded!');
     showToast('Cover uploaded', 'success');
   } catch (err) {
-    setElText('cover-upload-status', `Failed: ${err.message}`);
     showToast(err.message, 'error');
   }
 };
 
-function buildSeasonOptionsHtml(selectedVal) {
-  const normalized = normalizeSeasonOption(selectedVal);
-  const optionsList = SEASON_PART_OPTIONS.includes(normalized)
-    ? SEASON_PART_OPTIONS
-    : [normalized, ...SEASON_PART_OPTIONS];
-
-  return optionsList.map(opt => `
-    <option value="${escapeHtml(opt)}" ${opt === normalized ? 'selected' : ''}>${escapeHtml(opt)}</option>
-  `).join('');
-}
-
 window.addMediaTrackRow = function (track = null) {
   const container = document.getElementById('media-tracks-editor');
-  if (!container) return;
-
-  const cat = (track && track.category) ? track.category : 'tv_show';
-  const status = (track && track.status) ? track.status : 'completed';
-  const progress = (track && track.progress !== undefined) ? track.progress : 0;
-  const total = (track && track.total_units !== undefined && track.total_units !== null) ? track.total_units : '';
-  const unit = (track && track.unit_label) ? track.unit_label : (DEFAULT_UNITS_BY_CAT[cat] || 'eps');
-  const seasonLabel = (track && track.season_label) ? normalizeSeasonOption(track.season_label) : 'Main';
+  const cat = track?.category || document.getElementById('media-primary-cat')?.value || 'movie';
+  const status = track?.status || 'completed';
+  const progress = track?.progress ?? 0;
+  const total = track?.total_units ?? '';
+  const unit = track?.unit_label || DEFAULT_UNITS_BY_CAT[cat] || 'item';
+  const season = track?.season_label || 'Main';
 
   const card = document.createElement('div');
   card.className = 'track-edit-card';
   card.innerHTML = `
     <div class="clean-card-row-cat">
-      <select class="form-input track-cat-select" onchange="onTrackCategoryChange(this)">
-        <option value="tv_show" ${cat === 'tv_show' ? 'selected' : ''}>TV Show</option>
-        <option value="movie" ${cat === 'movie' ? 'selected' : ''}>Movie</option>
-        <option value="comic" ${cat === 'comic' ? 'selected' : ''}>Comic</option>
-        <option value="novel" ${cat === 'novel' ? 'selected' : ''}>Novel</option>
-        <option value="game" ${cat === 'game' ? 'selected' : ''}>Game</option>
-        <option value="music" ${cat === 'music' ? 'selected' : ''}>Music</option>
+      <select class="form-input track-cat-select">
+        ${Object.entries(CATEGORY_LABELS).map(([k, lbl]) => `<option value="${k}" ${cat === k ? 'selected' : ''}>${escapeHtml(lbl)}</option>`).join('')}
       </select>
-      <button type="button" class="social-remove-btn" onclick="removeMediaTrackRow(this)" title="Remove">
+      <button type="button" class="social-remove-btn" onclick="this.closest('.track-edit-card').remove()">
         <ion-icon name="trash-outline"></ion-icon>
       </button>
     </div>
-
     <div class="clean-card-row-3col">
       <select class="form-input track-unit-select">
-        <option value="eps" ${unit === 'eps' ? 'selected' : ''}>Episode</option>
         <option value="movie" ${unit === 'movie' ? 'selected' : ''}>Movie</option>
+        <option value="eps" ${unit === 'eps' ? 'selected' : ''}>Episode</option>
         <option value="ch" ${unit === 'ch' ? 'selected' : ''}>Chapter</option>
         <option value="vol" ${unit === 'vol' ? 'selected' : ''}>Volume</option>
         <option value="pages" ${unit === 'pages' ? 'selected' : ''}>Pages</option>
         <option value="track" ${unit === 'track' ? 'selected' : ''}>Track</option>
         <option value="item" ${unit === 'item' ? 'selected' : ''}>Item</option>
       </select>
-
-      <select class="form-input track-status-select" onchange="onTrackStatusOrTotalChange(this)">
+      <select class="form-input track-status-select">
+        <option value="planned" ${status === 'planned' ? 'selected' : ''}>Planning</option>
+        <option value="ongoing" ${status === 'ongoing' ? 'selected' : ''}>In Progress</option>
         <option value="completed" ${status === 'completed' ? 'selected' : ''}>Completed</option>
-        <option value="ongoing" ${status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
-        <option value="planned" ${status === 'planned' ? 'selected' : ''}>Planned</option>
+        <option value="on_hold" ${status === 'on_hold' ? 'selected' : ''}>On Hold</option>
         <option value="dropped" ${status === 'dropped' ? 'selected' : ''}>Dropped</option>
       </select>
-
-      <select class="form-input track-season-select" required>
-        ${buildSeasonOptionsHtml(seasonLabel)}
+      <select class="form-input track-season-select">
+        ${SEASON_PART_OPTIONS.map(opt => `<option value="${opt}" ${season === opt ? 'selected' : ''}>${opt}</option>`).join('')}
       </select>
     </div>
-
     <div class="clean-card-row-eps">
-      <input type="number" class="form-input track-progress-input" min="0" value="${progress}" placeholder="Count">
-      <span class="eps-slash">/</span>
-      <input type="number" class="form-input track-total-input" min="0" value="${total}" placeholder="Total" oninput="onTrackStatusOrTotalChange(this)">
+      <input type="number" class="form-input track-progress-input" min="0" value="${progress}" placeholder="Current">
+      <span>/</span>
+      <input type="number" class="form-input track-total-input" min="0" value="${total}" placeholder="Total">
     </div>
   `;
   container.appendChild(card);
 };
 
-window.removeMediaTrackRow = function (btn) {
-  const container = document.getElementById('media-tracks-editor');
-  if (container && container.children.length <= 1) {
-    showToast('At least 1 progress track is required', 'info');
-    return;
-  }
-  const card = btn.closest('.track-edit-card');
-  if (card) card.remove();
-};
-
-window.onTrackCategoryChange = function (selectEl) {
-  const card = selectEl.closest('.track-edit-card');
-  const unitSelect = card ? card.querySelector('.track-unit-select') : null;
-  if (unitSelect && DEFAULT_UNITS_BY_CAT[selectEl.value]) {
-    unitSelect.value = DEFAULT_UNITS_BY_CAT[selectEl.value];
-  }
-};
-
-window.onTrackStatusOrTotalChange = function (el) {
-  const card = el.closest('.track-edit-card');
-  if (!card) return;
-  const statusEl = card.querySelector('.track-status-select');
-  const totalEl = card.querySelector('.track-total-input');
-  const progInput = card.querySelector('.track-progress-input');
-
-  const status = statusEl ? statusEl.value : '';
-  const totalVal = totalEl ? parseInt(totalEl.value, 10) : NaN;
-
-  if (status === 'completed' && totalVal > 0 && progInput) {
-    progInput.value = totalVal;
-  }
-};
-
 window.addEpisodeReviewRow = function (ep = null) {
   const container = document.getElementById('media-ep-reviews-editor');
-  if (!container) return;
-
-  const numVal = (ep && ep.number) ? ep.number : '';
-  const ratingVal = (ep && ep.rating !== null && ep.rating !== undefined && ep.rating !== '') ? ep.rating : '';
-  const noteVal = (ep && (ep.note || ep.title)) ? (ep.note || ep.title) : '';
-
   const row = document.createElement('div');
   row.className = 'review-split-row';
   row.innerHTML = `
     <div class="review-part-group">
-      <input type="text" class="form-input ep-num-input" placeholder="Ch / Eps" value="${escapeHtml(numVal)}">
-      <input type="number" class="form-input ep-rating-input" step="0.1" min="1.0" max="10.0" placeholder="Rating" value="${ratingVal}">
+      <input type="text" class="form-input ep-num-input" placeholder="Ep / Ch / Route" value="${escapeHtml(ep?.number || '')}">
+      <input type="number" class="form-input ep-rating-input" step="0.5" min="0" max="10" placeholder="0–10" value="${ep?.rating ?? ''}">
     </div>
     <div class="row-right-controls">
-      <input type="text" class="form-input ep-note-input" placeholder="Notes" value="${escapeHtml(noteVal)}">
-      <button type="button" class="social-remove-btn" onclick="this.closest('.review-split-row').remove()" title="Remove">
+      <input type="text" class="form-input ep-note-input" placeholder="Notes / Impressions" value="${escapeHtml(ep?.note || ep?.title || '')}">
+      <button type="button" class="social-remove-btn" onclick="this.closest('.review-split-row').remove()">
         <ion-icon name="trash-outline"></ion-icon>
       </button>
     </div>
@@ -1850,93 +1790,78 @@ window.addEpisodeReviewRow = function (ep = null) {
   container.appendChild(row);
 };
 
+window.stepModalRepeat = function () {
+  const inp = document.getElementById('media-repeat');
+  inp.value = (parseInt(inp.value, 10) || 0) + 1;
+};
+
 window.openMediaModal = function () {
   pendingUploadedUrls = [];
-  document.getElementById('media-modal-title').textContent = 'Add Media';
+  setElText('media-modal-title', 'Add Media');
   document.getElementById('media-form').reset();
   document.getElementById('media-id').value = '';
-  document.getElementById('media-repeat').value = 0;
   document.getElementById('btn-modal-delete').style.display = 'none';
   document.getElementById('api-search-results').style.display = 'none';
-  setElText('cover-upload-status', '');
 
-  const galleryEditor = document.getElementById('media-gallery-editor');
-  if (galleryEditor) {
-    galleryEditor.innerHTML = '';
-    addMediaImageRow('');
-  }
+  const defaultCat = currentCategory !== 'all' ? currentCategory : 'movie';
+  document.getElementById('media-primary-cat').value = defaultCat;
+  onPrimaryCategoryModalChange({});
 
-  const tracksEditor = document.getElementById('media-tracks-editor');
-  if (tracksEditor) {
-    tracksEditor.innerHTML = '';
-    addMediaTrackRow({
-      category: 'tv_show',
-      status: 'completed',
-      progress: 0,
-      total_units: '',
-      unit_label: 'eps',
-      season_label: 'Main'
-    });
-  }
+  document.getElementById('media-gallery-editor').innerHTML = '';
+  addMediaImageRow('');
 
-  const epEditor = document.getElementById('media-ep-reviews-editor');
-  if (epEditor) {
-    epEditor.innerHTML = '';
-    addEpisodeReviewRow();
-  }
+  document.getElementById('media-tracks-editor').innerHTML = '';
+  addMediaTrackRow({ category: defaultCat, status: 'planned', progress: 0, unit_label: DEFAULT_UNITS_BY_CAT[defaultCat] });
+
+  document.getElementById('media-ep-reviews-editor').innerHTML = '';
+  renderCollectionCheckboxes(null);
 
   document.getElementById('media-modal').classList.add('active');
 };
 
 window.openEditModal = function (id) {
   const item = allMediaLogs.find(m => String(m.id) === String(id));
-  if (!item) {
-    showToast('Media entry not found', 'error');
-    return;
-  }
+  if (!item) return;
 
   pendingUploadedUrls = [];
-  document.getElementById('media-modal-title').textContent = 'Edit Media';
+  setElText('media-modal-title', 'Edit Media');
   document.getElementById('media-id').value = item.id;
   document.getElementById('btn-modal-delete').style.display = 'inline-flex';
 
+  const primaryCat = getLegacyCategory(item);
   document.getElementById('media-title').value = item.title || '';
-  document.getElementById('media-rating').value = (item.rating !== null && item.rating !== undefined) ? item.rating : '';
+  document.getElementById('media-original-title').value = item.original_title || '';
+  document.getElementById('media-primary-cat').value = primaryCat;
+  document.getElementById('media-release-year').value = item.release_year || '';
+  document.getElementById('media-creator').value = item.creator || '';
+  document.getElementById('media-genres').value = Array.isArray(item.genres) ? item.genres.join(', ') : '';
+  document.getElementById('media-tags').value = Array.isArray(item.tags) ? item.tags.join(', ') : '';
+  document.getElementById('media-rating').value = item.rating ?? '';
+  document.getElementById('media-start-date').value = item.start_date || '';
+  document.getElementById('media-completion-date').value = item.completion_date || '';
   document.getElementById('media-repeat').value = Number(item.repeat_count) || 0;
-  document.getElementById('api-search-results').style.display = 'none';
-  setElText('cover-upload-status', '');
+  document.getElementById('media-external-url').value = item.external_url || '';
+  document.getElementById('media-description').value = item.description || '';
+  document.getElementById('media-review').value = item.review || '';
+  document.getElementById('media-is-favorite').checked = Boolean(item.is_favorite);
+  document.getElementById('media-is-archived').checked = Boolean(item.is_archived);
+
+  onPrimaryCategoryModalChange(item.category_meta || {});
 
   const galleryEditor = document.getElementById('media-gallery-editor');
-  if (galleryEditor) {
-    galleryEditor.innerHTML = '';
-    const gallery = getItemGalleryUrls(item);
-    if (gallery.length > 0) {
-      gallery.forEach(u => addMediaImageRow(u));
-    } else {
-      addMediaImageRow('');
-    }
-  }
+  galleryEditor.innerHTML = '';
+  const urls = getItemGalleryUrls(item);
+  (urls.length ? urls : ['']).forEach(u => addMediaImageRow(u));
 
   const tracksEditor = document.getElementById('media-tracks-editor');
-  if (tracksEditor) {
-    tracksEditor.innerHTML = '';
-    const tracks = getItemTracks(item);
-    tracks.forEach(t => addMediaTrackRow(t));
-    const apiCatSelect = document.getElementById('api-search-cat');
-    if (apiCatSelect && tracks[0]) apiCatSelect.value = tracks[0].category || 'tv_show';
-  }
+  tracksEditor.innerHTML = '';
+  getItemTracks(item).forEach(t => addMediaTrackRow(t));
 
   const epEditor = document.getElementById('media-ep-reviews-editor');
-  if (epEditor) {
-    epEditor.innerHTML = '';
-    const existingReviews = getItemEpisodeReviews(item);
-    if (existingReviews.length > 0) {
-      existingReviews.forEach(ep => addEpisodeReviewRow(ep));
-    } else {
-      addEpisodeReviewRow();
-    }
-  }
+  epEditor.innerHTML = '';
+  getItemEpisodeReviews(item).forEach(ep => addEpisodeReviewRow(ep));
 
+  renderCollectionCheckboxes(item.id);
   document.getElementById('media-modal').classList.add('active');
 };
 
@@ -1945,560 +1870,162 @@ window.closeMediaModal = async function () {
   await cleanupPendingUploads([]);
 };
 
-window.stepModalRepeat = function () {
-  const repInput = document.getElementById('media-repeat');
-  const nextVal = (parseInt(repInput.value, 10) || 0) + 1;
-  repInput.value = nextVal;
-};
+// Save Media Entry
+document.getElementById('media-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
 
-async function fetchWithTimeout(url, options = {}, timeoutMs = 4500) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
+  const id = document.getElementById('media-id').value;
+  const primaryCat = document.getElementById('media-primary-cat').value;
+  const titleVal = document.getElementById('media-title').value.trim();
 
-async function fetchAniListMedia(query, isNovel = false) {
-  const gql = `
-    query ($search: String) {
-      Page(perPage: 6) {
-        media(search: $search, type: MANGA, ${isNovel ? 'format: NOVEL' : 'format_not: NOVEL'}) {
-          title { english romaji }
-          coverImage { large medium }
-          chapters
-          volumes
-          countryOfOrigin
-        }
-      }
-    }
-  `;
-  const res = await fetchWithTimeout('https://graphql.anilist.co', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    body: JSON.stringify({ query: gql, variables: { search: query } })
+  const galleryUrls = [];
+  document.querySelectorAll('#media-gallery-editor .media-gallery-url-input').forEach(inp => {
+    const clean = normalizeImageUrl(inp.value);
+    if (clean && !galleryUrls.includes(clean)) galleryUrls.push(clean);
   });
-  const json = await res.json();
-  const mediaList = (json.data && json.data.Page && json.data.Page.media) ? json.data.Page.media : [];
-  return mediaList.map(m => {
-    const originMap = { JP: 'Manga', KR: 'Manhwa', CN: 'Manhua' };
-    const label = isNovel ? 'Novel' : (originMap[m.countryOfOrigin] || 'Comic');
-    const coverImg = m.coverImage ? (m.coverImage.large || m.coverImage.medium || '') : '';
-    return {
-      title: m.title.english || m.title.romaji,
-      cover: normalizeImageUrl(coverImg),
-      total: isNovel ? (m.volumes || m.chapters || null) : (m.chapters || null),
-      unit: isNovel ? (m.volumes ? 'vol' : 'ch') : 'ch',
-      meta: `${label} · ${isNovel ? (m.volumes || '?') + ' Volume' : (m.chapters || '?') + ' Chapter'}`
-    };
+
+  const tracks = [];
+  document.querySelectorAll('#media-tracks-editor .track-edit-card').forEach(card => {
+    const cat = card.querySelector('.track-cat-select').value;
+    const status = card.querySelector('.track-status-select').value;
+    const totalRaw = card.querySelector('.track-total-input').value;
+    const totalUnits = totalRaw !== '' ? parseInt(totalRaw, 10) : null;
+    let progress = parseInt(card.querySelector('.track-progress-input').value, 10) || 0;
+    if (status === 'completed' && totalUnits > 0 && progress === 0) progress = totalUnits;
+
+    tracks.push({
+      category: cat,
+      status,
+      season_label: card.querySelector('.track-season-select').value,
+      progress,
+      total_units: totalUnits,
+      unit_label: card.querySelector('.track-unit-select').value
+    });
   });
-}
 
-function deduplicateResults(list) {
-  const seen = new Set();
-  return list.filter(item => {
-    const key = item.title.toLowerCase().trim();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-window.searchExternalAPI = async function () {
-  const query = document.getElementById('api-search-input').value.trim();
-  const cat = document.getElementById('api-search-cat').value;
-  const resultsBox = document.getElementById('api-search-results');
-
-  if (!query) return;
-  resultsBox.style.display = 'block';
-  resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">Searching...</p>`;
-
-  let items = [];
-
-  if (cat === 'tv_show') {
-    const [jikanRes, tvmazeRes, tmdbRes] = await Promise.allSettled([
-      (async () => {
-        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=5&sfw=true`);
-        if (!res.ok) return [];
-        const data = await res.json();
-        return (data.data || []).map(a => ({
-          title: a.title_english || a.title,
-          cover: normalizeImageUrl((a.images && a.images.jpg && (a.images.jpg.large_image_url || a.images.jpg.image_url)) || ''),
-          total: a.episodes || null,
-          unit: 'eps',
-          meta: `Anime TV · ${a.episodes || '?'} Episode`
-        }));
-      })(),
-      (async () => {
-        const res = await fetchWithTimeout(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
-        const data = await res.json();
-        return (data || []).slice(0, 5).map(entry => ({
-          tvmazeId: entry.show.id,
-          title: entry.show.name,
-          cover: normalizeImageUrl((entry.show.image && (entry.show.image.original || entry.show.image.medium)) || ''),
-          total: null,
-          unit: 'eps',
-          meta: `TV Show · ${entry.show.premiered ? entry.show.premiered.slice(0, 4) : 'Show'}`
-        }));
-      })(),
-      (async () => {
-        if (!TMDB_API_KEY) return [];
-        const res = await fetchWithTimeout(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
-        if (!res.ok) return [];
-        const data = await res.json();
-        return (data.results || []).slice(0, 5).map(t => ({
-          tmdbId: t.id,
-          title: t.name,
-          cover: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : '',
-          total: null,
-          unit: 'eps',
-          meta: `TV Show · ${t.first_air_date ? t.first_air_date.slice(0, 4) : 'TMDB'}`
-        }));
-      })()
-    ]);
-
-    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
-    if (tvmazeRes.status === 'fulfilled') items.push(...tvmazeRes.value);
-    if (tmdbRes.status === 'fulfilled') items.push(...tmdbRes.value);
-    items = deduplicateResults(items);
-
-  } else if (cat === 'movie') {
-    const [jikanRes, itunesRes, tmdbRes] = await Promise.allSettled([
-      (async () => {
-        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=movie&limit=5&sfw=true`);
-        if (!res.ok) return [];
-        const data = await res.json();
-        return (data.data || []).map(a => ({
-          title: a.title_english || a.title,
-          cover: normalizeImageUrl((a.images && a.images.jpg && (a.images.jpg.large_image_url || a.images.jpg.image_url)) || ''),
-          total: 1,
-          unit: 'movie',
-          meta: `Anime Movie · ${a.year || 'Film'}`
-        }));
-      })(),
-      (async () => {
-        const res = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=movie&limit=5`);
-        const data = await res.json();
-        return (data.results || []).map(m => ({
-          title: m.trackName,
-          cover: normalizeImageUrl(m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : ''),
-          total: 1,
-          unit: 'movie',
-          meta: `Movie · ${m.releaseDate ? m.releaseDate.slice(0, 4) : 'Film'}`
-        }));
-      })(),
-      (async () => {
-        if (!TMDB_API_KEY) return [];
-        const res = await fetchWithTimeout(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
-        if (!res.ok) return [];
-        const data = await res.json();
-        return (data.results || []).slice(0, 5).map(m => ({
-          title: m.title,
-          cover: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : '',
-          total: 1,
-          unit: 'movie',
-          meta: `Movie · ${m.release_date ? m.release_date.slice(0, 4) : 'TMDB'}`
-        }));
-      })()
-    ]);
-
-    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
-    if (itunesRes.status === 'fulfilled') items.push(...itunesRes.value);
-    if (tmdbRes.status === 'fulfilled') items.push(...tmdbRes.value);
-    items = deduplicateResults(items);
-
-  } else if (cat === 'comic') {
-    const [jikanRes, aniRes] = await Promise.allSettled([
-      (async () => {
-        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=6&sfw=true`);
-        if (!res.ok) return [];
-        const data = await res.json();
-        return (data.data || [])
-          .filter(m => m.type !== 'Light Novel' && m.type !== 'Novel')
-          .map(m => ({
-            title: m.title_english || m.title,
-            cover: normalizeImageUrl((m.images && m.images.jpg && (m.images.jpg.large_image_url || m.images.jpg.image_url)) || ''),
-            total: m.chapters || null,
-            unit: 'ch',
-            meta: `${m.type} · ${m.chapters || '?'} Chapter`
-          }));
-      })(),
-      fetchAniListMedia(query, false)
-    ]);
-
-    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
-    if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
-    items = deduplicateResults(items);
-
-  } else if (cat === 'novel') {
-    const [openLibRes, jikanRes, aniRes] = await Promise.allSettled([
-      (async () => {
-        const res = await fetchWithTimeout(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=6`);
-        if (!res.ok) return [];
-        const data = await res.json();
-        return (data.docs || []).map(b => {
-          const author = b.author_name ? b.author_name[0] : 'Book';
-          const pages = b.number_of_pages_median || null;
-          return {
-            title: b.title,
-            cover: b.cover_i ? `https://covers.openlibrary.org/b/id/${b.cover_i}-L.jpg` : '',
-            total: pages,
-            unit: pages ? 'pages' : 'vol',
-            meta: `Novel (${author}) · ${pages ? pages + ' Pages' : 'Book'}`
-          };
-        });
-      })(),
-      (async () => {
-        const res = await fetchWithTimeout(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&type=lightnovel&limit=4&sfw=true`);
-        if (!res.ok) return [];
-        const data = await res.json();
-        return (data.data || []).map(ln => ({
-          title: ln.title_english || ln.title,
-          cover: normalizeImageUrl((ln.images && ln.images.jpg && (ln.images.jpg.large_image_url || ln.images.jpg.image_url)) || ''),
-          total: ln.volumes || ln.chapters || null,
-          unit: ln.volumes ? 'vol' : 'ch',
-          meta: `Light Novel · ${ln.volumes || '?'} Volume`
-        }));
-      })(),
-      fetchAniListMedia(query, true)
-    ]);
-
-    if (openLibRes.status === 'fulfilled') items.push(...openLibRes.value);
-    if (jikanRes.status === 'fulfilled') items.push(...jikanRes.value);
-    if (aniRes.status === 'fulfilled') items.push(...aniRes.value);
-    items = deduplicateResults(items);
-
-  } else if (cat === 'game') {
-    const [wikiGameRes, vndbRes, rawgRes] = await Promise.allSettled([
-      (async () => {
-        const searchRes = await fetchWithTimeout(
-          `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=en&format=json&origin=*&limit=8`
-        );
-        if (!searchRes.ok) return [];
-        const searchData = await searchRes.json();
-        const candidates = (searchData.search || []).filter(item => {
-          const desc = (item.description || '').toLowerCase();
-          return desc.includes('video game') || desc.includes('game');
-        });
-        if (candidates.length === 0) return [];
-
-        const ids = candidates.map(c => c.id).join('|');
-        const entityRes = await fetchWithTimeout(
-          `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${ids}&props=claims|sitelinks|labels|descriptions&languages=en&format=json&origin=*`
-        );
-        const entityData = await entityRes.json();
-        const entities = entityData.entities || {};
-
-        const results = await Promise.all(
-          candidates.map(async c => {
-            const ent = entities[c.id];
-            if (!ent) return null;
-            const title = (ent.labels && ent.labels.en && ent.labels.en.value) || c.label;
-            const desc = (ent.descriptions && ent.descriptions.en && ent.descriptions.en.value) || 'Video Game';
-            let cover = '';
-            const p18 = ent.claims && ent.claims.P18 && ent.claims.P18[0] && ent.claims.P18[0].mainsnak && ent.claims.P18[0].mainsnak.datavalue && ent.claims.P18[0].mainsnak.datavalue.value;
-            if (p18) cover = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(p18)}?width=500`;
-            const enWikiTitle = ent.sitelinks && ent.sitelinks.enwiki && ent.sitelinks.enwiki.title;
-            if (!cover && enWikiTitle) {
-              try {
-                const wpRes = await fetchWithTimeout(
-                  `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(enWikiTitle)}&prop=pageimages&pithumbsize=500&format=json&origin=*`
-                );
-                const wpData = await wpRes.json();
-                const pagesObj = (wpData.query && wpData.query.pages) ? wpData.query.pages : {};
-                const pageObj = Object.values(pagesObj)[0];
-                if (pageObj && pageObj.thumbnail && pageObj.thumbnail.source) cover = normalizeImageUrl(pageObj.thumbnail.source);
-              } catch (_) {}
-            }
-            return { title, cover, total: 1, unit: 'item', meta: desc.charAt(0).toUpperCase() + desc.slice(1) };
-          })
-        );
-        return results.filter(Boolean);
-      })(),
-      (async () => {
-        const res = await fetchWithTimeout('https://api.vndb.org/kana/vn', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filters: ['search', '=', query],
-            fields: 'title, image.url, released',
-            results: 5
-          })
-        });
-        const data = await res.json();
-        return (data.results || []).map(g => ({
-          title: g.title,
-          cover: normalizeImageUrl(g.image ? g.image.url : ''),
-          total: 1,
-          unit: 'item',
-          meta: `Visual Novel · ${g.released || ''}`
-        }));
-      })(),
-      (async () => {
-        if (!RAWG_API_KEY) return [];
-        const res = await fetchWithTimeout(`https://api.rawg.io/api/games?key=${RAWG_API_KEY}&search=${encodeURIComponent(query)}&page_size=5`);
-        if (!res.ok) return [];
-        const data = await res.json();
-        return (data.results || []).map(g => ({
-          title: g.name,
-          cover: normalizeImageUrl(g.background_image || ''),
-          total: 1,
-          unit: 'item',
-          meta: `Game · ${g.released ? g.released.slice(0, 4) : ''}`
-        }));
-      })()
-    ]);
-
-    if (wikiGameRes.status === 'fulfilled') items.push(...wikiGameRes.value);
-    if (vndbRes.status === 'fulfilled') items.push(...vndbRes.value);
-    if (rawgRes.status === 'fulfilled') items.push(...rawgRes.value);
-    items = deduplicateResults(items);
-
-  } else if (cat === 'music') {
-    try {
-      const res = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=album&limit=8`);
-      const data = await res.json();
-      items = (data.results || []).map(m => ({
-        title: `${m.collectionName} — ${m.artistName}`,
-        cover: normalizeImageUrl(m.artworkUrl100 ? m.artworkUrl100.replace('100x100bb', '600x600bb') : ''),
-        total: m.trackCount || 1,
-        unit: 'track',
-        meta: `Album · ${m.trackCount || '?'} Tracks · ${m.releaseDate ? m.releaseDate.slice(0, 4) : ''}`
-      }));
-      items = deduplicateResults(items);
-    } catch (e) {
-      console.error('Music search error:', e);
-    }
+  if (!tracks.length) {
+    tracks.push({
+      category: primaryCat,
+      status: 'planned',
+      season_label: 'Main',
+      progress: 0,
+      total_units: null,
+      unit_label: DEFAULT_UNITS_BY_CAT[primaryCat] || 'item'
+    });
   }
 
-  lastApiResults = items;
+  const episodeReviews = [];
+  document.querySelectorAll('#media-ep-reviews-editor .review-split-row').forEach(row => {
+    const num = row.querySelector('.ep-num-input')?.value.trim() || '';
+    const rRaw = row.querySelector('.ep-rating-input')?.value ?? '';
+    const note = row.querySelector('.ep-note-input')?.value.trim() || '';
+    if (num || rRaw !== '' || note) {
+      episodeReviews.push({
+        number: num,
+        rating: rRaw !== '' ? parseFloat(rRaw) : null,
+        note
+      });
+    }
+  });
 
-  if (items.length === 0) {
-    resultsBox.innerHTML = `<p style="padding: 12px; font-size: 12px; color: var(--light-gray-70);">No results found.</p>`;
+  const categoryMeta = {};
+  document.querySelectorAll('#category-specific-fields-box .cat-meta-input').forEach(inp => {
+    if (inp.value !== '') categoryMeta[inp.dataset.metaKey] = inp.value;
+  });
+
+  const genres = document.getElementById('media-genres').value.split(',').map(s => s.trim()).filter(Boolean);
+  const tags = document.getElementById('media-tags').value.split(',').map(s => s.trim()).filter(Boolean);
+  const ratingRaw = document.getElementById('media-rating').value;
+  const synced = computeSyncedStatus(tracks);
+  const categories = Array.from(new Set([primaryCat, ...tracks.map(t => t.category)]));
+
+  const payload = {
+    title: titleVal,
+    original_title: document.getElementById('media-original-title').value.trim() || null,
+    category: primaryCat,
+    categories,
+    tracks,
+    episode_reviews: episodeReviews,
+    gallery_urls: galleryUrls,
+    cover_url: galleryUrls[0] || null,
+    status: synced.key,
+    progress: tracks[0].progress,
+    total_units: tracks[0].total_units,
+    unit_label: tracks[0].unit_label,
+    rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null,
+    release_year: document.getElementById('media-release-year').value ? parseInt(document.getElementById('media-release-year').value, 10) : null,
+    creator: document.getElementById('media-creator').value.trim() || null,
+    genres,
+    tags,
+    start_date: document.getElementById('media-start-date').value || null,
+    completion_date: document.getElementById('media-completion-date').value || null,
+    repeat_count: Math.max(0, parseInt(document.getElementById('media-repeat').value, 10) || 0),
+    external_url: document.getElementById('media-external-url').value.trim() || null,
+    description: document.getElementById('media-description').value.trim() || null,
+    review: document.getElementById('media-review').value.trim() || null,
+    category_meta: categoryMeta,
+    is_favorite: document.getElementById('media-is-favorite').checked,
+    is_archived: document.getElementById('media-is-archived').checked,
+    updated_at: new Date().toISOString()
+  };
+
+  let savedId = id;
+  let error;
+  if (id) {
+    ({ error } = await supabaseClient.from('media_logs').update(payload).eq('id', id));
+  } else {
+    const res = await supabaseClient.from('media_logs').insert([payload]).select('id').single();
+    error = res.error;
+    if (res.data) savedId = res.data.id;
+  }
+
+  if (error) {
+    showToast(error.message, 'error');
     return;
   }
 
-  resultsBox.innerHTML = items.map((it, idx) => `
-    <div class="api-result-item" onclick="applyApiResult(${idx})">
-      <img src="${it.cover || 'https://placehold.co/60x90/1e1e1f/888?text=?'}" alt="" referrerpolicy="no-referrer" onerror="this.src='https://placehold.co/60x90/1e1e1f/888?text=?'">
-      <div class="api-result-info">
-        <h4>${escapeHtml(it.title)}</h4>
-        <p>${escapeHtml(it.meta)}</p>
-      </div>
-    </div>
-  `).join('');
-};
-
-window.applyApiResult = async function (idx) {
-  const item = lastApiResults[idx];
-  const searchedCat = document.getElementById('api-search-cat').value;
-  if (!item) return;
-
-  if (!document.getElementById('media-title').value.trim()) {
-    document.getElementById('media-title').value = item.title;
-  }
-
-  if (item.cover) {
-    const existingInputs = Array.from(document.querySelectorAll('#media-gallery-editor .media-gallery-url-input'));
-    const hasAnyCover = existingInputs.some(inp => inp.value.trim() !== '');
-    if (!hasAnyCover) {
-      if (existingInputs[0]) {
-        existingInputs[0].value = item.cover;
-      } else {
-        addMediaImageRow(item.cover);
-      }
+  // Sync collection assignments
+  if (savedId && allCollections.length) {
+    const selectedColIds = Array.from(document.querySelectorAll('.media-col-checkbox:checked')).map(cb => cb.value);
+    await supabaseClient.from('media_collection_items').delete().eq('media_id', savedId);
+    if (selectedColIds.length) {
+      await supabaseClient.from('media_collection_items').insert(
+        selectedColIds.map(cid => ({ collection_id: cid, media_id: savedId }))
+      );
     }
+    await fetchCollections();
   }
 
-  const trackCards = Array.from(document.querySelectorAll('#media-tracks-editor .track-edit-card'));
-  let targetCard = trackCards.find(c => {
-    const sel = c.querySelector('.track-cat-select');
-    return sel && sel.value === searchedCat;
-  }) || trackCards[0];
+  await cleanupPendingUploads(galleryUrls);
+  document.getElementById('media-modal').classList.remove('active');
 
-  if (targetCard) {
-    targetCard.querySelector('.track-cat-select').value = searchedCat;
-    if (item.total) targetCard.querySelector('.track-total-input').value = item.total;
-    if (item.unit) targetCard.querySelector('.track-unit-select').value = item.unit;
-    onTrackStatusOrTotalChange(targetCard.querySelector('.track-total-input'));
-  }
+  await logPersonalActivity(
+    id ? 'media_updated' : 'media_added',
+    'media',
+    savedId,
+    titleVal,
+    `${id ? 'Updated' : 'Added'} (${CATEGORY_LABELS[primaryCat]} · ${synced.label})`
+  );
 
-  document.getElementById('api-search-results').style.display = 'none';
-
-  if (item.tvmazeId && targetCard) {
-    try {
-      const epRes = await fetchWithTimeout(`https://api.tvmaze.com/shows/${item.tvmazeId}/episodes`);
-      const epData = await epRes.json();
-      if (Array.isArray(epData) && epData.length > 0) {
-        targetCard.querySelector('.track-total-input').value = epData.length;
-        onTrackStatusOrTotalChange(targetCard.querySelector('.track-total-input'));
-      }
-    } catch (_) {}
-  }
-
-  if (item.tmdbId && TMDB_API_KEY && targetCard) {
-    try {
-      const detailRes = await fetchWithTimeout(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}`);
-      const detailData = await detailRes.json();
-      if (detailData.number_of_episodes) {
-        targetCard.querySelector('.track-total-input').value = detailData.number_of_episodes;
-        onTrackStatusOrTotalChange(targetCard.querySelector('.track-total-input'));
-      }
-    } catch (_) {}
-  }
-};
-
-// ==========================================
-// 6. SUPABASE MEDIA CRUD + AUTO-SORT TRACKS
-// ==========================================
-const mediaForm = document.getElementById('media-form');
-if (mediaForm) {
-  mediaForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const id = document.getElementById('media-id').value;
-    const existingItem = id ? allMediaLogs.find(m => String(m.id) === String(id)) : null;
-    const oldGallery = existingItem ? getItemGalleryUrls(existingItem) : [];
-
-    const galleryInputs = document.querySelectorAll('#media-gallery-editor .media-gallery-url-input');
-    const galleryUrls = [];
-    galleryInputs.forEach(inp => {
-      const clean = normalizeImageUrl(inp.value);
-      if (clean && !galleryUrls.includes(clean)) {
-        galleryUrls.push(clean);
-      }
-    });
-    const newPrimaryCover = galleryUrls[0] || null;
-
-    const trackCards = document.querySelectorAll('#media-tracks-editor .track-edit-card');
-    const rawTracks = [];
-    trackCards.forEach(card => {
-      const cat = card.querySelector('.track-cat-select').value;
-      const status = card.querySelector('.track-status-select').value;
-      const seasonLabel = normalizeSeasonOption(card.querySelector('.track-season-select')?.value);
-      const totalRaw = card.querySelector('.track-total-input').value;
-      const totalUnits = totalRaw ? parseInt(totalRaw, 10) : null;
-      let progressVal = parseInt(card.querySelector('.track-progress-input').value, 10) || 0;
-      const unitLabel = card.querySelector('.track-unit-select').value;
-
-      if (status === 'completed' && totalUnits && totalUnits > 0) {
-        progressVal = totalUnits;
-      }
-
-      rawTracks.push({
-        category: cat,
-        status,
-        season_label: seasonLabel,
-        progress: progressVal,
-        total_units: totalUnits,
-        unit_label: unitLabel
-      });
-    });
-
-    if (rawTracks.length === 0) {
-      showToast('At least 1 progress track is required', 'error');
-      return;
-    }
-
-    const tracks = sortTracksChronologically(rawTracks);
-
-    const epRows = document.querySelectorAll('#media-ep-reviews-editor .review-split-row');
-    const episodeReviews = [];
-    epRows.forEach(row => {
-      const numStr = row.querySelector('.ep-num-input')?.value.trim() || '';
-      const ratingRaw = row.querySelector('.ep-rating-input')?.value ?? '';
-      const noteStr = row.querySelector('.ep-note-input')?.value.trim() || '';
-
-      if (!numStr && ratingRaw === '' && !noteStr) return;
-
-      episodeReviews.push({
-        number: numStr,
-        title: '',
-        rating: ratingRaw !== '' ? parseFloat(ratingRaw) : null,
-        note: noteStr
-      });
-    });
-
-    const ratingRaw = document.getElementById('media-rating').value;
-    const overallRating = ratingRaw !== '' ? parseFloat(ratingRaw) : null;
-    const categories = Array.from(new Set(tracks.map(t => t.category)));
-    const primaryTrack = tracks[0];
-    const syncedStatus = computeSyncedStatus(tracks);
-    const repeatVal = Math.max(0, parseInt(document.getElementById('media-repeat').value, 10) || 0);
-
-    const payload = {
-      title: document.getElementById('media-title').value.trim(),
-      category: primaryTrack.category,
-      categories,
-      tracks,
-      episode_reviews: episodeReviews,
-      gallery_urls: galleryUrls,
-      sub_category: null,
-      cover_url: newPrimaryCover,
-      status: syncedStatus.key,
-      progress: primaryTrack.progress,
-      total_units: primaryTrack.total_units,
-      unit_label: primaryTrack.unit_label,
-      rating: overallRating,
-      repeat_count: repeatVal,
-      updated_at: new Date().toISOString()
-    };
-
-    let error;
-    if (id) {
-      ({ error } = await supabaseClient.from('media_logs').update(payload).eq('id', id));
-    } else {
-      ({ error } = await supabaseClient.from('media_logs').insert([payload]));
-    }
-
-    if (error) {
-      showToast(error.message, 'error');
-    } else {
-      await cleanupPendingUploads(galleryUrls);
-      const keepSet = new Set(galleryUrls);
-      for (const oldUrl of oldGallery) {
-        if (!keepSet.has(oldUrl)) {
-          await deleteOldStorageFile(oldUrl);
-        }
-      }
-      document.getElementById('media-modal').classList.remove('active');
-      await fetchMediaLogs();
-      showToast(id ? 'Updated' : 'Saved', 'success');
-    }
-  });
-}
+  await fetchMediaLogs();
+  showToast(id ? 'Media updated' : 'Media added', 'success');
+});
 
 window.deleteCurrentModalMedia = async function () {
   const id = document.getElementById('media-id').value;
   if (!id) return;
-
-  const existingItem = allMediaLogs.find(m => String(m.id) === String(id));
-
   const confirm = await Swal.fire({
-    text: 'Remove this entry from your library?',
+    text: 'Delete this media entry permanently?',
     icon: 'warning',
     showCancelButton: true,
-    confirmButtonColor: '#ffffff',
-    confirmButtonText: '<span style="color:#111;">Delete</span>',
-    cancelButtonText: 'Cancel',
-    background: '#1e1e1f',
+    confirmButtonText: 'Delete',
+    background: '#1a1a1c',
     color: '#fff'
   });
-
   if (confirm.isConfirmed) {
     const { error } = await supabaseClient.from('media_logs').delete().eq('id', id);
-    if (error) {
-      showToast(error.message, 'error');
-    } else {
-      await cleanupPendingUploads([]);
-      if (existingItem) {
-        const oldGallery = getItemGalleryUrls(existingItem);
-        for (const u of oldGallery) {
-          await deleteOldStorageFile(u);
-        }
-      }
+    if (error) showToast(error.message, 'error');
+    else {
       document.getElementById('media-modal').classList.remove('active');
       await fetchMediaLogs();
       showToast('Deleted', 'info');
@@ -2507,85 +2034,158 @@ window.deleteCurrentModalMedia = async function () {
 };
 
 // ==========================================
-// 7. PERSONAL NOTES / POSTS + 50:50 IMAGE ROWS
+// 12. EXTERNAL API METADATA AUTO-FILL (PUBLIC ENDPOINTS)
 // ==========================================
-function getPostImageUrls(post) {
-  const urls = [];
-  if (Array.isArray(post.image_urls)) {
-    post.image_urls.forEach(u => {
-      const clean = normalizeImageUrl(u);
-      if (clean && !urls.includes(clean)) urls.push(clean);
-    });
-  }
-  const legacyImg = normalizeImageUrl(post.image_url);
-  if (legacyImg && !urls.includes(legacyImg)) {
-    urls.unshift(legacyImg);
-  }
-  return urls;
-}
+window.searchExternalAPI = async function () {
+  const query = document.getElementById('api-search-input').value.trim();
+  const cat = document.getElementById('api-search-cat').value;
+  const resultsBox = document.getElementById('api-search-results');
+  if (!query) return;
 
-function formatPostDateTime(createdIso, updatedIso) {
-  if (!createdIso) return '';
-  const created = new Date(createdIso);
-  if (Number.isNaN(created.getTime())) return '';
+  resultsBox.style.display = 'block';
+  resultsBox.innerHTML = `<p style="padding:10px; font-size:12px; color:var(--mono-muted);">Searching...</p>`;
 
-  const dateStr = created.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  });
-  const timeStr = created.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  });
-
-  const isEdited = updatedIso && Math.abs(new Date(updatedIso) - created) > 10000;
-  return `${dateStr} · ${timeStr}${isEdited ? ' (edited)' : ''}`;
-}
-
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text == null ? '' : String(text);
-  return div.innerHTML;
-}
-
-function extractFirstUrl(text) {
-  const match = (text || '').match(/https?:\/\/[^\s<>"']+/i);
-  return match ? match[0] : null;
-}
-
-function formatTextWithLinks(rawText) {
-  const escaped = escapeHtml(rawText || '');
-  return escaped.replace(/(https?:\/\/[^\s<>"']+)/gi, (url) => {
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="inline-note-link">${url}</a>`;
-  });
-}
-
-function buildLinkPreviewCard(url) {
-  if (!url) return '';
+  let items = [];
   try {
-    const parsed = new URL(url);
-    const domain = parsed.hostname.replace(/^www\./, '');
-    const iconName = detectSocialIcon(url);
-    const pathClean = decodeURIComponent(parsed.pathname).replace(/^\/|\/$/g, '').replace(/[-_]/g, ' ');
-    const displayTitle = pathClean ? `${domain} — ${pathClean}` : url;
-
-    return `
-      <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="link-preview-card">
-        <div class="link-preview-icon">
-          <ion-icon name="${iconName}"></ion-icon>
-        </div>
-        <div class="link-preview-info">
-          <span class="link-preview-domain">${escapeHtml(domain)}</span>
-          <span class="link-preview-title">${escapeHtml(displayTitle)}</span>
-        </div>
-        <ion-icon name="open-outline" style="color: var(--light-gray-70); font-size: 16px; flex-shrink: 0;"></ion-icon>
-      </a>
-    `;
-  } catch (_) {
-    return '';
+    if (cat === 'anime') {
+      const res = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=6&sfw=true`);
+      const data = await res.json();
+      items = (data.data || []).map(a => ({
+        title: a.title_english || a.title,
+        original_title: a.title_japanese || '',
+        cover: normalizeImageUrl(a.images?.jpg?.large_image_url || ''),
+        year: a.year || null,
+        creator: (a.studios || []).map(s => s.name).join(', '),
+        genres: (a.genres || []).map(g => g.name),
+        total: a.episodes || null,
+        unit: 'eps',
+        meta: `Anime · ${a.episodes || '?'} eps · ${a.year || ''}`
+      }));
+    } else if (['manga', 'manhwa', 'manhua'].includes(cat)) {
+      const res = await fetch(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=6&sfw=true`);
+      const data = await res.json();
+      items = (data.data || []).map(m => ({
+        title: m.title_english || m.title,
+        original_title: m.title_japanese || '',
+        cover: normalizeImageUrl(m.images?.jpg?.large_image_url || ''),
+        year: m.published?.prop?.from?.year || null,
+        creator: (m.authors || []).map(a => a.name).join(', '),
+        genres: (m.genres || []).map(g => g.name),
+        total: m.chapters || null,
+        unit: 'ch',
+        meta: `${m.type || 'Manga'} · ${m.chapters || '?'} ch`
+      }));
+    } else if (cat === 'book') {
+      const res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=6`);
+      const data = await res.json();
+      items = (data.docs || []).map(b => ({
+        title: b.title,
+        cover: b.cover_i ? `https://covers.openlibrary.org/b/id/${b.cover_i}-L.jpg` : '',
+        year: b.first_publish_year || null,
+        creator: b.author_name ? b.author_name.join(', ') : '',
+        total: b.number_of_pages_median || null,
+        unit: 'pages',
+        meta: `Book · ${b.first_publish_year || ''}`
+      }));
+    } else if (cat === 'tv_show') {
+      const res = await fetch(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      items = (data || []).slice(0, 6).map(e => ({
+        title: e.show.name,
+        cover: normalizeImageUrl(e.show.image?.original || e.show.image?.medium || ''),
+        year: e.show.premiered ? parseInt(e.show.premiered.slice(0, 4), 10) : null,
+        genres: e.show.genres || [],
+        unit: 'eps',
+        meta: `TV Show · ${e.show.premiered ? e.show.premiered.slice(0, 4) : ''}`
+      }));
+    } else if (cat === 'movie' || cat === 'music') {
+      const entity = cat === 'music' ? 'album' : 'movie';
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=${cat === 'music' ? 'music' : 'movie'}&entity=${entity}&limit=6`);
+      const data = await res.json();
+      items = (data.results || []).map(r => ({
+        title: cat === 'music' ? r.collectionName : r.trackName,
+        cover: normalizeImageUrl((r.artworkUrl100 || '').replace('100x100bb', '600x600bb')),
+        year: r.releaseDate ? parseInt(r.releaseDate.slice(0, 4), 10) : null,
+        creator: r.artistName || '',
+        genres: r.primaryGenreName ? [r.primaryGenreName] : [],
+        total: cat === 'music' ? (r.trackCount || 1) : 1,
+        unit: cat === 'music' ? 'track' : 'movie',
+        meta: `${cat === 'music' ? 'Album' : 'Movie'} · ${r.artistName || ''}`
+      }));
+    } else if (cat === 'visual_novel') {
+      const res = await fetch('https://api.vndb.org/kana/vn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filters: ['search', '=', query], fields: 'title, image.url, released', results: 6 })
+      });
+      const data = await res.json();
+      items = (data.results || []).map(g => ({
+        title: g.title,
+        cover: normalizeImageUrl(g.image?.url || ''),
+        year: g.released ? parseInt(g.released.slice(0, 4), 10) : null,
+        unit: 'item',
+        meta: `Visual Novel · ${g.released || ''}`
+      }));
+    }
+  } catch (err) {
+    console.warn('Metadata lookup error:', err);
   }
+
+  lastApiResults = items;
+  if (!items.length) {
+    resultsBox.innerHTML = `<p style="padding:10px; font-size:12px; color:var(--mono-muted);">No matches found. You can enter details manually below.</p>`;
+    return;
+  }
+
+  resultsBox.innerHTML = items.map((it, idx) => `
+    <div class="api-result-item" onclick="applyApiResult(${idx})">
+      <img src="${it.cover || 'https://placehold.co/60x90/1e1e1f/888?text=?'}" alt="">
+      <div class="api-result-info">
+        <h4>${escapeHtml(it.title)}</h4>
+        <p>${escapeHtml(it.meta)}</p>
+      </div>
+    </div>
+  `).join('');
+};
+
+window.applyApiResult = function (idx) {
+  const item = lastApiResults[idx];
+  const searchedCat = document.getElementById('api-search-cat').value;
+  if (!item) return;
+
+  document.getElementById('media-title').value = item.title || '';
+  if (item.original_title) document.getElementById('media-original-title').value = item.original_title;
+  document.getElementById('media-primary-cat').value = searchedCat;
+  onPrimaryCategoryModalChange({});
+  if (item.year) document.getElementById('media-release-year').value = item.year;
+  if (item.creator) document.getElementById('media-creator').value = item.creator;
+  if (item.genres?.length) document.getElementById('media-genres').value = item.genres.join(', ');
+
+  if (item.cover) {
+    const firstCover = document.querySelector('#media-gallery-editor .media-gallery-url-input');
+    if (firstCover) firstCover.value = item.cover;
+  }
+
+  const firstTrack = document.querySelector('#media-tracks-editor .track-edit-card');
+  if (firstTrack) {
+    firstTrack.querySelector('.track-cat-select').value = searchedCat;
+    if (item.total) firstTrack.querySelector('.track-total-input').value = item.total;
+    if (item.unit) firstTrack.querySelector('.track-unit-select').value = item.unit;
+  }
+
+  document.getElementById('api-search-results').style.display = 'none';
+};
+
+// ==========================================
+// 13. NOTES & MARKDOWN RENDERING (PRESERVING BLOG_POSTS)
+// ==========================================
+function renderSafeMarkdown(rawText) {
+  let html = escapeHtml(rawText || '');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  html = html.replace(/(https?:\/\/[^\s<>"']+)/gi, '<a href="$1" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">$1</a>');
+  return html;
 }
 
 async function fetchBlogPosts() {
@@ -2596,65 +2196,84 @@ async function fetchBlogPosts() {
 
   if (error) {
     const listEl = document.getElementById('blog-feed-list');
-    if (listEl) listEl.innerHTML = `<p class="empty-state">Failed to load posts: ${escapeHtml(error.message)}</p>`;
+    if (listEl) listEl.innerHTML = `<p class="empty-state">Failed to load notes: ${escapeHtml(error.message)}</p>`;
     return;
   }
 
   allBlogPosts = data || [];
+  updateFolderFilterDropdown();
   renderBlogPosts();
+  renderOverviewDashboard();
+}
+
+function updateFolderFilterDropdown() {
+  const select = document.getElementById('filter-note-folder');
+  if (!select) return;
+  const folders = new Set(['General']);
+  allBlogPosts.forEach(p => { if (p.folder) folders.add(p.folder); });
+  const currentVal = select.value;
+  select.innerHTML = `<option value="all">All Folders</option>` +
+    Array.from(folders).map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join('');
+  if ([...folders, 'all'].includes(currentVal)) select.value = currentVal;
 }
 
 function renderBlogPosts() {
   const listEl = document.getElementById('blog-feed-list');
   if (!listEl) return;
 
-  const visiblePosts = allBlogPosts.filter(p => !p.is_private || isAdminLoggedIn);
+  const query = (document.getElementById('search-notes')?.value || '').toLowerCase().trim();
+  const folderFilter = document.getElementById('filter-note-folder')?.value || 'all';
 
-  if (visiblePosts.length === 0) {
-    listEl.innerHTML = `<p class="empty-state">No notes yet.</p>`;
+  let visible = allBlogPosts.filter(p => {
+    if (p.is_archived || p.deleted_at) return false;
+    if (p.is_private && !isAdminLoggedIn) return false;
+    if (folderFilter !== 'all' && (p.folder || 'General') !== folderFilter) return false;
+    if (query) {
+      const hay = [p.title, p.content, p.folder, ...(Array.isArray(p.tags) ? p.tags : [])].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(query)) return false;
+    }
+    return true;
+  });
+
+  // Pinned first
+  visible.sort((a, b) => (b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0));
+
+  if (!visible.length) {
+    listEl.innerHTML = `<p class="empty-state">No notes found.</p>`;
     return;
   }
 
   const avatarSrc = normalizeImageUrl(currentProfile.avatar_url) || TRANSPARENT_PIXEL;
-  const authorName = escapeHtml(currentProfile.name || '');
+  const authorName = escapeHtml(currentProfile.name || 'Archive');
 
-  listEl.innerHTML = visiblePosts.map(post => {
-    const safePostId = escapeHtml(String(post.id));
-    const postImages = getPostImageUrls(post);
-    const timeLabel = formatPostDateTime(post.created_at, post.updated_at);
-    const detectedUrl = extractFirstUrl(post.content);
-    const linkPreviewHtml = detectedUrl ? buildLinkPreviewCard(detectedUrl) : '';
-
-    const adminControls = isAdminLoggedIn ? `
-      <div class="blog-post-actions">
-        <button type="button" class="blog-icon-btn" onclick="openEditPostModal('${safePostId}')" title="Edit">
-          <ion-icon name="create-outline"></ion-icon>
-        </button>
-        <button type="button" class="blog-icon-btn" onclick="deleteBlogPost('${safePostId}')" title="Delete">
-          <ion-icon name="trash-outline"></ion-icon>
-        </button>
-      </div>
-    ` : '';
-
-    const imageSliderBlock = postImages.length > 0
-      ? buildImageCarouselHtml(postImages, 'blog-post-carousel')
-      : '';
+  listEl.innerHTML = visible.map(post => {
+    const safeId = escapeHtml(String(post.id));
+    const imgs = [];
+    if (Array.isArray(post.image_urls)) post.image_urls.forEach(u => { if (u) imgs.push(u); });
+    if (post.image_url && !imgs.includes(post.image_url)) imgs.unshift(post.image_url);
+    const tags = Array.isArray(post.tags) ? post.tags : [];
 
     return `
-      <article class="blog-post-card">
+      <article class="blog-post-card ${post.is_pinned ? 'is-pinned' : ''}">
         <div class="blog-post-header">
           <div class="blog-post-author">
             <img class="blog-post-avatar" src="${avatarSrc}" alt="" onerror="this.src='${TRANSPARENT_PIXEL}'">
-            <div class="blog-post-meta">
-              <span class="blog-post-name">${authorName}</span>
-              <span class="blog-post-time">${timeLabel}</span>
+            <div>
+              <span class="blog-post-name">${authorName} ${post.is_pinned ? '· Pinned' : ''}</span>
+              <span class="blog-post-time">${escapeHtml(post.folder || 'General')} · ${formatStatusDate(post.created_at)}</span>
             </div>
           </div>
-          ${adminControls}
+          ${isAdminLoggedIn ? `
+            <div class="blog-post-actions">
+              <button type="button" class="blog-icon-btn" onclick="openEditPostModal('${safeId}')"><ion-icon name="create-outline"></ion-icon></button>
+              <button type="button" class="blog-icon-btn" onclick="deleteBlogPost('${safeId}')"><ion-icon name="trash-outline"></ion-icon></button>
+            </div>
+          ` : ''}
         </div>
-        <div class="blog-post-text">${formatTextWithLinks(post.content)}</div>
-        ${linkPreviewHtml}
-        ${imageSliderBlock}
+        ${post.title ? `<h3 class="note-card-title">${escapeHtml(post.title)}</h3>` : ''}
+        <div class="blog-post-text">${renderSafeMarkdown(post.content)}</div>
+        ${tags.length ? `<div class="note-tags-row">${tags.map(t => `<span class="tag-pill">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+        ${imgs.length ? buildImageCarouselHtml(imgs, 'blog-post-carousel') : ''}
       </article>
     `;
   }).join('');
@@ -2662,19 +2281,17 @@ function renderBlogPosts() {
 
 window.addPostImageRow = function (url = '') {
   const container = document.getElementById('post-images-editor');
-  if (!container) return;
-
   const row = document.createElement('div');
   row.className = 'post-img-split-row';
   row.innerHTML = `
     <input type="url" class="form-input post-image-url-input" placeholder="Image URL" value="${escapeHtml(url)}">
     <div class="row-right-controls">
-      <label class="equal-upload-btn" title="Upload">
+      <label class="equal-upload-btn">
         <ion-icon name="cloud-upload-outline"></ion-icon>
         <span>Upload</span>
         <input type="file" accept="image/*" hidden onchange="handleSinglePostRowUpload(event, this)">
       </label>
-      <button type="button" class="social-remove-btn" onclick="removePostImageRow(this)" title="Delete">
+      <button type="button" class="social-remove-btn" onclick="this.closest('.post-img-split-row').remove()">
         <ion-icon name="trash-outline"></ion-icon>
       </button>
     </div>
@@ -2682,51 +2299,44 @@ window.addPostImageRow = function (url = '') {
   container.appendChild(row);
 };
 
-window.removePostImageRow = function (btn) {
-  const container = document.getElementById('post-images-editor');
-  const row = btn.closest('.post-img-split-row');
-  if (!row || !container) return;
-  if (container.children.length <= 1) {
-    const inp = row.querySelector('.post-image-url-input');
-    if (inp) inp.value = '';
-    return;
-  }
-  row.remove();
-};
-
 window.handleSinglePostRowUpload = async function (event, fileInput) {
-  const file = event.target.files ? event.target.files[0] : null;
+  const file = event.target.files?.[0];
   event.target.value = '';
   if (!file) return;
-
   const row = fileInput.closest('.post-img-split-row');
-  const urlInput = row ? row.querySelector('.post-image-url-input') : null;
-
-  setElText('post-upload-status', 'Uploading...');
+  const urlInput = row?.querySelector('.post-image-url-input');
   try {
     const publicUrl = await uploadImageToSupabase(file, 'posts');
     if (urlInput) urlInput.value = publicUrl;
-    setElText('post-upload-status', 'Uploaded!');
-    showToast('Uploaded', 'success');
+    showToast('Image uploaded', 'success');
   } catch (err) {
-    setElText('post-upload-status', `Failed: ${err.message}`);
     showToast(err.message, 'error');
   }
 };
 
+// Local Autosave for Note Drafts
+document.getElementById('post-content')?.addEventListener('input', (e) => {
+  if (!document.getElementById('post-id').value) {
+    localStorage.setItem('archive_note_draft', e.target.value);
+    setElText('note-autosave-status', 'Draft autosaved locally');
+  }
+});
+
 window.openPostModal = function () {
   pendingUploadedUrls = [];
-  document.getElementById('post-modal-title').textContent = 'New Post';
+  setElText('post-modal-title', 'New Note');
   document.getElementById('post-form').reset();
   document.getElementById('post-id').value = '';
-  setElText('post-upload-status', '');
-
-  const imgEditor = document.getElementById('post-images-editor');
-  if (imgEditor) {
-    imgEditor.innerHTML = '';
-    addPostImageRow('');
+  document.getElementById('post-folder').value = 'General';
+  const savedDraft = localStorage.getItem('archive_note_draft');
+  if (savedDraft) {
+    document.getElementById('post-content').value = savedDraft;
+    setElText('note-autosave-status', 'Restored local draft');
+  } else {
+    setElText('note-autosave-status', '');
   }
-
+  document.getElementById('post-images-editor').innerHTML = '';
+  addPostImageRow('');
   document.getElementById('post-modal').classList.add('active');
 };
 
@@ -2735,21 +2345,20 @@ window.openEditPostModal = function (id) {
   if (!post) return;
 
   pendingUploadedUrls = [];
-  document.getElementById('post-modal-title').textContent = 'Edit Post';
+  setElText('post-modal-title', 'Edit Note');
   document.getElementById('post-id').value = post.id;
+  document.getElementById('post-title').value = post.title || '';
+  document.getElementById('post-folder').value = post.folder || 'General';
   document.getElementById('post-content').value = post.content || '';
-  setElText('post-upload-status', '');
+  document.getElementById('post-tags').value = Array.isArray(post.tags) ? post.tags.join(', ') : '';
+  document.getElementById('post-is-pinned').checked = Boolean(post.is_pinned);
+  document.getElementById('post-is-private').checked = Boolean(post.is_private);
+  setElText('note-autosave-status', '');
 
-  const imgEditor = document.getElementById('post-images-editor');
-  if (imgEditor) {
-    imgEditor.innerHTML = '';
-    const imgs = getPostImageUrls(post);
-    if (imgs.length > 0) {
-      imgs.forEach(u => addPostImageRow(u));
-    } else {
-      addPostImageRow('');
-    }
-  }
+  const editor = document.getElementById('post-images-editor');
+  editor.innerHTML = '';
+  const imgs = Array.isArray(post.image_urls) && post.image_urls.length ? post.image_urls : (post.image_url ? [post.image_url] : ['']);
+  imgs.forEach(u => addPostImageRow(u));
 
   document.getElementById('post-modal').classList.add('active');
 };
@@ -2759,91 +2368,280 @@ window.closePostModal = async function () {
   await cleanupPendingUploads([]);
 };
 
-const postForm = document.getElementById('post-form');
-if (postForm) {
-  postForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
+document.getElementById('post-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('post-id').value;
+  const contentVal = document.getElementById('post-content').value.trim();
+  if (!contentVal) return;
 
-    const id = document.getElementById('post-id').value;
-    const existingPost = id ? allBlogPosts.find(p => String(p.id) === String(id)) : null;
-    const oldImages = existingPost ? getPostImageUrls(existingPost) : [];
-
-    const imgInputs = document.querySelectorAll('#post-images-editor .post-image-url-input');
-    const imageUrls = [];
-    imgInputs.forEach(inp => {
-      const clean = normalizeImageUrl(inp.value);
-      if (clean && !imageUrls.includes(clean)) {
-        imageUrls.push(clean);
-      }
-    });
-
-    const contentVal = document.getElementById('post-content').value.trim();
-    if (!contentVal) return;
-
-    const nowIso = new Date().toISOString();
-    const payload = {
-      content: contentVal,
-      image_url: imageUrls[0] || null,
-      image_urls: imageUrls,
-      is_private: false,
-      updated_at: nowIso
-    };
-
-    let res = id
-      ? await supabaseClient.from('blog_posts').update(payload).eq('id', id)
-      : await supabaseClient.from('blog_posts').insert([{ ...payload, created_at: nowIso }]);
-
-    if (res.error && res.error.message && res.error.message.includes('is_private')) {
-      delete payload.is_private;
-      res = id
-        ? await supabaseClient.from('blog_posts').update(payload).eq('id', id)
-        : await supabaseClient.from('blog_posts').insert([{ ...payload, created_at: nowIso }]);
-    }
-
-    if (res.error) {
-      showToast(res.error.message, 'error');
-    } else {
-      await cleanupPendingUploads(imageUrls);
-      const keepSet = new Set(imageUrls);
-      for (const oldImg of oldImages) {
-        if (!keepSet.has(oldImg)) {
-          await deleteOldStorageFile(oldImg);
-        }
-      }
-      document.getElementById('post-modal').classList.remove('active');
-      await fetchBlogPosts();
-      showToast(id ? 'Updated' : 'Published', 'success');
-    }
+  const imageUrls = [];
+  document.querySelectorAll('#post-images-editor .post-image-url-input').forEach(inp => {
+    const clean = normalizeImageUrl(inp.value);
+    if (clean && !imageUrls.includes(clean)) imageUrls.push(clean);
   });
-}
+
+  const tags = document.getElementById('post-tags').value.split(',').map(s => s.trim()).filter(Boolean);
+  const titleVal = document.getElementById('post-title').value.trim() || null;
+  const nowIso = new Date().toISOString();
+
+  const payload = {
+    title: titleVal,
+    folder: document.getElementById('post-folder').value.trim() || 'General',
+    content: contentVal,
+    tags,
+    image_url: imageUrls[0] || null,
+    image_urls: imageUrls,
+    is_pinned: document.getElementById('post-is-pinned').checked,
+    is_private: document.getElementById('post-is-private').checked,
+    updated_at: nowIso
+  };
+
+  const res = id
+    ? await supabaseClient.from('blog_posts').update(payload).eq('id', id)
+    : await supabaseClient.from('blog_posts').insert([{ ...payload, created_at: nowIso }]);
+
+  if (res.error) {
+    showToast(res.error.message, 'error');
+    return;
+  }
+
+  if (!id) localStorage.removeItem('archive_note_draft');
+  await cleanupPendingUploads(imageUrls);
+  document.getElementById('post-modal').classList.remove('active');
+
+  await logPersonalActivity(
+    id ? 'note_updated' : 'note_created',
+    'note',
+    id || null,
+    titleVal || contentVal.slice(0, 40),
+    id ? 'Updated note' : 'Created note'
+  );
+
+  await fetchBlogPosts();
+  showToast(id ? 'Note updated' : 'Note published', 'success');
+});
 
 window.deleteBlogPost = async function (id) {
-  const existingPost = allBlogPosts.find(p => String(p.id) === String(id));
-
   const confirm = await Swal.fire({
-    text: 'Delete this post permanently?',
+    text: 'Delete this note permanently?',
     icon: 'warning',
     showCancelButton: true,
-    confirmButtonColor: '#ffffff',
-    confirmButtonText: '<span style="color:#111;">Delete</span>',
-    cancelButtonText: 'Cancel',
-    background: '#1e1e1f',
+    confirmButtonText: 'Delete',
+    background: '#1a1a1c',
     color: '#fff'
   });
-
   if (confirm.isConfirmed) {
     const { error } = await supabaseClient.from('blog_posts').delete().eq('id', id);
-    if (error) {
-      showToast(error.message, 'error');
-    } else {
-      if (existingPost) {
-        const oldImages = getPostImageUrls(existingPost);
-        for (const u of oldImages) {
-          await deleteOldStorageFile(u);
-        }
-      }
+    if (error) showToast(error.message, 'error');
+    else {
       await fetchBlogPosts();
       showToast('Deleted', 'info');
     }
   }
+};
+
+// ==========================================
+// 14. CUSTOM MEDIA COLLECTIONS
+// ==========================================
+async function fetchCollections() {
+  const [colRes, itemsRes] = await Promise.all([
+    supabaseClient.from('media_collections').select('*').order('created_at', { ascending: false }),
+    supabaseClient.from('media_collection_items').select('*')
+  ]);
+
+  if (!colRes.error) allCollections = colRes.data || [];
+  if (!itemsRes.error) allCollectionItems = itemsRes.data || [];
+
+  const filterSelect = document.getElementById('filter-collection');
+  if (filterSelect) {
+    filterSelect.innerHTML = `<option value="all">All Collections</option>` +
+      allCollections.map(c => `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.name)}</option>`).join('');
+  }
+}
+
+function renderCollectionsView() {
+  const grid = document.getElementById('collections-grid');
+  if (!grid) return;
+
+  if (!allCollections.length) {
+    grid.innerHTML = `<p class="empty-state">No collections yet. Create custom lists to group your favorite works.</p>`;
+    return;
+  }
+
+  grid.innerHTML = allCollections.map(col => {
+    const safeId = escapeHtml(String(col.id));
+    const itemIds = allCollectionItems.filter(ci => String(ci.collection_id) === String(col.id)).map(ci => String(ci.media_id));
+    const matchedMedia = allMediaLogs.filter(m => itemIds.includes(String(m.id)));
+    const thumbs = matchedMedia.slice(0, 5).map(m => normalizeImageUrl(m.cover_url)).filter(Boolean);
+
+    return `
+      <div class="collection-card" onclick="openCollectionInLibrary('${safeId}')">
+        <div class="collection-card-top">
+          <div>
+            <h3>${escapeHtml(col.name)}</h3>
+            <span style="font-size:11px; color:var(--mono-dim);">${matchedMedia.length} items</span>
+          </div>
+          ${isAdminLoggedIn ? `
+            <button type="button" class="blog-icon-btn" onclick="event.stopPropagation(); openEditCollectionModal('${safeId}')">
+              <ion-icon name="create-outline"></ion-icon>
+            </button>
+          ` : ''}
+        </div>
+        ${col.description ? `<p>${escapeHtml(col.description)}</p>` : ''}
+        ${thumbs.length ? `<div class="collection-thumbs-strip">${thumbs.map(src => `<img src="${src}" alt="">`).join('')}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+window.openCollectionInLibrary = function (colId) {
+  switchMainView('library');
+  const filterSelect = document.getElementById('filter-collection');
+  if (filterSelect) {
+    filterSelect.value = colId;
+    resetPaginationAndRender();
+  }
+};
+
+window.openCollectionModal = function () {
+  setElText('collection-modal-title', 'New Collection');
+  document.getElementById('collection-form').reset();
+  document.getElementById('collection-id').value = '';
+  document.getElementById('btn-delete-collection').style.display = 'none';
+  document.getElementById('collection-modal').classList.add('active');
+};
+
+window.openEditCollectionModal = function (id) {
+  const col = allCollections.find(c => String(c.id) === String(id));
+  if (!col) return;
+  setElText('collection-modal-title', 'Edit Collection');
+  document.getElementById('collection-id').value = col.id;
+  document.getElementById('collection-name').value = col.name;
+  document.getElementById('collection-desc').value = col.description || '';
+  document.getElementById('btn-delete-collection').style.display = 'inline-flex';
+  document.getElementById('collection-modal').classList.add('active');
+};
+
+window.closeCollectionModal = function () {
+  document.getElementById('collection-modal').classList.remove('active');
+};
+
+document.getElementById('collection-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('collection-id').value;
+  const payload = {
+    name: document.getElementById('collection-name').value.trim(),
+    description: document.getElementById('collection-desc').value.trim() || null,
+    updated_at: new Date().toISOString()
+  };
+
+  const res = id
+    ? await supabaseClient.from('media_collections').update(payload).eq('id', id)
+    : await supabaseClient.from('media_collections').insert([payload]);
+
+  if (res.error) showToast(res.error.message, 'error');
+  else {
+    closeCollectionModal();
+    await fetchCollections();
+    renderCollectionsView();
+    showToast(id ? 'Collection updated' : 'Collection created', 'success');
+  }
+});
+
+window.deleteCurrentCollection = async function () {
+  const id = document.getElementById('collection-id').value;
+  if (!id) return;
+  const { error } = await supabaseClient.from('media_collections').delete().eq('id', id);
+  if (error) showToast(error.message, 'error');
+  else {
+    closeCollectionModal();
+    await fetchCollections();
+    renderCollectionsView();
+    showToast('Collection deleted', 'info');
+  }
+};
+
+// ==========================================
+// 15. GLOBAL SEARCH / COMMAND PALETTE & QUICK CAPTURE
+// ==========================================
+window.openGlobalSearchModal = function () {
+  const modal = document.getElementById('global-search-modal');
+  const input = document.getElementById('global-search-input');
+  modal.classList.add('active');
+  input.value = '';
+  handleGlobalSearchInput();
+  setTimeout(() => input.focus(), 40);
+};
+
+window.closeGlobalSearchModal = function () {
+  document.getElementById('global-search-modal').classList.remove('active');
+};
+
+window.handleGlobalSearchInput = function () {
+  const q = (document.getElementById('global-search-input')?.value || '').toLowerCase().trim();
+  const body = document.getElementById('global-search-results');
+  if (!body) return;
+
+  const navItems = [
+    { label: 'Go to Overview Dashboard', meta: 'View', action: "closeGlobalSearchModal(); switchMainView('overview');" },
+    { label: 'Go to Media Library', meta: 'View', action: "closeGlobalSearchModal(); switchMainView('library');" },
+    { label: 'Go to Notes & Feed', meta: 'View', action: "closeGlobalSearchModal(); switchMainView('notes');" },
+    { label: 'Go to Collections', meta: 'View', action: "closeGlobalSearchModal(); switchMainView('collections');" }
+  ];
+
+  if (isAdminLoggedIn) {
+    navItems.unshift(
+      { label: 'Add New Media Entry', meta: 'Action', action: 'closeGlobalSearchModal(); openMediaModal();' },
+      { label: 'Create New Note', meta: 'Action', action: 'closeGlobalSearchModal(); openPostModal();' }
+    );
+  }
+
+  const matchedNav = navItems.filter(n => !q || n.label.toLowerCase().includes(q));
+  const matchedMedia = q
+    ? allMediaLogs.filter(m => !m.is_archived && !m.deleted_at && [m.title, m.original_title, m.creator].filter(Boolean).join(' ').toLowerCase().includes(q)).slice(0, 6)
+    : [];
+  const matchedNotes = q
+    ? allBlogPosts.filter(p => !p.is_archived && (!p.is_private || isAdminLoggedIn) && [p.title, p.content, p.folder].filter(Boolean).join(' ').toLowerCase().includes(q)).slice(0, 4)
+    : [];
+
+  let html = '';
+  if (matchedNav.length) {
+    html += `<div class="cmd-group-label">Navigation & Commands</div>` + matchedNav.map(n => `
+      <button type="button" class="cmd-item" onclick="${n.action}">
+        <span class="cmd-item-left"><ion-icon name="arrow-forward-circle-outline"></ion-icon><span>${escapeHtml(n.label)}</span></span>
+        <span class="cmd-item-meta">${escapeHtml(n.meta)}</span>
+      </button>
+    `).join('');
+  }
+
+  if (matchedMedia.length) {
+    html += `<div class="cmd-group-label">Media Library</div>` + matchedMedia.map(m => `
+      <button type="button" class="cmd-item" onclick="closeGlobalSearchModal(); openMediaDetailModal('${escapeHtml(String(m.id))}');">
+        <span class="cmd-item-left"><ion-icon name="albums-outline"></ion-icon><span>${escapeHtml(m.title)}</span></span>
+        <span class="cmd-item-meta">${escapeHtml(CATEGORY_LABELS[getLegacyCategory(m)] || '')}</span>
+      </button>
+    `).join('');
+  }
+
+  if (matchedNotes.length) {
+    html += `<div class="cmd-group-label">Notes</div>` + matchedNotes.map(p => `
+      <button type="button" class="cmd-item" onclick="closeGlobalSearchModal(); switchMainView('notes');">
+        <span class="cmd-item-left"><ion-icon name="document-text-outline"></ion-icon><span>${escapeHtml(p.title || (p.content || '').slice(0, 45))}</span></span>
+        <span class="cmd-item-meta">${escapeHtml(p.folder || 'General')}</span>
+      </button>
+    `).join('');
+  }
+
+  if (!html) {
+    html = `<p class="empty-state-compact">No matching results for "${escapeHtml(q)}"</p>`;
+  }
+  body.innerHTML = html;
+};
+
+window.openQuickCaptureModal = function () {
+  document.getElementById('quick-capture-modal').classList.add('active');
+};
+
+window.closeQuickCaptureModal = function () {
+  document.getElementById('quick-capture-modal').classList.remove('active');
 };
