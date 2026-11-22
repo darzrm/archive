@@ -1,1094 +1,2724 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Archive — Personal Media & Life OS</title>
-
-  <link id="favicon-link" rel="icon" type="image/png" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
-
-  <!-- Google Fonts: Inter -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-  <!-- Main CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css?v=400">
-
-  <!-- Supabase & SweetAlert2 -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-</head>
-
-<body>
-
-  <!-- Toast Container -->
-  <div id="toast-container" class="toast-container"></div>
-
-  <!-- Mobile Sidebar Backdrop -->
-  <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="toggleMobileSidebar(false)"></div>
-
-  <!-- APP SHELL -->
-  <div class="app-shell" id="app-shell">
-
-    <!-- COLLAPSIBLE SIDEBAR -->
-    <aside class="app-sidebar" id="app-sidebar">
-      <div class="sidebar-top">
-        <div class="sidebar-brand" onclick="switchMainView('overview')" title="Go to Overview">
-          <img id="sidebar-avatar-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="">
-          <div class="sidebar-brand-text">
-            <span id="sidebar-name-text" class="brand-title">Archive</span>
-            <span class="brand-subtitle">Personal OS</span>
-          </div>
-        </div>
-        <button type="button" class="sidebar-collapse-btn" onclick="toggleSidebarCollapse()" title="Toggle Sidebar" aria-label="Toggle Sidebar">
-          <ion-icon name="chevron-back-outline" id="sidebar-collapse-icon"></ion-icon>
-        </button>
-      </div>
-
-      <!-- Quick Capture Trigger -->
-      <div class="sidebar-quick-wrap" id="sidebar-quick-wrap" style="display: none;">
-        <button type="button" class="sidebar-quick-btn" onclick="openQuickCaptureModal()">
-          <ion-icon name="add-circle-outline"></ion-icon>
-          <span>Quick Capture</span>
-          <kbd>C</kbd>
-        </button>
-      </div>
-
-      <!-- Primary Navigation -->
-      <nav class="sidebar-nav" aria-label="Main Navigation">
-        <div class="sidebar-section-label">CORE</div>
-        <button type="button" class="sidebar-nav-item active" data-view="overview" onclick="switchMainView('overview')">
-          <ion-icon name="grid-outline"></ion-icon>
-          <span>Overview</span>
-        </button>
-
-        <button type="button" class="sidebar-nav-item" id="nav-item-library" data-view="library" onclick="switchMainView('library')">
-          <ion-icon name="albums-outline"></ion-icon>
-          <span>Media Library</span>
-          <span class="nav-badge" id="nav-media-count">0</span>
-          <ion-icon name="lock-closed" id="library-private-lock" class="nav-lock-icon" style="display: none;"></ion-icon>
-        </button>
-
-        <button type="button" class="sidebar-nav-item" data-view="notes" onclick="switchMainView('notes')">
-          <ion-icon name="document-text-outline"></ion-icon>
-          <span>Notes & Feed</span>
-          <span class="nav-badge" id="nav-notes-count">0</span>
-        </button>
-
-        <button type="button" class="sidebar-nav-item" data-view="collections" onclick="switchMainView('collections')">
-          <ion-icon name="bookmarks-outline"></ion-icon>
-          <span>Collections</span>
-        </button>
-
-        <div class="sidebar-section-label">COMING IN PHASE 2–5</div>
-        <button type="button" class="sidebar-nav-item is-phase-upcoming" onclick="showPhaseNotice('Workspace (Journal, Tasks, Goals, Projects)', 2)">
-          <ion-icon name="checkbox-outline"></ion-icon>
-          <span>Workspace</span>
-          <span class="phase-pill">P2</span>
-        </button>
-        <button type="button" class="sidebar-nav-item is-phase-upcoming" onclick="showPhaseNotice('Knowledge Base (Quotes, Vocabulary, Concepts)', 3)">
-          <ion-icon name="library-outline"></ion-icon>
-          <span>Knowledge Base</span>
-          <span class="phase-pill">P3</span>
-        </button>
-        <button type="button" class="sidebar-nav-item is-phase-upcoming" onclick="showPhaseNotice('Deep Statistics & Analytics', 4)">
-          <ion-icon name="bar-chart-outline"></ion-icon>
-          <span>Statistics</span>
-          <span class="phase-pill">P4</span>
-        </button>
-        <button type="button" class="sidebar-nav-item is-phase-upcoming" onclick="showPhaseNotice('AI Assistant (Groq Edge Function)', 5)">
-          <ion-icon name="sparkles-outline"></ion-icon>
-          <span>AI Assistant</span>
-          <span class="phase-pill">P5</span>
-        </button>
-      </nav>
-
-      <!-- Sidebar Footer -->
-      <div class="sidebar-footer">
-        <button type="button" id="btn-edit-profile" class="sidebar-footer-btn" style="display: none;" onclick="openSettingsRoot()">
-          <ion-icon name="settings-outline"></ion-icon>
-          <span>Settings</span>
-        </button>
-        <button type="button" id="btn-admin-auth" class="sidebar-footer-btn" onclick="handleAdminAuthClick()">
-          <ion-icon name="lock-closed-outline" id="admin-lock-icon"></ion-icon>
-          <span id="admin-btn-text">Admin</span>
-        </button>
-      </div>
-    </aside>
-
-    <!-- MAIN CONTENT WORKSPACE -->
-    <div class="app-main">
-
-      <!-- TOP BAR -->
-      <header class="app-topbar">
-        <div class="topbar-left">
-          <button type="button" class="mobile-menu-btn" onclick="toggleMobileSidebar(true)" aria-label="Open Navigation">
-            <ion-icon name="menu-outline"></ion-icon>
-          </button>
-          <div class="topbar-breadcrumb">
-            <span id="topbar-view-title">Overview</span>
-            <span class="topbar-sep">/</span>
-            <span id="topbar-date-label" class="topbar-date"></span>
-          </div>
-        </div>
-
-        <div class="topbar-right">
-          <button type="button" class="topbar-search-trigger" onclick="openGlobalSearchModal()">
-            <ion-icon name="search-outline"></ion-icon>
-            <span>Search archive...</span>
-            <kbd>Ctrl K</kbd>
-          </button>
-
-          <button type="button" id="btn-primary-context-action" class="primary-create-btn" style="display: none;" onclick="handlePrimaryContextAction()">
-            <ion-icon name="add-outline" id="primary-action-icon"></ion-icon>
-            <span id="primary-action-label">Add Media</span>
-          </button>
-        </div>
-      </header>
-
-      <!-- CONTENT BODY -->
-      <main class="app-content">
-
-        <!-- ======================================================== -->
-        <!-- VIEW 1: OVERVIEW / DASHBOARD                             -->
-        <!-- ======================================================== -->
-        <section id="view-overview" class="view-section active-view">
-
-          <!-- Compact Profile & Welcome Banner -->
-          <div class="profile-header-card" id="profile-header-card">
-            <div class="profile-banner-wrap" id="profile-banner-wrap" style="display: none;">
-              <img id="profile-banner-img" src="" alt="Profile Banner">
-            </div>
-            <div class="profile-content-area">
-              <div class="profile-top-bar">
-                <div class="profile-left">
-                  <div class="avatar-box">
-                    <img id="profile-avatar-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Profile Avatar">
-                  </div>
-                  <div class="profile-info">
-                    <div class="welcome-kicker" id="dashboard-welcome-date">Welcome back</div>
-                    <h1 class="profile-name" id="profile-name-text">Archive</h1>
-                    <p class="profile-bio" id="profile-bio-text"></p>
-                  </div>
-                </div>
-
-                <div class="header-actions">
-                  <button type="button" id="btn-customize-dashboard" class="header-pill-btn" style="display: none;" onclick="openWidgetCustomizerModal()">
-                    <ion-icon name="options-outline"></ion-icon>
-                    <span>Widgets</span>
-                  </button>
-                </div>
-              </div>
-
-              <!-- Social Links Bar -->
-              <div class="profile-socials-bar" id="profile-socials-bar" style="display: none;"></div>
-
-              <!-- Quick Actions Strip (Admin) -->
-              <div class="dashboard-quick-actions" id="dashboard-quick-actions" style="display: none;">
-                <button type="button" class="quick-action-chip" onclick="openMediaModal()">
-                  <ion-icon name="film-outline"></ion-icon>
-                  <span>Add Media</span>
-                </button>
-                <button type="button" class="quick-action-chip" onclick="openPostModal()">
-                  <ion-icon name="create-outline"></ion-icon>
-                  <span>Create Note</span>
-                </button>
-                <button type="button" class="quick-action-chip" onclick="openCollectionModal()">
-                  <ion-icon name="folder-open-outline"></ion-icon>
-                  <span>New Collection</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- KPI Summary Strip -->
-          <div class="dashboard-kpi-grid" id="widget-stats">
-            <div class="kpi-card" onclick="switchMainView('library')">
-              <div class="kpi-top">
-                <span class="kpi-label">Total Media</span>
-                <ion-icon name="albums-outline"></ion-icon>
-              </div>
-              <div class="kpi-value" id="dash-total-media">0</div>
-              <div class="kpi-sub" id="dash-categories-used">0 categories active</div>
-            </div>
-
-            <div class="kpi-card" onclick="openLibraryWithStatus('ongoing')">
-              <div class="kpi-top">
-                <span class="kpi-label">In Progress</span>
-                <ion-icon name="play-circle-outline"></ion-icon>
-              </div>
-              <div class="kpi-value" id="dash-consuming-count">0</div>
-              <div class="kpi-sub">Currently consuming</div>
-            </div>
-
-            <div class="kpi-card" onclick="openLibraryWithStatus('completed')">
-              <div class="kpi-top">
-                <span class="kpi-label">Completed</span>
-                <ion-icon name="checkmark-done-outline"></ion-icon>
-              </div>
-              <div class="kpi-value" id="dash-completed-count">0</div>
-              <div class="kpi-sub" id="dash-completion-rate">0% completion rate</div>
-            </div>
-
-            <div class="kpi-card">
-              <div class="kpi-top">
-                <span class="kpi-label">Mean Rating</span>
-                <ion-icon name="star-outline"></ion-icon>
-              </div>
-              <div class="kpi-value" id="dash-mean-rating">—</div>
-              <div class="kpi-sub" id="dash-rated-count">0 rated entries</div>
-            </div>
-
-            <div class="kpi-card" onclick="switchMainView('notes')">
-              <div class="kpi-top">
-                <span class="kpi-label">Personal Notes</span>
-                <ion-icon name="document-text-outline"></ion-icon>
-              </div>
-              <div class="kpi-value" id="dash-total-notes">0</div>
-              <div class="kpi-sub" id="dash-pinned-notes">0 pinned</div>
-            </div>
-          </div>
-
-          <!-- Modular Dashboard Grid -->
-          <div class="dashboard-widgets-grid">
-
-            <!-- Widget: Currently Consuming -->
-            <div class="dash-widget-card" id="widget-currently_consuming">
-              <div class="dash-widget-header">
-                <div class="dash-widget-title">
-                  <ion-icon name="play-outline"></ion-icon>
-                  <h3>Currently Consuming</h3>
-                </div>
-                <button type="button" class="dash-link-btn" onclick="openLibraryWithStatus('ongoing')">View All</button>
-              </div>
-              <div class="dash-widget-body" id="dash-list-consuming">
-                <p class="empty-state-compact">No active media in progress.</p>
-              </div>
-            </div>
-
-            <!-- Widget: Recently Completed -->
-            <div class="dash-widget-card" id="widget-recently_completed">
-              <div class="dash-widget-header">
-                <div class="dash-widget-title">
-                  <ion-icon name="checkmark-circle-outline"></ion-icon>
-                  <h3>Recently Completed</h3>
-                </div>
-                <button type="button" class="dash-link-btn" onclick="openLibraryWithStatus('completed')">View All</button>
-              </div>
-              <div class="dash-widget-body" id="dash-list-completed">
-                <p class="empty-state-compact">No completed media yet.</p>
-              </div>
-            </div>
-
-            <!-- Widget: Recently Added Media -->
-            <div class="dash-widget-card" id="widget-recently_added">
-              <div class="dash-widget-header">
-                <div class="dash-widget-title">
-                  <ion-icon name="time-outline"></ion-icon>
-                  <h3>Recently Added Media</h3>
-                </div>
-                <button type="button" class="dash-link-btn" onclick="switchMainView('library')">Library</button>
-              </div>
-              <div class="dash-widget-body" id="dash-list-recent-media">
-                <p class="empty-state-compact">No media recorded yet.</p>
-              </div>
-            </div>
-
-            <!-- Widget: Recent Personal Notes -->
-            <div class="dash-widget-card" id="widget-recent_notes">
-              <div class="dash-widget-header">
-                <div class="dash-widget-title">
-                  <ion-icon name="document-text-outline"></ion-icon>
-                  <h3>Recent Notes</h3>
-                </div>
-                <button type="button" class="dash-link-btn" onclick="switchMainView('notes')">All Notes</button>
-              </div>
-              <div class="dash-widget-body" id="dash-list-recent-notes">
-                <p class="empty-state-compact">No notes yet.</p>
-              </div>
-            </div>
-
-            <!-- Widget: Category Breakdown Overview -->
-            <div class="dash-widget-card dash-widget-wide" id="widget-category_overview">
-              <div class="dash-widget-header">
-                <div class="dash-widget-title">
-                  <ion-icon name="layers-outline"></ion-icon>
-                  <h3>Media Consumption by Category</h3>
-                </div>
-              </div>
-              <div class="dash-category-bars" id="dash-category-breakdown"></div>
-            </div>
-
-            <!-- Widget: Recent Activity Timeline -->
-            <div class="dash-widget-card dash-widget-wide" id="widget-activity_timeline">
-              <div class="dash-widget-header">
-                <div class="dash-widget-title">
-                  <ion-icon name="pulse-outline"></ion-icon>
-                  <h3>Recent Activity</h3>
-                </div>
-              </div>
-              <div class="dash-activity-list" id="dash-activity-list">
-                <p class="empty-state-compact">No recorded activity yet.</p>
-              </div>
-            </div>
-
-          </div>
-        </section>
-
-        <!-- ======================================================== -->
-        <!-- VIEW 2: MEDIA LIBRARY (12 CATEGORIES)                    -->
-        <!-- ======================================================== -->
-        <section id="view-library" class="view-section" style="display: none;">
-
-          <!-- Collapsible Library Stats -->
-          <div class="stats-accordion-wrap">
-            <div class="stats-accordion-header" onclick="toggleLibraryStats()">
-              <div class="stats-summary-left">
-                <ion-icon name="stats-chart-outline"></ion-icon>
-                <span>Library Summary</span>
-                <span class="entries-pill" id="total-entries-label">0 Entries</span>
-              </div>
-              <button type="button" class="stats-toggle-btn" id="btn-toggle-stats">
-                <span id="stats-toggle-text">Show Stats</span>
-                <ion-icon name="chevron-down-outline" id="stats-chevron-icon"></ion-icon>
-              </button>
-            </div>
-
-            <div class="collapsible-stats-panel" id="collapsible-stats-panel" style="display: none;">
-              <div class="stats-bento-grid" id="library-category-stats-grid"></div>
-              <div class="stats-bottom-highlights">
-                <div class="stat-highlight-card">
-                  <div class="highlight-icon-box"><ion-icon name="checkmark-done-outline"></ion-icon></div>
-                  <div class="highlight-info">
-                    <span class="stat-label">Total Completed</span>
-                    <div class="highlight-value-row">
-                      <span class="highlight-value" id="stat-completed-total">0</span>
-                      <span class="highlight-badge" id="stat-completion-rate">0% Rate</span>
-                    </div>
-                  </div>
-                </div>
-                <div class="stat-highlight-card">
-                  <div class="highlight-icon-box"><ion-icon name="star-outline"></ion-icon></div>
-                  <div class="highlight-info">
-                    <span class="stat-label">Mean Rating</span>
-                    <div class="highlight-value-row">
-                      <span class="highlight-value" id="stat-avg-rating">0.0</span>
-                      <span class="highlight-badge" id="stat-rated-count">0 Rated</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 12 CATEGORIES NAVIGATION STRIP -->
-          <nav class="category-tabs-wrap" aria-label="Media Categories">
-            <ul class="category-tabs" id="media-category-tabs">
-              <li><button type="button" class="cat-tab active" data-category="all">All</button></li>
-              <li><button type="button" class="cat-tab" data-category="movie">Movies</button></li>
-              <li><button type="button" class="cat-tab" data-category="tv_show">TV Shows</button></li>
-              <li><button type="button" class="cat-tab" data-category="anime">Anime</button></li>
-              <li><button type="button" class="cat-tab" data-category="manga">Manga</button></li>
-              <li><button type="button" class="cat-tab" data-category="comic">Comics</button></li>
-              <li><button type="button" class="cat-tab" data-category="manhwa">Manhwa</button></li>
-              <li><button type="button" class="cat-tab" data-category="manhua">Manhua</button></li>
-              <li><button type="button" class="cat-tab" data-category="book">Books</button></li>
-              <li><button type="button" class="cat-tab" data-category="game">Video Games</button></li>
-              <li><button type="button" class="cat-tab" data-category="visual_novel">Visual Novels</button></li>
-              <li><button type="button" class="cat-tab" data-category="music">Music</button></li>
-              <li><button type="button" class="cat-tab" data-category="other">Other</button></li>
-            </ul>
-          </nav>
-
-          <!-- LIBRARY TOOLBAR (SEARCH, ADVANCED FILTERS, SORT, GRID/LIST/COMPACT) -->
-          <div class="library-toolbar">
-            <div class="search-box">
-              <ion-icon name="search-outline"></ion-icon>
-              <input type="text" id="search-library" placeholder="Search title, creator, genre, tag...">
-            </div>
-
-            <div class="toolbar-controls-group">
-              <!-- Filter Popover -->
-              <div class="popover-wrapper" id="filter-popover-wrap">
-                <button type="button" class="toolbar-btn" id="btn-filter-toggle" onclick="toggleToolbarPopover('filter')">
-                  <ion-icon name="funnel-outline"></ion-icon>
-                  <span>Filter</span>
-                  <span class="active-indicator-dot" id="filter-active-dot" style="display: none;"></span>
-                </button>
-
-                <div class="toolbar-popover-menu" id="filter-popover-menu">
-                  <div class="popover-header">
-                    <span>Filter Library</span>
-                    <button type="button" class="popover-reset-btn" onclick="resetLibraryFilters()">Reset</button>
-                  </div>
-
-                  <div class="popover-field">
-                    <label>Status</label>
-                    <select id="filter-status" class="form-input">
-                      <option value="all">All Status</option>
-                      <option value="planned">Planning</option>
-                      <option value="ongoing">In Progress</option>
-                      <option value="completed">Completed</option>
-                      <option value="on_hold">On Hold</option>
-                      <option value="dropped">Dropped</option>
-                    </select>
-                  </div>
-
-                  <div class="popover-field">
-                    <label>Collection</label>
-                    <select id="filter-collection" class="form-input">
-                      <option value="all">All Collections</option>
-                    </select>
-                  </div>
-
-                  <div class="popover-field">
-                    <label>Genre / Tag</label>
-                    <input type="text" id="filter-genre" class="form-input" placeholder="e.g. Sci-Fi, Shoegaze">
-                  </div>
-
-                  <div class="popover-field">
-                    <label>Release Year</label>
-                    <input type="number" id="filter-year" class="form-input" placeholder="e.g. 2024">
-                  </div>
-
-                  <div class="popover-field">
-                    <label>Rating Range (0.0 – 10.0)</label>
-                    <div class="range-input-pair">
-                      <input type="number" id="filter-rating-min" class="form-input" step="0.5" min="0" max="10" placeholder="Min">
-                      <span>—</span>
-                      <input type="number" id="filter-rating-max" class="form-input" step="0.5" min="0" max="10" placeholder="Max">
-                    </div>
-                  </div>
-
-                  <div class="popover-field">
-                    <label class="checkbox-inline-label">
-                      <input type="checkbox" id="filter-favorites-only">
-                      <span>Favorites only</span>
-                    </label>
-                    <label class="checkbox-inline-label">
-                      <input type="checkbox" id="filter-unrated-only">
-                      <span>Unrated only</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Sort Popover -->
-              <div class="popover-wrapper" id="sort-popover-wrap">
-                <button type="button" class="toolbar-btn" id="btn-sort-toggle" onclick="toggleToolbarPopover('sort')">
-                  <ion-icon name="swap-vertical-outline"></ion-icon>
-                  <span id="sort-btn-label">Rating (Best)</span>
-                </button>
-
-                <div class="toolbar-popover-menu" id="sort-popover-menu">
-                  <div class="popover-header"><span>Sort Order</span></div>
-                  <div class="popover-field">
-                    <label>Sort By</label>
-                    <select id="sort-library-field" class="form-input" onchange="onSortOptionChange()">
-                      <option value="rating" selected>Rating</option>
-                      <option value="updated">Recently Updated</option>
-                      <option value="created">Recently Added</option>
-                      <option value="year">Release Year</option>
-                      <option value="units">Progress / Total Count</option>
-                      <option value="title">Title (A–Z)</option>
-                    </select>
-                  </div>
-                  <div class="popover-field">
-                    <label>Direction</label>
-                    <div class="sort-dir-group">
-                      <button type="button" class="sort-dir-btn active" id="btn-sort-desc" onclick="setSortDirection('desc')">High / New</button>
-                      <button type="button" class="sort-dir-btn" id="btn-sort-asc" onclick="setSortDirection('asc')">Low / Old</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- View Switcher (Grid / List / Compact) -->
-              <div class="view-mode-segmented" role="group" aria-label="Library View Mode">
-                <button type="button" class="view-seg-btn active" data-mode="grid" onclick="setLibraryViewMode('grid')" title="Grid View">
-                  <ion-icon name="grid-outline"></ion-icon>
-                </button>
-                <button type="button" class="view-seg-btn" data-mode="list" onclick="setLibraryViewMode('list')" title="List View">
-                  <ion-icon name="list-outline"></ion-icon>
-                </button>
-                <button type="button" class="view-seg-btn" data-mode="compact" onclick="setLibraryViewMode('compact')" title="Compact Table View">
-                  <ion-icon name="reorder-four-outline"></ion-icon>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- MEDIA CONTAINER -->
-          <div class="media-grid" id="media-grid">
-            <p class="empty-state">Loading library...</p>
-          </div>
-
-          <!-- LOAD MORE PAGINATION -->
-          <div id="load-more-wrap" class="load-more-wrap" style="display: none;">
-            <button type="button" class="load-more-btn" onclick="loadMoreMedia()">
-              <span id="load-more-text">Load More</span>
-              <ion-icon name="chevron-down-outline"></ion-icon>
-            </button>
-          </div>
-        </section>
-
-        <!-- ======================================================== -->
-        <!-- VIEW 3: NOTES & PERSONAL FEED                            -->
-        <!-- ======================================================== -->
-        <section id="view-notes" class="view-section" style="display: none;">
-          <div class="notes-toolbar">
-            <div class="search-box">
-              <ion-icon name="search-outline"></ion-icon>
-              <input type="text" id="search-notes" placeholder="Search notes, folders, tags..." oninput="renderBlogPosts()">
-            </div>
-            <select id="filter-note-folder" class="form-input notes-folder-select" onchange="renderBlogPosts()">
-              <option value="all">All Folders</option>
-            </select>
-          </div>
-
-          <div class="blog-feed-container" id="blog-feed-list">
-            <p class="empty-state">Loading notes...</p>
-          </div>
-        </section>
-
-        <!-- ======================================================== -->
-        <!-- VIEW 4: MEDIA COLLECTIONS                                -->
-        <!-- ======================================================== -->
-        <section id="view-collections" class="view-section" style="display: none;">
-          <div class="section-top-bar">
-            <div>
-              <h2 class="section-heading">Custom Collections</h2>
-              <p class="section-sub">Curated lists across all 12 media categories.</p>
-            </div>
-            <button type="button" id="btn-new-collection" class="primary-create-btn" style="display: none;" onclick="openCollectionModal()">
-              <ion-icon name="add-outline"></ion-icon>
-              <span>New Collection</span>
-            </button>
-          </div>
-
-          <div class="collections-grid" id="collections-grid">
-            <p class="empty-state">No collections created yet.</p>
-          </div>
-        </section>
-
-      </main>
-
-      <!-- MINIMALIST FOOTER -->
-      <footer class="site-footer">
-        <p>&copy; 2026 <span id="footer-brand-name">ARCHIVE</span>. Personal Media & Life Operating System.</p>
-      </footer>
-
-    </div>
-  </div>
-
-  <!-- FLOATING BACK TO TOP -->
-  <button type="button" id="btn-back-to-top" class="back-to-top-btn" onclick="scrollToTopSmooth()" title="Back to top">
-    <ion-icon name="arrow-up-outline"></ion-icon>
-  </button>
-
-  <!-- ======================================================== -->
-  <!-- MODAL 1: ADD / EDIT MEDIA (12 CATEGORIES + SPECIFIC META) -->
-  <!-- ======================================================== -->
-  <div class="modal-overlay" id="media-modal">
-    <div class="modal-box modal-box-lg">
-      <div class="modal-header">
-        <div class="modal-title-group">
-          <div class="modal-icon-badge"><ion-icon name="albums-outline"></ion-icon></div>
-          <h3 id="media-modal-title">Add Media</h3>
-        </div>
-        <button type="button" class="close-modal-btn" onclick="closeMediaModal()">&times;</button>
-      </div>
-
-      <!-- Optional Metadata Auto-Fill -->
-      <div class="api-search-section">
-        <label class="form-label">Auto-Fill Metadata (Optional)</label>
-        <div class="api-search-bar">
-          <select id="api-search-cat" class="form-input" style="max-width: 138px;">
-            <option value="movie">Movies</option>
-            <option value="tv_show">TV Shows</option>
-            <option value="anime">Anime</option>
-            <option value="manga">Manga</option>
-            <option value="comic">Comics</option>
-            <option value="manhwa">Manhwa</option>
-            <option value="manhua">Manhua</option>
-            <option value="book">Books</option>
-            <option value="game">Video Games</option>
-            <option value="visual_novel">Visual Novels</option>
-            <option value="music">Music</option>
-          </select>
-          <input type="text" id="api-search-input" class="form-input" placeholder="Search external database...">
-          <button type="button" class="form-btn" onclick="searchExternalAPI()">Search</button>
-        </div>
-        <div class="api-results-list" id="api-search-results"></div>
-      </div>
-
-      <form id="media-form" class="modal-form">
-        <input type="hidden" id="media-id">
-
-        <div class="form-row">
-          <div class="form-group">
-            <label>Title *</label>
-            <input type="text" id="media-title" class="form-input" required placeholder="Primary title">
-          </div>
-          <div class="form-group">
-            <label>Original Title</label>
-            <input type="text" id="media-original-title" class="form-input" placeholder="Native / Original title">
-          </div>
-        </div>
-
-        <div class="form-row-3">
-          <div class="form-group">
-            <label>Primary Category *</label>
-            <select id="media-primary-cat" class="form-input" onchange="onPrimaryCategoryModalChange()">
-              <option value="movie">Movies</option>
-              <option value="tv_show">TV Shows</option>
-              <option value="anime">Anime</option>
-              <option value="manga">Manga</option>
-              <option value="comic">Comics</option>
-              <option value="manhwa">Manhwa</option>
-              <option value="manhua">Manhua</option>
-              <option value="book">Books</option>
-              <option value="game">Video Games</option>
-              <option value="visual_novel">Visual Novels</option>
-              <option value="music">Music</option>
-              <option value="other">Other Media</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Release Year</label>
-            <input type="number" id="media-release-year" class="form-input" min="1800" max="2100" placeholder="2026">
-          </div>
-          <div class="form-group">
-            <label>Creator / Studio / Author</label>
-            <input type="text" id="media-creator" class="form-input" placeholder="Director, Author, Artist...">
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label>Genres (comma-separated)</label>
-            <input type="text" id="media-genres" class="form-input" placeholder="Drama, Sci-Fi, Mystery">
-          </div>
-          <div class="form-group">
-            <label>Tags (comma-separated)</label>
-            <input type="text" id="media-tags" class="form-input" placeholder="masterpiece, slow-burn, 90s">
-          </div>
-        </div>
-
-        <!-- DYNAMIC CATEGORY-SPECIFIC METADATA FIELDS -->
-        <div id="category-specific-fields-box" class="category-meta-box"></div>
-
-        <!-- COVER GALLERY -->
-        <div class="form-group">
-          <div class="social-editor-header">
-            <label style="margin: 0;">Cover / Poster</label>
-            <button type="button" class="add-social-btn" onclick="addMediaImageRow()">
-              <ion-icon name="add-outline"></ion-icon> Add
-            </button>
-          </div>
-          <div id="media-gallery-editor" class="multi-img-editor-list"></div>
-          <span class="upload-status-text" id="cover-upload-status"></span>
-        </div>
-
-        <!-- PROGRESS TRACKS -->
-        <div class="form-group">
-          <div class="social-editor-header">
-            <label style="margin: 0;">Progress & Status</label>
-            <button type="button" class="add-social-btn" onclick="addMediaTrackRow()">
-              <ion-icon name="add-outline"></ion-icon> Add Track
-            </button>
-          </div>
-          <div id="media-tracks-editor" class="tracks-editor-list"></div>
-        </div>
-
-        <!-- RATING (0-10 WITH 0.5 STEP), DATES & FAVORITE -->
-        <div class="form-row-3">
-          <div class="form-group">
-            <label>Personal Rating (0 – 10)</label>
-            <input type="number" id="media-rating" class="form-input" step="0.5" min="0" max="10" placeholder="0.0 – 10.0">
-          </div>
-          <div class="form-group">
-            <label>Start Date</label>
-            <input type="date" id="media-start-date" class="form-input">
-          </div>
-          <div class="form-group">
-            <label>Completion Date</label>
-            <input type="date" id="media-completion-date" class="form-input">
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label>Rewatch / Replay Count</label>
-            <div class="progress-input-row">
-              <input type="number" id="media-repeat" class="form-input" min="0" value="0">
-              <button type="button" class="step-plus-btn" onclick="stepModalRepeat()">+1</button>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>External Reference URL</label>
-            <input type="url" id="media-external-url" class="form-input" placeholder="https://...">
-          </div>
-        </div>
-
-        <!-- COLLECTIONS ASSIGNMENT -->
-        <div class="form-group" id="media-collections-assign-group" style="display: none;">
-          <label>Assign to Collections</label>
-          <div id="media-collections-checkboxes" class="collections-check-grid"></div>
-        </div>
-
-        <!-- DESCRIPTION & PERSONAL REVIEW -->
-        <div class="form-group">
-          <label>Synopsis / Description</label>
-          <textarea id="media-description" class="form-input" rows="2" placeholder="Brief summary..."></textarea>
-        </div>
-
-        <div class="form-group">
-          <label>Personal Review</label>
-          <textarea id="media-review" class="form-input" rows="3" placeholder="Your thoughts, critique, pros & cons..."></textarea>
-        </div>
-
-        <!-- EPISODE / CHAPTER / ROUTE NOTES -->
-        <div class="form-group">
-          <div class="social-editor-header">
-            <label style="margin: 0;">Episode / Chapter / Route Logs</label>
-            <button type="button" class="add-social-btn" onclick="addEpisodeReviewRow()">
-              <ion-icon name="add-outline"></ion-icon> Add
-            </button>
-          </div>
-          <div id="media-ep-reviews-editor" class="ep-reviews-editor-list"></div>
-        </div>
-
-        <div class="modal-inline-toggles">
-          <label class="checkbox-inline-label">
-            <input type="checkbox" id="media-is-favorite">
-            <span>Mark as Favorite</span>
-          </label>
-          <label class="checkbox-inline-label">
-            <input type="checkbox" id="media-is-archived">
-            <span>Archive Entry</span>
-          </label>
-        </div>
-
-        <div class="modal-submit-row">
-          <button type="button" id="btn-modal-delete" class="form-btn danger-btn" style="display: none;" onclick="deleteCurrentModalMedia()">Delete</button>
-          <button type="submit" class="form-btn primary-submit">Save Entry</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ======================================================== -->
-  <!-- MODAL 1B: MEDIA DETAIL VIEW                              -->
-  <!-- ======================================================== -->
-  <div class="modal-overlay" id="media-detail-modal">
-    <div class="modal-box modal-box-lg">
-      <div class="modal-header">
-        <div class="modal-title-group">
-          <div class="modal-icon-badge"><ion-icon name="information-circle-outline"></ion-icon></div>
-          <h3 id="detail-modal-title">Details</h3>
-        </div>
-        <button type="button" class="close-modal-btn" onclick="closeMediaDetailModal()">&times;</button>
-      </div>
-      <div id="media-detail-body" class="detail-modal-body"></div>
-    </div>
-  </div>
-
-  <!-- ======================================================== -->
-  <!-- MODAL 2: ADD / EDIT NOTE POST (MARKDOWN + FOLDERS + PIN) -->
-  <!-- ======================================================== -->
-  <div class="modal-overlay" id="post-modal">
-    <div class="modal-box modal-box-lg">
-      <div class="modal-header">
-        <div class="modal-title-group">
-          <div class="modal-icon-badge"><ion-icon name="create-outline"></ion-icon></div>
-          <h3 id="post-modal-title">New Note</h3>
-        </div>
-        <button type="button" class="close-modal-btn" onclick="closePostModal()">&times;</button>
-      </div>
-
-      <form id="post-form" class="modal-form">
-        <input type="hidden" id="post-id">
-
-        <div class="form-row">
-          <div class="form-group">
-            <label>Title (Optional)</label>
-            <input type="text" id="post-title" class="form-input" placeholder="Note title...">
-          </div>
-          <div class="form-group">
-            <label>Folder</label>
-            <input type="text" id="post-folder" class="form-input" value="General" placeholder="General, Ideas, Reflections...">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <div class="social-editor-header">
-            <label style="margin: 0;">Content (Markdown supported)</label>
-            <span class="autosave-hint" id="note-autosave-status"></span>
-          </div>
-          <textarea id="post-content" class="form-input note-textarea-large" rows="7" required placeholder="Write your note... Supports **bold**, *italic*, `code`, lists, and links."></textarea>
-        </div>
-
-        <div class="form-group">
-          <label>Tags (comma-separated)</label>
-          <input type="text" id="post-tags" class="form-input" placeholder="philosophy, dev, journal">
-        </div>
-
-        <div class="form-group">
-          <div class="social-editor-header">
-            <label style="margin: 0;">Images</label>
-            <button type="button" class="add-social-btn" onclick="addPostImageRow()">
-              <ion-icon name="add-outline"></ion-icon> Add
-            </button>
-          </div>
-          <div id="post-images-editor" class="multi-img-editor-list"></div>
-          <span class="upload-status-text" id="post-upload-status"></span>
-        </div>
-
-        <div class="modal-inline-toggles">
-          <label class="checkbox-inline-label">
-            <input type="checkbox" id="post-is-pinned">
-            <span>Pin to top</span>
-          </label>
-          <label class="checkbox-inline-label">
-            <input type="checkbox" id="post-is-private">
-            <span>Private (Admin only)</span>
-          </label>
-        </div>
-
-        <div class="modal-submit-row">
-          <button type="submit" class="form-btn primary-submit full-width-submit">Save Note</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ======================================================== -->
-  <!-- MODAL 3: COLLECTION CREATE / EDIT                        -->
-  <!-- ======================================================== -->
-  <div class="modal-overlay" id="collection-modal">
-    <div class="modal-box" style="max-width: 440px;">
-      <div class="modal-header">
-        <div class="modal-title-group">
-          <div class="modal-icon-badge"><ion-icon name="bookmarks-outline"></ion-icon></div>
-          <h3 id="collection-modal-title">New Collection</h3>
-        </div>
-        <button type="button" class="close-modal-btn" onclick="closeCollectionModal()">&times;</button>
-      </div>
-      <form id="collection-form" class="modal-form">
-        <input type="hidden" id="collection-id">
-        <div class="form-group">
-          <label>Collection Name *</label>
-          <input type="text" id="collection-name" class="form-input" required placeholder="e.g. All-Time Favorites">
-        </div>
-        <div class="form-group">
-          <label>Description</label>
-          <textarea id="collection-desc" class="form-input" rows="3" placeholder="What connects these entries?"></textarea>
-        </div>
-        <div class="modal-submit-row">
-          <button type="button" id="btn-delete-collection" class="form-btn danger-btn" style="display: none;" onclick="deleteCurrentCollection()">Delete</button>
-          <button type="submit" class="form-btn primary-submit">Save Collection</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ======================================================== -->
-  <!-- MODAL 4: GLOBAL SEARCH & COMMAND PALETTE (CTRL+K)        -->
-  <!-- ======================================================== -->
-  <div class="modal-overlay" id="global-search-modal" onclick="if(event.target === this) closeGlobalSearchModal()">
-    <div class="modal-box command-palette-box">
-      <div class="command-input-wrap">
-        <ion-icon name="search-outline"></ion-icon>
-        <input type="text" id="global-search-input" placeholder="Search media, notes, collections, or jump to view..." oninput="handleGlobalSearchInput()">
-        <button type="button" class="close-modal-btn" onclick="closeGlobalSearchModal()">&times;</button>
-      </div>
-      <div class="command-results-body" id="global-search-results"></div>
-    </div>
-  </div>
-
-  <!-- ======================================================== -->
-  <!-- MODAL 5: QUICK CAPTURE                                   -->
-  <!-- ======================================================== -->
-  <div class="modal-overlay" id="quick-capture-modal" onclick="if(event.target === this) closeQuickCaptureModal()">
-    <div class="modal-box" style="max-width: 420px;">
-      <div class="modal-header">
-        <div class="modal-title-group">
-          <div class="modal-icon-badge"><ion-icon name="flash-outline"></ion-icon></div>
-          <h3>Quick Capture</h3>
-        </div>
-        <button type="button" class="close-modal-btn" onclick="closeQuickCaptureModal()">&times;</button>
-      </div>
-      <div class="quick-capture-grid">
-        <button type="button" class="qc-choice-btn" onclick="closeQuickCaptureModal(); openMediaModal();">
-          <ion-icon name="film-outline"></ion-icon>
-          <span>Media Entry</span>
-        </button>
-        <button type="button" class="qc-choice-btn" onclick="closeQuickCaptureModal(); openPostModal();">
-          <ion-icon name="document-text-outline"></ion-icon>
-          <span>Personal Note</span>
-        </button>
-        <button type="button" class="qc-choice-btn" onclick="closeQuickCaptureModal(); openCollectionModal();">
-          <ion-icon name="bookmarks-outline"></ion-icon>
-          <span>Collection</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ======================================================== -->
-  <!-- MODAL 6: DASHBOARD WIDGET CUSTOMIZER                     -->
-  <!-- ======================================================== -->
-  <div class="modal-overlay" id="widget-modal" onclick="if(event.target === this) closeWidgetCustomizerModal()">
-    <div class="modal-box" style="max-width: 400px;">
-      <div class="modal-header">
-        <div class="modal-title-group">
-          <div class="modal-icon-badge"><ion-icon name="options-outline"></ion-icon></div>
-          <h3>Dashboard Widgets</h3>
-        </div>
-        <button type="button" class="close-modal-btn" onclick="closeWidgetCustomizerModal()">&times;</button>
-      </div>
-      <div class="modal-form" id="widget-toggles-list"></div>
-    </div>
-  </div>
-
-  <!-- ======================================================== -->
-  <!-- MODAL 7: SETTINGS (ROOT & PROFILE)                       -->
-  <!-- ======================================================== -->
-  <div class="modal-overlay" id="profile-modal">
-    <div class="modal-box">
-      <div class="modal-header">
-        <div class="modal-title-group">
-          <button type="button" id="btn-settings-back" class="modal-back-btn" style="display: none;" onclick="navigateSettingsStep('root')">
-            <ion-icon name="arrow-back-outline"></ion-icon>
-          </button>
-          <div class="modal-icon-badge" id="settings-header-icon"><ion-icon name="settings-outline"></ion-icon></div>
-          <h3 id="settings-modal-title">Settings</h3>
-        </div>
-        <button type="button" class="close-modal-btn" onclick="closeProfileModal()">&times;</button>
-      </div>
-
-      <form id="profile-form" class="modal-form">
-        <div id="settings-step-root" class="settings-step-panel">
-          <button type="button" class="settings-nav-item" onclick="navigateSettingsStep('profile')">
-            <div class="settings-nav-left">
-              <div class="settings-nav-icon"><ion-icon name="person-outline"></ion-icon></div>
-              <div class="settings-nav-text">
-                <span class="settings-nav-title">Profile</span>
-                <span class="settings-nav-sub">Name, bio, avatar, banner & links</span>
-              </div>
-            </div>
-            <ion-icon name="chevron-forward-outline" class="settings-chevron"></ion-icon>
-          </button>
-
-          <div class="settings-card-row">
-            <div class="settings-card-info">
-              <div class="settings-card-title">
-                <ion-icon name="eye-off-outline"></ion-icon>
-                <span>Private Library</span>
-              </div>
-              <p class="settings-card-desc">Hide Media Library & Collections from public visitors.</p>
-            </div>
-            <label class="toggle-switch">
-              <input type="checkbox" id="edit-library-private">
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-
-          <div class="settings-root-save-wrap">
-            <button type="submit" class="form-btn primary-submit settings-root-save-btn">Save</button>
-          </div>
-        </div>
-
-        <div id="settings-step-profile" class="settings-step-panel" style="display: none;">
-          <div class="form-group">
-            <label>Name</label>
-            <input type="text" id="edit-profile-name" class="form-input" required>
-          </div>
-          <div class="form-group">
-            <label>Bio & Links</label>
-            <div class="split-equal-row">
-              <input type="text" id="edit-profile-bio" class="form-input" placeholder="Bio">
-              <button type="button" class="equal-action-btn" onclick="addSocialLinkRow()">
-                <ion-icon name="add-outline"></ion-icon>
-                <span>Add Link</span>
-              </button>
-            </div>
-            <div id="social-links-editor" class="social-links-editor"></div>
-          </div>
-          <div class="form-group">
-            <label>Avatar</label>
-            <div class="split-equal-row">
-              <input type="url" id="edit-profile-avatar" class="form-input" placeholder="Avatar URL">
-              <label class="equal-upload-btn">
-                <ion-icon name="person-circle-outline"></ion-icon>
-                <span>Upload Avatar</span>
-                <input type="file" id="profile-avatar-file" accept="image/*" hidden onchange="handleProfileImageUpload(event)">
-              </label>
-            </div>
-            <span class="upload-status-text" id="profile-upload-status"></span>
-          </div>
-          <div class="form-group">
-            <label>Banner</label>
-            <div class="split-equal-row">
-              <input type="url" id="edit-profile-banner" class="form-input" placeholder="Banner URL">
-              <div class="equal-action-pair">
-                <label class="equal-upload-btn">
-                  <ion-icon name="image-outline"></ion-icon>
-                  <span>Upload Banner</span>
-                  <input type="file" id="profile-banner-file" accept="image/*" hidden onchange="handleBannerImageUpload(event)">
-                </label>
-                <button type="button" class="clean-clear-btn" onclick="clearBannerInput()" title="Remove banner">
-                  <ion-icon name="trash-outline"></ion-icon>
-                </button>
-              </div>
-            </div>
-            <span class="upload-status-text" id="banner-upload-status"></span>
-          </div>
-          <div class="modal-submit-row">
-            <button type="button" class="form-btn" onclick="navigateSettingsStep('root')">Back</button>
-            <button type="submit" class="form-btn primary-submit">Save</button>
-          </div>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ======================================================== -->
-  <!-- MODAL 8: ADMIN LOGIN                                     -->
-  <!-- ======================================================== -->
-  <div class="modal-overlay" id="login-modal">
-    <div class="modal-box" style="max-width: 380px;">
-      <div class="modal-header">
-        <div class="modal-title-group">
-          <div class="modal-icon-badge"><ion-icon name="lock-closed-outline"></ion-icon></div>
-          <h3>Admin Login</h3>
-        </div>
-        <button type="button" class="close-modal-btn" onclick="closeLoginModal()">&times;</button>
-      </div>
-      <form id="admin-login-form" class="modal-form">
-        <div class="form-group">
-          <label>Email</label>
-          <input type="email" id="login-email" class="form-input" required>
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="login-password" class="form-input" required>
-        </div>
-        <button type="submit" class="form-btn primary-submit full-width-submit" style="margin-top: 4px;">Sign In</button>
-      </form>
-    </div>
-  </div>
-
-  <!-- Ionicons -->
-  <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
-  <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
-
-  <!-- Main JS -->
-  <script src="./assets/js/script.js?v=100"></script>
-</body>
-
-</html>
+/*-----------------------------------*\
+  #CUSTOM PROPERTIES (MONOCHROME)
+\*-----------------------------------*/
+
+:root {
+  --jet: hsl(0, 0%, 20%);
+  --onyx: hsl(240, 2%, 15%);
+  --eerie-black-1: hsl(240, 2%, 12%);
+  --eerie-black-2: hsl(240, 2%, 10%);
+  --smoky-black: hsl(0, 0%, 6%);
+  --white-1: hsl(0, 0%, 100%);
+  --white-2: hsl(0, 0%, 96%);
+  --light-gray: hsl(0, 0%, 84%);
+  --light-gray-70: hsla(0, 0%, 84%, 0.65);
+
+  --mono-bright: #ffffff;
+  --mono-soft: #e4e4e7;
+  --mono-muted: #a1a1aa;
+  --mono-dim: #71717a;
+
+  --ff-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --shadow-1: 0 4px 16px hsla(0, 0%, 0%, 0.22);
+  --shadow-2: 0 12px 28px hsla(0, 0%, 0%, 0.3);
+  --shadow-3: 0 20px 44px hsla(0, 0%, 0%, 0.45);
+
+  --sidebar-w: 244px;
+  --sidebar-collapsed-w: 68px;
+  --transition-1: 0.18s ease;
+}
+
+/*-----------------------------------*\
+  #RESET & BASE
+\*-----------------------------------*/
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+ul, li {
+  list-style: none;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+html {
+  font-family: var(--ff-inter);
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--smoky-black);
+  color: var(--white-2);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--smoky-black);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--jet);
+  border-radius: 6px;
+}
+
+kbd {
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--mono-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--jet);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+/*-----------------------------------*\
+  #TOAST NOTIFICATION
+\*-----------------------------------*/
+
+.toast-container {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 260;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast-item {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(22, 22, 24, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--white-1);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 10px 14px;
+  border-radius: 10px;
+  box-shadow: var(--shadow-3);
+  animation: toastSlideIn 0.2s ease forwards;
+}
+
+.toast-item.hide {
+  animation: toastSlideOut 0.2s ease forwards;
+}
+
+.toast-item ion-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toastSlideOut {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-8px); }
+}
+
+/*-----------------------------------*\
+  #APP SHELL & COLLAPSIBLE SIDEBAR
+\*-----------------------------------*/
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.app-sidebar {
+  width: var(--sidebar-w);
+  background: var(--eerie-black-2);
+  border-right: 1px solid var(--jet);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 100;
+  transition: width 0.22s ease, transform 0.24s ease;
+}
+
+.app-shell.sidebar-collapsed .app-sidebar {
+  width: var(--sidebar-collapsed-w);
+}
+
+.sidebar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 14px 12px;
+  border-bottom: 1px solid var(--jet);
+  gap: 8px;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.sidebar-brand img {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  object-fit: cover;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  flex-shrink: 0;
+}
+
+.sidebar-brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.brand-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--white-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brand-subtitle {
+  font-size: 10px;
+  color: var(--mono-dim);
+  letter-spacing: 0.3px;
+}
+
+.sidebar-collapse-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  color: var(--mono-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: var(--transition-1);
+}
+
+.sidebar-collapse-btn:hover {
+  color: var(--white-1);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.app-shell.sidebar-collapsed .sidebar-brand-text,
+.app-shell.sidebar-collapsed .sidebar-section-label,
+.app-shell.sidebar-collapsed .sidebar-nav-item span,
+.app-shell.sidebar-collapsed .sidebar-quick-btn span,
+.app-shell.sidebar-collapsed .sidebar-quick-btn kbd,
+.app-shell.sidebar-collapsed .sidebar-footer-btn span,
+.app-shell.sidebar-collapsed .phase-pill,
+.app-shell.sidebar-collapsed .nav-badge {
+  display: none;
+}
+
+.app-shell.sidebar-collapsed .sidebar-top {
+  justify-content: center;
+  padding: 14px 8px;
+}
+
+.app-shell.sidebar-collapsed .sidebar-brand {
+  display: none;
+}
+
+.sidebar-quick-wrap {
+  padding: 12px 12px 4px;
+}
+
+.sidebar-quick-btn {
+  width: 100%;
+  height: 36px;
+  padding: 0 11px;
+  border-radius: 9px;
+  background: var(--white-1);
+  color: var(--smoky-black);
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: opacity 0.18s ease;
+}
+
+.sidebar-quick-btn:hover {
+  opacity: 0.92;
+}
+
+.sidebar-quick-btn ion-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.sidebar-quick-btn kbd {
+  margin-left: auto;
+  background: rgba(0, 0, 0, 0.12);
+  border-color: rgba(0, 0, 0, 0.2);
+  color: var(--smoky-black);
+}
+
+.app-shell.sidebar-collapsed .sidebar-quick-btn {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+}
+
+.sidebar-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: var(--mono-dim);
+  padding: 10px 10px 4px;
+}
+
+.sidebar-nav-item {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--mono-muted);
+  transition: background 0.15s ease, color 0.15s ease;
+  text-align: left;
+}
+
+.sidebar-nav-item ion-icon {
+  font-size: 17px;
+  flex-shrink: 0;
+}
+
+.sidebar-nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--white-1);
+}
+
+.sidebar-nav-item.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--white-1);
+  font-weight: 600;
+}
+
+.sidebar-nav-item.is-phase-upcoming {
+  opacity: 0.6;
+}
+
+.nav-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  color: var(--mono-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.phase-pill {
+  margin-left: auto;
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  color: var(--mono-dim);
+}
+
+.nav-lock-icon {
+  font-size: 12px !important;
+  color: var(--mono-muted);
+}
+
+.app-shell.sidebar-collapsed .sidebar-nav-item {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar-footer {
+  padding: 10px;
+  border-top: 1px solid var(--jet);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-footer-btn {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mono-muted);
+  transition: var(--transition-1);
+}
+
+.sidebar-footer-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--white-1);
+}
+
+.sidebar-footer-btn ion-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.app-shell.sidebar-collapsed .sidebar-footer-btn {
+  justify-content: center;
+  padding: 0;
+}
+
+/*-----------------------------------*\
+  #MAIN CONTENT AREA & TOPBAR
+\*-----------------------------------*/
+
+.app-main {
+  flex: 1;
+  margin-left: var(--sidebar-w);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left 0.22s ease;
+}
+
+.app-shell.sidebar-collapsed .app-main {
+  margin-left: var(--sidebar-collapsed-w);
+}
+
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  height: 56px;
+  padding: 0 24px;
+  background: rgba(15, 15, 16, 0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--jet);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mobile-menu-btn {
+  display: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--white-1);
+}
+
+.topbar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--white-1);
+  white-space: nowrap;
+}
+
+.topbar-sep {
+  color: var(--mono-dim);
+  font-weight: 400;
+}
+
+.topbar-date {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--mono-muted);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-search-trigger {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 9px;
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--mono-muted);
+  transition: var(--transition-1);
+}
+
+.topbar-search-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  color: var(--white-1);
+}
+
+.primary-create-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 9px;
+  background: var(--white-1);
+  color: var(--smoky-black);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: opacity 0.18s ease;
+}
+
+.primary-create-btn:hover {
+  opacity: 0.9;
+}
+
+.app-content {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px 24px 40px;
+  flex: 1;
+}
+
+.view-section.active-view {
+  animation: viewFadeIn 0.2s ease;
+}
+
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/*-----------------------------------*\
+  #OVERVIEW / DASHBOARD
+\*-----------------------------------*/
+
+.profile-header-card {
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.profile-banner-wrap {
+  width: 100%;
+  height: 130px;
+  background: var(--onyx);
+  border-bottom: 1px solid var(--jet);
+}
+
+.profile-banner-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-content-area {
+  padding: 18px 20px;
+}
+
+.profile-header-card.has-banner .avatar-box {
+  margin-top: -48px;
+  position: relative;
+  z-index: 2;
+  border: 3px solid var(--eerie-black-2);
+}
+
+.profile-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.profile-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.avatar-box {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  flex-shrink: 0;
+}
+
+.avatar-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.welcome-kicker {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mono-muted);
+  margin-bottom: 2px;
+}
+
+.profile-name {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--white-1);
+  letter-spacing: -0.3px;
+}
+
+.profile-bio {
+  font-size: 12.5px;
+  color: var(--light-gray-70);
+  margin-top: 3px;
+}
+
+.header-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--light-gray);
+  transition: var(--transition-1);
+}
+
+.header-pill-btn:hover {
+  border-color: var(--white-1);
+  color: var(--white-1);
+}
+
+.profile-socials-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.social-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  font-size: 11px;
+  color: var(--light-gray);
+  transition: var(--transition-1);
+}
+
+.social-chip:hover {
+  border-color: var(--white-1);
+  color: var(--white-1);
+}
+
+.dashboard-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.quick-action-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--white-2);
+  transition: var(--transition-1);
+}
+
+.quick-action-chip:hover {
+  border-color: var(--white-1);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* KPI Grid */
+.dashboard-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.kpi-card {
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 14px;
+  padding: 14px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.kpi-card:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.kpi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mono-muted);
+}
+
+.kpi-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--white-1);
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+
+.kpi-sub {
+  font-size: 11px;
+  color: var(--mono-dim);
+}
+
+/* Modular Dashboard Widgets */
+.dashboard-widgets-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.dash-widget-card {
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dash-widget-wide {
+  grid-column: 1 / -1;
+}
+
+.dash-widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dash-widget-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dash-widget-title ion-icon {
+  font-size: 16px;
+  color: var(--mono-muted);
+}
+
+.dash-widget-title h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--white-1);
+}
+
+.dash-link-btn {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--mono-muted);
+}
+
+.dash-link-btn:hover {
+  color: var(--white-1);
+}
+
+.dash-widget-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dash-media-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: var(--onyx);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.dash-media-row:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.dash-media-row img {
+  width: 30px;
+  height: 42px;
+  border-radius: 5px;
+  object-fit: cover;
+  background: var(--eerie-black-1);
+  flex-shrink: 0;
+}
+
+.dash-media-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.dash-media-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--white-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash-media-meta {
+  font-size: 11px;
+  color: var(--mono-muted);
+  margin-top: 2px;
+}
+
+.dash-media-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mono-soft);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.dash-category-bars {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.cat-bar-item {
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.cat-bar-item:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.cat-bar-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mono-soft);
+}
+
+.cat-bar-track {
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.cat-bar-fill {
+  height: 100%;
+  background: var(--white-1);
+  border-radius: 99px;
+}
+
+.dash-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.activity-row-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: var(--onyx);
+  font-size: 12px;
+}
+
+.activity-row-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.activity-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--white-1);
+  flex-shrink: 0;
+}
+
+.activity-time {
+  font-size: 11px;
+  color: var(--mono-dim);
+  white-space: nowrap;
+}
+
+.empty-state-compact {
+  font-size: 12px;
+  color: var(--mono-dim);
+  padding: 14px 0;
+  text-align: center;
+}
+
+/*-----------------------------------*\
+  #LIBRARY STATS, 12 TABS & TOOLBAR
+\*-----------------------------------*/
+
+.stats-accordion-wrap {
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 14px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.stats-accordion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 11px 15px;
+  cursor: pointer;
+}
+
+.stats-summary-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--white-1);
+}
+
+.entries-pill {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mono-muted);
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  padding: 2px 8px;
+  border-radius: 99px;
+}
+
+.stats-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--mono-muted);
+}
+
+.collapsible-stats-panel {
+  padding: 14px 15px;
+  border-top: 1px solid var(--jet);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(12, 12, 14, 0.45);
+}
+
+.stats-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.stat-bento-card {
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--mono-muted);
+}
+
+.stat-value {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--white-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-sub {
+  font-size: 10.5px;
+  color: var(--mono-dim);
+}
+
+.stats-bottom-highlights {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.stat-highlight-card {
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  border-radius: 11px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.highlight-icon-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.highlight-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.highlight-value {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--white-1);
+}
+
+.highlight-badge {
+  font-size: 10.5px;
+  color: var(--mono-muted);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 7px;
+  border-radius: 99px;
+}
+
+/* 12 Category Tabs */
+.category-tabs-wrap {
+  width: 100%;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.category-tabs {
+  display: flex;
+  gap: 6px;
+  min-width: max-content;
+}
+
+.cat-tab {
+  padding: 7px 12px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mono-muted);
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  transition: var(--transition-1);
+  white-space: nowrap;
+}
+
+.cat-tab:hover {
+  color: var(--white-1);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.cat-tab.active {
+  background: var(--white-1);
+  color: var(--smoky-black);
+  border-color: var(--white-1);
+  font-weight: 600;
+}
+
+/* Toolbar */
+.library-toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.search-box {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 10px;
+  padding: 0 12px;
+  height: 36px;
+}
+
+.search-box ion-icon {
+  color: var(--mono-muted);
+  font-size: 15px;
+}
+
+.search-box input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 12.5px;
+  color: var(--white-2);
+}
+
+.toolbar-controls-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.popover-wrapper {
+  position: relative;
+}
+
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 10px;
+  padding: 0 12px;
+  height: 36px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--light-gray);
+  transition: var(--transition-1);
+}
+
+.toolbar-btn:hover,
+.toolbar-btn.active {
+  border-color: var(--white-1);
+  color: var(--white-1);
+}
+
+.active-indicator-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--white-1);
+}
+
+.view-mode-segmented {
+  display: inline-flex;
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 10px;
+  padding: 2px;
+  height: 36px;
+}
+
+.view-seg-btn {
+  width: 32px;
+  height: 30px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mono-muted);
+  font-size: 15px;
+  transition: var(--transition-1);
+}
+
+.view-seg-btn:hover {
+  color: var(--white-1);
+}
+
+.view-seg-btn.active {
+  background: var(--white-1);
+  color: var(--smoky-black);
+}
+
+.toolbar-popover-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 270px;
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: var(--shadow-3);
+  z-index: 60;
+  display: none;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.toolbar-popover-menu.open {
+  display: flex;
+}
+
+.popover-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--white-1);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--jet);
+}
+
+.popover-reset-btn {
+  font-size: 11px;
+  color: var(--mono-muted);
+  text-decoration: underline;
+}
+
+.popover-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.popover-field label {
+  font-size: 11px;
+  color: var(--mono-muted);
+}
+
+.range-input-pair {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.checkbox-inline-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--light-gray);
+  cursor: pointer;
+}
+
+.sort-dir-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  background: var(--onyx);
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--jet);
+}
+
+.sort-dir-btn {
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mono-muted);
+}
+
+.sort-dir-btn.active {
+  background: var(--white-1);
+  color: var(--smoky-black);
+}
+
+/*-----------------------------------*\
+  #MEDIA VIEWS: GRID, LIST & COMPACT TABLE
+\*-----------------------------------*/
+
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+}
+
+.media-card {
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+
+.media-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.media-cover-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  background: var(--onyx);
+  overflow: hidden;
+}
+
+.media-cover-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.poster-top-badges {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.poster-chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(10, 10, 12, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+
+.poster-bottom-overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 28px 10px 10px;
+  background: linear-gradient(to top, rgba(8, 8, 10, 0.9) 0%, rgba(8, 8, 10, 0.5) 60%, transparent 100%);
+  z-index: 2;
+}
+
+.poster-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #ffffff;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.poster-sub-cat {
+  font-size: 10px;
+  color: var(--mono-muted);
+  margin-top: 2px;
+}
+
+/* List View */
+.media-grid.list-view {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.media-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 11px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.media-list-row:hover {
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.list-thumb {
+  width: 30px;
+  height: 42px;
+  border-radius: 5px;
+  object-fit: cover;
+  background: var(--onyx);
+  flex-shrink: 0;
+}
+
+.list-main-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.list-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.list-sub-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--mono-muted);
+  margin-top: 2px;
+}
+
+.list-right-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.list-rating-pill {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--mono-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Compact Table View */
+.media-grid.compact-view {
+  display: block;
+}
+
+.compact-table-wrap {
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 12px;
+  overflow-x: auto;
+}
+
+.compact-media-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.compact-media-table th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--mono-muted);
+  border-bottom: 1px solid var(--jet);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.compact-media-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--mono-soft);
+}
+
+.compact-media-table tr:last-child td {
+  border-bottom: none;
+}
+
+.compact-media-table tbody tr {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.compact-media-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/*-----------------------------------*\
+  #NOTES, COLLECTIONS & COMMAND PALETTE
+\*-----------------------------------*/
+
+.notes-toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.notes-folder-select {
+  max-width: 180px;
+  height: 36px !important;
+}
+
+.blog-feed-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.blog-post-card {
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.blog-post-card.is-pinned {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.blog-post-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.blog-post-author {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.blog-post-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+}
+
+.blog-post-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--white-1);
+}
+
+.blog-post-time {
+  font-size: 11px;
+  color: var(--mono-muted);
+  display: block;
+}
+
+.note-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--white-1);
+}
+
+.blog-post-text {
+  font-size: 13.5px;
+  color: var(--light-gray);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.blog-post-text code {
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  padding: 1px 5px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+.note-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-pill {
+  font-size: 10.5px;
+  color: var(--mono-muted);
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.blog-post-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.blog-icon-btn,
+.list-edit-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  color: var(--mono-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: var(--transition-1);
+}
+
+.blog-icon-btn:hover,
+.list-edit-btn:hover {
+  border-color: var(--white-1);
+  color: var(--white-1);
+}
+
+/* Collections */
+.section-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.section-heading {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--white-1);
+}
+
+.section-sub {
+  font-size: 12px;
+  color: var(--mono-muted);
+  margin-top: 2px;
+}
+
+.collections-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.collection-card {
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+  transition: border-color 0.18s ease;
+}
+
+.collection-card:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.collection-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.collection-card h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--white-1);
+}
+
+.collection-card p {
+  font-size: 12px;
+  color: var(--mono-muted);
+  line-height: 1.45;
+}
+
+.collection-thumbs-strip {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.collection-thumbs-strip img {
+  width: 34px;
+  height: 48px;
+  border-radius: 5px;
+  object-fit: cover;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+}
+
+/* Command Palette */
+.command-palette-box {
+  max-width: 540px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.command-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--jet);
+}
+
+.command-input-wrap ion-icon {
+  font-size: 18px;
+  color: var(--mono-muted);
+}
+
+.command-input-wrap input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 13.5px;
+  color: var(--white-1);
+}
+
+.command-results-body {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cmd-group-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--mono-dim);
+  padding: 6px 8px 2px;
+}
+
+.cmd-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--mono-soft);
+  text-align: left;
+}
+
+.cmd-item:hover {
+  background: var(--onyx);
+  color: var(--white-1);
+}
+
+.cmd-item-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.cmd-item-meta {
+  font-size: 11px;
+  color: var(--mono-dim);
+}
+
+/* Quick Capture Grid */
+.quick-capture-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.qc-choice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px 10px;
+  border-radius: 12px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--white-2);
+  transition: var(--transition-1);
+}
+
+.qc-choice-btn ion-icon {
+  font-size: 22px;
+}
+
+.qc-choice-btn:hover {
+  border-color: var(--white-1);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/*-----------------------------------*\
+  #MODALS, FORMS & CAROUSEL
+\*-----------------------------------*/
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 150;
+  opacity: 0;
+  visibility: hidden;
+  transition: 0.18s ease;
+}
+
+.modal-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.modal-box {
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  border-radius: 18px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 20px 22px;
+  box-shadow: var(--shadow-3);
+}
+
+.modal-box-lg {
+  max-width: 640px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 13px;
+  margin-bottom: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 10px;
+}
+
+.modal-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-icon-badge,
+.modal-back-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: #ffffff;
+}
+
+.modal-header h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.close-modal-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: var(--mono-muted);
+}
+
+.close-modal-btn:hover {
+  background: var(--onyx);
+  color: #ffffff;
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.form-row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.form-group label,
+.form-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mono-muted);
+}
+
+.form-input {
+  width: 100%;
+  height: 36px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  border-radius: 9px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  color: #ffffff;
+  outline: none;
+  transition: border-color 0.18s ease;
+}
+
+.form-input:focus {
+  border-color: #ffffff;
+}
+
+textarea.form-input {
+  height: auto;
+  min-height: 76px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+textarea.note-textarea-large {
+  min-height: 140px;
+}
+
+.category-meta-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--jet);
+  border-radius: 11px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.category-meta-box:empty {
+  display: none;
+}
+
+.collections-check-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.collection-check-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.modal-inline-toggles {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.api-search-section {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+}
+
+.api-search-bar {
+  display: flex;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.api-results-list {
+  margin-top: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  display: none;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  border-radius: 9px;
+  padding: 5px;
+}
+
+.api-result-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.api-result-item:hover {
+  background: var(--eerie-black-2);
+}
+
+.api-result-item img {
+  width: 32px;
+  height: 46px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.api-result-info h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.api-result-info p {
+  font-size: 11px;
+  color: var(--mono-muted);
+}
+
+/* Editor Dynamic Rows */
+.social-editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.add-social-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  padding: 4px 9px;
+  border-radius: 7px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+}
+
+.multi-img-editor-list,
+.tracks-editor-list,
+.ep-reviews-editor-list,
+.social-links-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.cover-split-row,
+.post-img-split-row,
+.review-split-row,
+.split-equal-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  align-items: center;
+}
+
+.row-right-controls,
+.equal-action-pair,
+.progress-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.review-part-group {
+  display: grid;
+  grid-template-columns: 1.3fr 0.7fr;
+  gap: 6px;
+}
+
+.track-edit-card {
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clean-card-row-cat {
+  display: grid;
+  grid-template-columns: 1fr 34px;
+  gap: 8px;
+}
+
+.clean-card-row-3col {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.clean-card-row-eps {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.equal-upload-btn,
+.equal-action-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 9px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.social-remove-btn,
+.clean-clear-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-plus-btn {
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.modal-submit-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.form-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  padding: 0 14px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.primary-submit {
+  flex: 1;
+  height: 38px;
+  background: #ffffff;
+  border-color: #ffffff;
+  color: var(--smoky-black);
+}
+
+.full-width-submit {
+  width: 100%;
+}
+
+/* Detail Modal */
+.detail-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.detail-hero {
+  display: flex;
+  gap: 14px;
+}
+
+.detail-poster {
+  width: 115px;
+  height: 168px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  flex-shrink: 0;
+}
+
+.detail-meta-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.detail-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--mono-soft);
+}
+
+.detail-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--mono-muted);
+  margin-bottom: 6px;
+}
+
+.detail-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.detail-meta-item span {
+  display: block;
+  font-size: 10px;
+  color: var(--mono-dim);
+  text-transform: uppercase;
+}
+
+.detail-progress-list,
+.ep-review-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-progress-card,
+.ep-review-card {
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.detail-progress-top,
+.detail-progress-bottom,
+.ep-review-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.detail-progress-bar-track {
+  height: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 99px;
+  margin: 7px 0;
+  overflow: hidden;
+}
+
+.detail-progress-bar-fill {
+  height: 100%;
+  background: #ffffff;
+  border-radius: 99px;
+}
+
+.ep-review-note {
+  font-size: 12px;
+  color: var(--mono-muted);
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  line-height: 1.5;
+}
+
+/* Carousel */
+.image-carousel {
+  position: relative;
+  border-radius: 11px;
+  overflow: hidden;
+  border: 1px solid var(--jet);
+  background: var(--onyx);
+}
+
+.carousel-track {
+  display: flex;
+  transition: transform 0.28s ease;
+}
+
+.carousel-slide {
+  min-width: 100%;
+  display: flex;
+  justify-content: center;
+  background: #0d0d0f;
+}
+
+.blog-post-carousel .carousel-slide img {
+  width: 100%;
+  max-height: 420px;
+  object-fit: cover;
+}
+
+.detail-gallery-carousel {
+  width: 115px;
+  height: 168px;
+  flex-shrink: 0;
+}
+
+.detail-gallery-carousel .carousel-slide img {
+  width: 100%;
+  height: 168px;
+  object-fit: cover;
+}
+
+.carousel-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(12, 12, 14, 0.8);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.carousel-btn.prev { left: 6px; }
+.carousel-btn.next { right: 6px; }
+
+.carousel-counter {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 10px;
+  background: rgba(12, 12, 14, 0.8);
+  padding: 2px 6px;
+  border-radius: 99px;
+}
+
+.link-preview-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+
+.link-preview-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--eerie-black-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.link-preview-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.link-preview-domain {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--mono-dim);
+  display: block;
+}
+
+.link-preview-title {
+  font-size: 12px;
+  color: var(--white-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+/* Settings Helpers */
+.settings-step-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-nav-item,
+.settings-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--onyx);
+  border: 1px solid var(--jet);
+  border-radius: 11px;
+  padding: 12px 14px;
+}
+
+.settings-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-nav-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--eerie-black-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-nav-title,
+.settings-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-nav-sub,
+.settings-card-desc {
+  font-size: 11px;
+  color: var(--mono-muted);
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--eerie-black-1);
+  border: 1px solid var(--jet);
+  border-radius: 99px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 3px;
+  top: 3px;
+  background: var(--mono-muted);
+  border-radius: 50%;
+  transition: 0.2s ease;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: #ffffff;
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+  background: var(--smoky-black);
+}
+
+.load-more-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.load-more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px 16px;
+  font-size: 13px;
+  color: var(--mono-muted);
+}
+
+.site-footer {
+  padding: 16px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: center;
+  font-size: 11px;
+  color: var(--mono-dim);
+}
+
+.back-to-top-btn {
+  position: fixed;
+  right: 20px;
+  bottom: 22px;
+  z-index: 85;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--eerie-black-2);
+  border: 1px solid var(--jet);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: 0.2s ease;
+}
+
+.back-to-top-btn.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/*-----------------------------------*\
+  #RESPONSIVE
+\*-----------------------------------*/
+
+@media (max-width: 1080px) {
+  .dashboard-kpi-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .media-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .dash-category-bars {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 820px) {
+  .app-sidebar {
+    transform: translateX(-100%);
+    width: var(--sidebar-w) !important;
+  }
+  .app-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+  .sidebar-backdrop.active {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    z-index: 95;
+  }
+  .sidebar-collapse-btn {
+    display: none;
+  }
+  .mobile-menu-btn {
+    display: inline-flex;
+  }
+  .app-main {
+    margin-left: 0 !important;
+  }
+  .dashboard-widgets-grid,
+  .collections-grid {
+    grid-template-columns: 1fr;
+  }
+  .media-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .stats-bento-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 580px) {
+  .app-topbar {
+    padding: 0 14px;
+  }
+  .app-content {
+    padding: 16px 14px 36px;
+  }
+  .topbar-date,
+  .topbar-sep,
+  .topbar-search-trigger span,
+  .topbar-search-trigger kbd {
+    display: none;
+  }
+  .dashboard-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .dash-category-bars {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .media-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .form-row,
+  .form-row-3,
+  .stats-bottom-highlights {
+    grid-template-columns: 1fr;
+  }
+  .stats-bento-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
